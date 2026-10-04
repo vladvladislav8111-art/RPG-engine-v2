@@ -3,6 +3,7 @@ import { config } from "./src/config.ts";
 import { getTurnContext } from "./src/context.ts";
 import { sheetsBatchGet, sheetsBatchUpdate } from "./src/google.ts";
 import { intBetween } from "./src/rng.ts";
+import { diagnoseMcp, handleMcp } from "./src/mcp.ts";
 import type { CommitRequest, TurnContextRequest } from "./src/types.ts";
 
 function json(data: unknown, status = 200): Response {
@@ -134,6 +135,17 @@ Deno.serve({ port: config.port }, async (req) => {
         totalUpdatedCells: write.totalUpdatedCells ?? null,
         verified,
       });
+    }
+
+    if (url.pathname === "/diag/mcp" && req.method === "GET") {
+      return json(await diagnoseMcp());
+    }
+
+    if (url.pathname === "/mcp") {
+      if (!authorized(req)) {
+        return json({ error: "unauthorized" }, 401);
+      }
+      return await handleMcp(req);
     }
 
     if (!authorized(req)) return json({ error: "unauthorized" }, 401);
