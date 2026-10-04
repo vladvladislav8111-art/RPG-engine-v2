@@ -1,6 +1,10 @@
 import { cacheGet, cacheSet } from "./cache.ts";
 import { config } from "./config.ts";
 import { docsGet, fileModifiedTime, sheetsBatchGet } from "./google.ts";
+import { PREGEN_TABLES, TABLES } from "./schema.ts";
+import { RULESET_VERSION } from "./rules.ts";
+import { makeTurnToken } from "./turn_token.ts";
+import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
 
 function findControl(values: unknown[][], key: string): unknown {
@@ -10,7 +14,9 @@ function findControl(values: unknown[][], key: string): unknown {
 function rowsToObjects(values: unknown[][]): Array<Record<string, unknown>> {
   if (!values.length) return [];
   const headers = values[0].map((v) => String(v ?? ""));
-  return values.slice(1).map((row) => Object.fromEntries(headers.map((h, i) => [h, row[i] ?? null])));
+  return values.slice(1)
+    .filter((row) => row.some((v) => String(v ?? "") !== ""))
+    .map((row) => Object.fromEntries(headers.map((h, i) => [h, row[i] ?? null])));
 }
 
 function resourceMap(values: unknown[][]): Record<string, unknown> {
@@ -39,54 +45,152 @@ async function cachedDoc(key: DocKey): Promise<{ text: string; revision: string 
 async function cachedLookup(lookup: SheetLookup): Promise<{ rows: unknown[][]; revision: string | null; cache: "HIT" | "MISS" }> {
   const spreadsheetId = lookup.source === "GM_PREGEN" ? config.files.GM_PREGEN : config.files.TEMP_RUNTIME;
   if (lookup.source === "TEMP_RUNTIME") {
-    const rows = (await sheetsBatchGet(spreadsheetId, [`${lookup.sheet}!${lookup.range}`]))[`${lookup.sheet}!${lookup.range}`] ?? [];
+    const a1 = `${lookup.sheet}!${lookup.range}`;
+    const rows = (await sheetsBatchGet(spreadsheetId, [a1]))[a1] ?? [];
     return { rows: matchingRows(rows, lookup.query), revision: null, cache: "MISS" };
   }
-
-  const revision = await fileModifiedTime(spreadsheetId);
   const a1 = `${lookup.sheet}!${lookup.range}`;
+  const result = await cachedPregen(a1);
+  return { rows: matchingRows(result.rows, lookup.query), revision: result.revision, cache: result.cache };
+}
+
+async function cachedPregen(a1: string): Promise<{ rows: unknown[][]; revision: string | null; cache: "HIT" | "MISS" }> {
+  const revision = await fileModifiedTime(config.files.GM_PREGEN);
   const key = ["sheet", "GM_PREGEN", revision ?? "none", a1] as const;
   const cached = await cacheGet<{ rows: unknown[][] }>(key);
-  if (cached) return { rows: matchingRows(cached.rows, lookup.query), revision, cache: "HIT" };
-  const rows = (await sheetsBatchGet(spreadsheetId, [a1]))[a1] ?? [];
+  if (cached) return { rows: cached.rows, revision, cache: "HIT" };
+  const rows = (await sheetsBatchGet(config.files.GM_PREGEN, [a1]))[a1] ?? [];
   await cacheSet(key, { rows });
-  return { rows: matchingRows(rows, lookup.query), revision, cache: "MISS" };
+  return { rows, revision, cache: "MISS" };
+}
+
+function hasAny(tags: Set<string>, wanted: string[]): boolean {
+  return wanted.some((x) => tags.has(x));
+}
+
+function filterByLocation(records: Array<Record<string, unknown>>, locationId: string): Array<Record<string, unknown>> {
+  if (!locationId) return records;
+  const locationHeaders = ["Location", "Location/start", "District/location", "Current/last-known location", "Location / anchor"];
+  return records.filter((r) =>
+    locationHeaders.some((h) => String(r[h] ?? "").includes(locationId)) ||
+    !locationHeaders.some((h) => h in r)
+  );
 }
 
 export async function getTurnContext(input: TurnContextRequest) {
   const started = performance.now();
-  const tags = input.tags ?? [];
+  const tagSet = new Set((input.tags ?? []).map((t) => t.toUpperCase()));
   const actorIds = input.actorIds ?? [];
   const lookups = input.lookups ?? [];
   const docQueries = input.docQueries ?? [];
-  const needsCompetences = input.turnClass !== "MICRO" || tags.some((t) => ["WORK", "LANGUAGE", "SKILL", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL"].includes(t.toUpperCase()));
 
-  const baseRanges = [
+  const needsCompetences = input.turnClass !== "MICRO" || hasAny(tagSet, ["WORK", "LANGUAGE", "SKILL", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY"]);
+  const runtimeRanges = new Set<string>([
     "CONTROL!A1:D12",
     "PLAYER_RESOURCES!A1:D20",
-    "PLAYER_CONDITIONS!A1:F12",
-    "ACTIVE_CONTEXT!A1:H15",
-    ...(needsCompetences ? ["COMPETENCES!A1:H25"] : []),
-  ];
+    "PLAYER_CONDITIONS!A1:F100",
+    "ACTIVE_CONTEXT!A1:H50",
+    ...(needsCompetences ? ["COMPETENCES!A1:K100"] : []),
+  ]);
 
-  const npcNeeded = actorIds.length > 0;
-  const uniqueDocKeys = Array.from(new Set([
-    ...(npcNeeded ? ["LIVE_NPCS_KNOWLEDGE_SOCIAL" as DocKey] : []),
-    ...docQueries.map((q) => q.documentKey),
-  ]));
+  const structuredNames: Array<keyof typeof TABLES> = [];
+  const addStructured = (name: keyof typeof TABLES) => {
+    runtimeRanges.add(TABLES[name].range);
+    if (!structuredNames.includes(name)) structuredNames.push(name);
+  };
 
-  const [base, lookupResults, docs] = await Promise.all([
-    sheetsBatchGet(config.files.TEMP_RUNTIME, baseRanges),
+  if (hasAny(tagSet, ["SKILL", "WORK", "LANGUAGE", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY"])) {
+    addStructured("SPECIALIZATIONS");
+    addStructured("MILESTONES");
+    addStructured("PENDING_CHOICES");
+  }
+  if (hasAny(tagSet, ["ITEM", "PURCHASE", "COMBAT", "CRAFT", "SURVIVAL", "STORAGE", "EQUIPMENT"])) addStructured("INVENTORY_CURRENT");
+  if (hasAny(tagSet, ["SERVICES", "SOCIAL", "ECONOMY", "LANGUAGE", "WORK"])) {
+    addStructured("SERVICES_CURRENT");
+    addStructured("OPPORTUNITIES_CURRENT");
+  }
+  if (hasAny(tagSet, ["PROJECT", "CRAFT", "STUDY", "LANGUAGE"])) addStructured("PROJECTS_CURRENT");
+  if (actorIds.length || hasAny(tagSet, ["NPC", "SOCIAL", "SERVICES"])) {
+    addStructured("NPC_CURRENT");
+    addStructured("NPC_KNOWLEDGE");
+  }
+  if (hasAny(tagSet, ["LANGUAGE", "READ", "WRITE", "STUDY"])) {
+    addStructured("PLAYER_LANGUAGE");
+    addStructured("PLAYER_LEXICON");
+    addStructured("PLAYER_GRAMMAR");
+  }
+  if (hasAny(tagSet, ["TRAVEL", "MAP", "EXPLORATION"])) addStructured("MAP_KNOWLEDGE_CURRENT");
+
+  const pregenRequests: Array<{ key: string; range: string }> = [];
+  if (hasAny(tagSet, ["SERVICES", "SOCIAL", "ECONOMY", "LANGUAGE", "WORK"])) {
+    pregenRequests.push({ key: "districtPacks", range: PREGEN_TABLES.DISTRICT_PACKS });
+    pregenRequests.push({ key: "serviceDirectory", range: PREGEN_TABLES.SERVICE_DIRECTORY });
+  }
+  if (hasAny(tagSet, ["LANGUAGE", "READ", "WRITE", "STUDY"]) || input.includeWorldLanguage || (input.languageConcepts?.length ?? 0) > 0) {
+    pregenRequests.push({ key: "languageMeta", range: PREGEN_TABLES.TAREN_LANGUAGE_META });
+    pregenRequests.push({ key: "languageGrammar", range: PREGEN_TABLES.TAREN_GRAMMAR });
+    pregenRequests.push({ key: "languageDerivation", range: PREGEN_TABLES.TAREN_DERIVATION });
+    if (input.includeWorldLanguage || (input.languageConcepts?.length ?? 0) > 0) {
+      pregenRequests.push({ key: "languageLexicon", range: PREGEN_TABLES.TAREN_LEXICON });
+    }
+  }
+
+  const uniqueDocKeys = Array.from(new Set(docQueries.map((q) => q.documentKey)));
+
+  const [base, lookupResults, docs, pregens] = await Promise.all([
+    sheetsBatchGet(config.files.TEMP_RUNTIME, [...runtimeRanges]),
     Promise.all(lookups.map(cachedLookup)),
     Promise.all(uniqueDocKeys.map(async (key) => [key, await cachedDoc(key)] as const)),
+    Promise.all(pregenRequests.map(async (p) => ({ ...p, ...(await cachedPregen(p.range)) }))),
   ]);
 
   const control = base["CONTROL!A1:D12"] ?? [];
-  const docMap = new Map(docs);
-  const actors: Record<string, string | null> = {};
-  const npcText = docMap.get("LIVE_NPCS_KNOWLEDGE_SOCIAL")?.text ?? "";
-  for (const id of actorIds) actors[id] = npcText.split(/\r?\n/).find((line) => line.includes(id)) ?? null;
+  const saveId = String(findControl(control, "save_id") ?? "");
+  const worldDay = findControl(control, "world_day");
+  const worldTime = findControl(control, "world_time");
+  const locationId = String(findControl(control, "current_location_id") ?? "");
+  const locationDisplay = findControl(control, "current_location_display");
+  const sceneId = findControl(control, "current_scene_id");
+  const turnToken = makeTurnToken({ saveId, worldDay, worldTime, locationId, sceneId });
 
+  const structured: Record<string, unknown> = {};
+  for (const name of structuredNames) {
+    let records = rowsToObjects(base[TABLES[name].range] ?? []);
+    if (["SERVICES_CURRENT", "OPPORTUNITIES_CURRENT", "NPC_CURRENT", "MAP_KNOWLEDGE_CURRENT"].includes(name)) {
+      records = filterByLocation(records, locationId);
+    }
+    if (name === "NPC_CURRENT" && actorIds.length) records = records.filter((r) => actorIds.includes(String(r["NPC ID"] ?? "")));
+    if (name === "NPC_KNOWLEDGE" && actorIds.length) records = records.filter((r) => actorIds.includes(String(r["NPC ID"] ?? "")));
+    structured[name] = records;
+  }
+
+  const pregen: Record<string, unknown> = {};
+  let languageLexiconRows: unknown[][] = [];
+  for (const p of pregens) {
+    let records = rowsToObjects(p.rows);
+    if (p.key === "districtPacks" || p.key === "serviceDirectory") records = filterByLocation(records, locationId);
+    if (p.key === "languageLexicon") languageLexiconRows = p.rows;
+    if (p.key !== "languageLexicon" || input.includeWorldLanguage) pregen[p.key] = { records, revision: p.revision, cache: p.cache };
+  }
+
+  const languageConcepts = (input.languageConcepts ?? []).map((q) => q.trim()).filter(Boolean);
+  let languageLookup: unknown[] = [];
+  if (languageConcepts.length && languageLexiconRows.length) {
+    const lexicon = parseTarenLexicon(languageLexiconRows);
+    languageLookup = languageConcepts.map((concept) => ({ concept, ...proposeTarenLexeme(lexicon, concept) }));
+  }
+
+  const actorCurrent = (structured.NPC_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
+  const actorKnowledge = (structured.NPC_KNOWLEDGE as Array<Record<string, unknown>> | undefined) ?? [];
+  const actors: Record<string, unknown> = {};
+  for (const id of actorIds) {
+    actors[id] = {
+      current: actorCurrent.find((r) => String(r["NPC ID"] ?? "") === id) ?? null,
+      knowledge: actorKnowledge.filter((r) => String(r["NPC ID"] ?? "") === id),
+    };
+  }
+
+  const docMap = new Map(docs);
   const queriedDocs = docQueries.map((q) => {
     const doc = docMap.get(q.documentKey)!;
     const needle = q.query.toLocaleLowerCase();
@@ -103,24 +207,30 @@ export async function getTurnContext(input: TurnContextRequest) {
     turnId: input.turnId,
     elapsedMs: Math.round(performance.now() - started),
     packet: {
-      saveId: String(findControl(control, "save_id") ?? ""),
-      worldDay: findControl(control, "world_day"),
-      worldTime: findControl(control, "world_time"),
-      locationId: findControl(control, "current_location_id"),
-      locationDisplay: findControl(control, "current_location_display"),
-      sceneId: findControl(control, "current_scene_id"),
+      saveId,
+      turnToken,
+      rulesetVersion: RULESET_VERSION,
+      worldDay,
+      worldTime,
+      locationId,
+      locationDisplay,
+      sceneId,
       resources: resourceMap(base["PLAYER_RESOURCES!A1:D20"] ?? []),
-      conditions: rowsToObjects(base["PLAYER_CONDITIONS!A1:F12"] ?? []),
-      competences: needsCompetences ? rowsToObjects(base["COMPETENCES!A1:H25"] ?? []) : [],
+      conditions: rowsToObjects(base["PLAYER_CONDITIONS!A1:F100"] ?? []),
+      competences: needsCompetences ? rowsToObjects(base["COMPETENCES!A1:K100"] ?? []) : [],
+      structured,
+      pregen,
+      languageLookup,
       actors,
       lookups: lookups.map((lookup, i) => ({ ...lookup, ...lookupResults[i] })),
       docs: queriedDocs,
       readPlan: [
-        "TEMP:CONTROL+RESOURCES+CONDITIONS+ACTIVE_CONTEXT",
+        "TEMP:CORE",
         ...(needsCompetences ? ["TEMP:COMPETENCES"] : []),
-        ...(npcNeeded ? ["DOC:LIVE_NPCS_KNOWLEDGE_SOCIAL(exact ids)"] : []),
+        ...structuredNames.map((n) => `TEMP:${n}`),
+        ...pregenRequests.map((p) => `GM_PREGEN:${p.key}`),
         ...lookups.map((l) => `${l.source}:${l.sheet}`),
-        ...docQueries.map((d) => `DOC:${d.documentKey}`),
+        ...docQueries.map((d) => `LEGACY_DOC:${d.documentKey}`),
       ],
     },
   };
