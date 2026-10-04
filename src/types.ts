@@ -130,7 +130,7 @@ export type SemanticRowUpdate = {
 
 export type SemanticSessionRecord = {
   inworldStart: string;
-  inworldEnd: string;
+  inworldEnd?: string;
   sceneId?: string;
   actionSummary: string;
   deltas?: unknown;
@@ -142,6 +142,7 @@ export type SemanticSessionRecord = {
 
 export type SemanticCommitPlan = {
   turnToken?: string;
+  elapsedSeconds?: number;
   control?: SemanticControl;
   resourceDeltas?: SemanticResourceDelta[];
   resourceSets?: SemanticResourceSet[];
