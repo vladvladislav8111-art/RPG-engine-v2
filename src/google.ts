@@ -30,9 +30,11 @@ export async function sheetsBatchGet(spreadsheetId: string, ranges: string[]): P
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values:batchGet?${params}`,
   );
   const out: Record<string, unknown[][]> = {};
-  for (const requested of ranges) {
-    const hit = data.valueRanges?.find((v) => v.range.endsWith(requested) || v.range === requested);
-    out[requested] = hit?.values ?? [];
+  // Sheets batchGet preserves the request order. Google may normalize the returned
+  // range to the last non-empty row, so matching by the requested A1 string can
+  // silently drop valid tables (for example A1:I200 may return A1:I27).
+  for (let i = 0; i < ranges.length; i++) {
+    out[ranges[i]] = data.valueRanges?.[i]?.values ?? [];
   }
   return out;
 }
