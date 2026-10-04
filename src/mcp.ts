@@ -214,17 +214,32 @@ export async function diagnoseMcp(): Promise<{
   const response = await mcpHandler.fetch(req);
   const text = await response.text();
   let data: any = null;
+
   try {
     data = JSON.parse(text);
   } catch {
-    // Some transports may return event-stream framing. The HTTP status still
-    // proves that the MCP handler accepted the request.
+    // Streamable HTTP may frame the JSON-RPC response as SSE:
+    // event: message
+    // data: { ...json... }
+    const dataLine = text
+      .split(/\r?\n/)
+      .find((line) => line.startsWith("data:"));
+    if (dataLine) {
+      try {
+        data = JSON.parse(dataLine.slice(5).trim());
+      } catch {
+        data = null;
+      }
+    }
   }
 
   return {
-    ok: response.ok,
+    ok: response.ok && Boolean(data?.result),
     httpStatus: response.status,
+    contentType: response.headers.get("content-type"),
     protocolVersion: data?.result?.protocolVersion ?? null,
     serverName: data?.result?.serverInfo?.name ?? null,
+    serverVersion: data?.result?.serverInfo?.version ?? null,
+    toolsCapability: Boolean(data?.result?.capabilities?.tools),
   };
 }
