@@ -31,21 +31,125 @@ export type TurnContextRequest = {
   actorIds?: string[];
   lookups?: SheetLookup[];
   docQueries?: DocQuery[];
+  languageConcepts?: string[];
+  includeWorldLanguage?: boolean;
 };
+
+export type Scalar = string | number | boolean | null;
 
 export type SheetWrite = {
   range: string;
-  values: Array<Array<string | number | boolean | null>>;
+  values: Scalar[][];
 };
 
 export type Precondition = {
   range: string;
-  equals: string | number | boolean | null;
+  equals: Scalar;
 };
 
 export type DocAppend = {
   documentKey: DocKey;
   text: string;
+};
+
+export type LearningBand = "tiny" | "useful" | "substantial" | "breakthrough" | "exceptional";
+export type SpecializationQuality = "trace" | "useful" | "substantial" | "expert" | "breakthrough";
+
+export type LearningModifiers = {
+  novelty?: number;
+  feedback?: number;
+  difficulty?: number;
+  repetition?: number;
+  fatigue?: number;
+};
+
+export type SemanticLearningEvent = {
+  competenceId: string;
+  specialization?: string;
+  band: LearningBand;
+  productiveMinutes: number;
+  modifiers?: LearningModifiers;
+  exactXpOverride?: number;
+  specializationQuality?: SpecializationQuality;
+  exactSpecializationProgressOverride?: number;
+  reason?: string;
+};
+
+export type SemanticControl = {
+  worldDay?: number;
+  worldTime?: string;
+  locationId?: string;
+  locationDisplay?: string;
+  sceneId?: string;
+  explorationPace?: string;
+  explorationStance?: string;
+};
+
+export type SemanticResourceDelta = {
+  resource: string;
+  delta: number;
+};
+
+export type SemanticResourceSet = {
+  resource: string;
+  value: number;
+};
+
+export type SemanticConditionSet = {
+  conditionId: string;
+  value: string;
+  unit?: string;
+  notes?: string;
+  updatedAt?: string;
+};
+
+export type StructuredRuntimeTable =
+  | "INVENTORY_CURRENT"
+  | "OPPORTUNITIES_CURRENT"
+  | "PROJECTS_CURRENT"
+  | "NPC_CURRENT"
+  | "NPC_KNOWLEDGE"
+  | "PLAYER_LANGUAGE"
+  | "PLAYER_LEXICON"
+  | "PLAYER_GRAMMAR"
+  | "SERVICES_CURRENT"
+  | "MAP_KNOWLEDGE_CURRENT"
+  | "ENTITY_INDEX";
+
+export type SemanticRowUpsert = {
+  table: StructuredRuntimeTable;
+  key: string;
+  values: Record<string, Scalar>;
+};
+
+export type SemanticRowUpdate = {
+  table: StructuredRuntimeTable;
+  key: string;
+  patch: Record<string, Scalar>;
+};
+
+export type SemanticSessionRecord = {
+  inworldStart: string;
+  inworldEnd: string;
+  sceneId?: string;
+  actionSummary: string;
+  deltas?: unknown;
+  newCanon?: unknown;
+  worldAdvances?: unknown;
+  notes?: string;
+  source?: string;
+};
+
+export type SemanticCommitPlan = {
+  turnToken?: string;
+  control?: SemanticControl;
+  resourceDeltas?: SemanticResourceDelta[];
+  resourceSets?: SemanticResourceSet[];
+  conditions?: SemanticConditionSet[];
+  learningEvents?: SemanticLearningEvent[];
+  rowUpserts?: SemanticRowUpsert[];
+  rowUpdates?: SemanticRowUpdate[];
+  session: SemanticSessionRecord;
 };
 
 export type CommitRequest = {
@@ -56,5 +160,6 @@ export type CommitRequest = {
   preconditions?: Precondition[];
   sheetWrites?: SheetWrite[];
   docAppends?: DocAppend[];
+  semantic?: SemanticCommitPlan;
   dryRun?: boolean;
 };
