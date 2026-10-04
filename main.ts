@@ -60,6 +60,32 @@ Deno.serve({ port: config.port }, async (req) => {
       });
     }
 
+    if (url.pathname === "/diag/prepare" && req.method === "GET") {
+      const probe = await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2", "CONTROL!B5"]);
+      const currentSave = String(probe["CONTROL!B2"]?.[0]?.[0] ?? "");
+      const currentWorldTime = probe["CONTROL!B5"]?.[0]?.[0] ?? null;
+      const prepared = await prepareCommit({
+        turnId: "diag-prepare",
+        txId: "diag-prepare-no-write",
+        expectedSaveId: currentSave,
+        saveTo: currentSave,
+        preconditions: [{ range: "CONTROL!B5", equals: currentWorldTime as string | number | boolean | null }],
+        sheetWrites: [],
+        docAppends: [],
+        dryRun: true,
+      });
+      return json({
+        ok: true,
+        prepared: true,
+        dryRun: true,
+        writesEnabled: config.allowWrites,
+        elapsedMs: prepared.elapsedMs,
+        validationPass: prepared.validation.every((v) => v.pass),
+        sheetWritesInManifest: prepared.manifest.sheetWrites.length,
+        docAppendsInManifest: prepared.manifest.docAppends.length,
+      });
+    }
+
     if (!authorized(req)) return json({ error: "unauthorized" }, 401);
 
     if (url.pathname === "/health" && req.method === "GET") {
