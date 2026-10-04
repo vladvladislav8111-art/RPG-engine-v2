@@ -1,0 +1,12 @@
+{
+  "tasks": {
+    "dev": "deno run --allow-net --allow-env --unstable-kv main.ts",
+    "start": "deno run --allow-net --allow-env --unstable-kv main.ts",
+    "test": "deno test --allow-env --unstable-kv tests"
+  },
+  "fmt": {
+    "lineWidth": 100,
+    "indentWidth": 2,
+    "singleQuote": false
+  }
+}
