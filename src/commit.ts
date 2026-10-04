@@ -1,6 +1,7 @@
 import { cacheGet, cacheSet } from "./cache.ts";
 import { config } from "./config.ts";
 import { docsAppendIdempotent, sheetsBatchGet, sheetsBatchUpdate } from "./google.ts";
+import { prepareSemanticCommit } from "./semantic.ts";
 import type { CommitRequest } from "./types.ts";
 
 function firstCell(values: Record<string, unknown[][]>, range: string): unknown {
@@ -13,6 +14,8 @@ function same(a: unknown, b: unknown): boolean {
 }
 
 export async function prepareCommit(input: CommitRequest) {
+  if (input.semantic) return await prepareSemanticCommit(input as CommitRequest & { semantic: NonNullable<CommitRequest["semantic"]> });
+
   const started = performance.now();
   const preconditions = input.preconditions ?? [];
   const ranges = Array.from(new Set(["CONTROL!B2", ...preconditions.map((p) => p.range)]));
@@ -34,6 +37,7 @@ export async function prepareCommit(input: CommitRequest) {
     turnId: input.turnId,
     txId: input.txId,
     dryRun: input.dryRun ?? false,
+    semantic: false,
     elapsedMs: Math.round(performance.now() - started),
     validation,
     manifest: {
@@ -47,25 +51,29 @@ export async function prepareCommit(input: CommitRequest) {
 export async function commitTurn(input: CommitRequest) {
   if (!config.allowWrites) throw new Error("Writes are disabled. Set ALLOW_WRITES=true only after dry-run validation.");
   const started = performance.now();
-  const prepared = await prepareCommit(input);
+  const prepared: any = await prepareCommit(input);
   if (input.dryRun) return { ...prepared, committed: false };
+  if (prepared.alreadyCommitted) {
+    return { ...prepared, committed: true, idempotentReplay: true, elapsedMs: Math.round(performance.now() - started) };
+  }
 
   const txKey = ["tx", input.txId] as const;
   const prior = await cacheGet<{ state: string }>(txKey);
-  if (prior?.state === "COMMITTED") return { ...prepared, committed: true, idempotentReplay: true };
+  if (prior?.state === "COMMITTED") {
+    return { ...prepared, committed: true, idempotentReplay: true, elapsedMs: Math.round(performance.now() - started) };
+  }
 
   await cacheSet(txKey, { state: "COMMITTING", saveTo: input.saveTo, startedAt: new Date().toISOString() });
   try {
     const sheetResult = await sheetsBatchUpdate(config.files.TEMP_RUNTIME, prepared.manifest.sheetWrites);
     await cacheSet(txKey, { state: "SHEET_COMMITTED_DOCS_PENDING", saveTo: input.saveTo });
 
-    const docs = [];
-    for (const item of input.docAppends ?? []) {
+    const docs = await Promise.all((input.docAppends ?? []).map(async (item) => {
       const documentId = config.files[item.documentKey];
-      docs.push({ documentKey: item.documentKey, ...(await docsAppendIdempotent(documentId, input.txId, item.text)) });
-    }
+      return { documentKey: item.documentKey, ...(await docsAppendIdempotent(documentId, input.txId, item.text)) };
+    }));
 
-    const verify = await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2"]);
+    const verify = await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2", "CONTROL!B5", "CONTROL!B6", "CONTROL!B8"]);
     const save = String(firstCell(verify, "CONTROL!B2") ?? "");
     if (save !== input.saveTo) throw new Error(`commit verification failed: expected ${input.saveTo}, got ${save}`);
 
@@ -75,6 +83,12 @@ export async function commitTurn(input: CommitRequest) {
       committed: true,
       totalUpdatedCells: sheetResult.totalUpdatedCells ?? null,
       docs,
+      verifiedState: {
+        saveId: save,
+        worldTime: firstCell(verify, "CONTROL!B5"),
+        locationId: firstCell(verify, "CONTROL!B6"),
+        sceneId: firstCell(verify, "CONTROL!B8"),
+      },
       elapsedMs: Math.round(performance.now() - started),
     };
   } catch (error) {
