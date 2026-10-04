@@ -37,6 +37,84 @@ const turnContextSchema = z.object({
     query: z.string(),
     maxMatches: z.number().int().min(1).max(50).optional(),
   })).optional(),
+  languageConcepts: z.array(z.string().min(1)).max(30).optional(),
+  includeWorldLanguage: z.boolean().optional(),
+});
+
+const structuredTableSchema = z.enum([
+  "INVENTORY_CURRENT",
+  "OPPORTUNITIES_CURRENT",
+  "PROJECTS_CURRENT",
+  "NPC_CURRENT",
+  "NPC_KNOWLEDGE",
+  "PLAYER_LANGUAGE",
+  "PLAYER_LEXICON",
+  "PLAYER_GRAMMAR",
+  "SERVICES_CURRENT",
+  "MAP_KNOWLEDGE_CURRENT",
+  "ENTITY_INDEX",
+]);
+
+const learningModifiersSchema = z.object({
+  novelty: z.number().positive().optional(),
+  feedback: z.number().positive().optional(),
+  difficulty: z.number().positive().optional(),
+  repetition: z.number().positive().optional(),
+  fatigue: z.number().positive().optional(),
+});
+
+const semanticSchema = z.object({
+  turnToken: z.string().optional(),
+  control: z.object({
+    worldDay: z.number().int().min(1).optional(),
+    worldTime: z.string().optional(),
+    locationId: z.string().optional(),
+    locationDisplay: z.string().optional(),
+    sceneId: z.string().optional(),
+    explorationPace: z.string().optional(),
+    explorationStance: z.string().optional(),
+  }).optional(),
+  resourceDeltas: z.array(z.object({ resource: z.string(), delta: z.number() })).optional(),
+  resourceSets: z.array(z.object({ resource: z.string(), value: z.number() })).optional(),
+  conditions: z.array(z.object({
+    conditionId: z.string(),
+    value: z.string(),
+    unit: z.string().optional(),
+    notes: z.string().optional(),
+    updatedAt: z.string().optional(),
+  })).optional(),
+  learningEvents: z.array(z.object({
+    competenceId: z.string(),
+    specialization: z.string().optional(),
+    band: z.enum(["tiny", "useful", "substantial", "breakthrough", "exceptional"]),
+    productiveMinutes: z.number().nonnegative(),
+    modifiers: learningModifiersSchema.optional(),
+    exactXpOverride: z.number().nonnegative().optional(),
+    specializationQuality: z.enum(["trace", "useful", "substantial", "expert", "breakthrough"]).optional(),
+    exactSpecializationProgressOverride: z.number().nonnegative().optional(),
+    reason: z.string().optional(),
+  })).optional(),
+  rowUpserts: z.array(z.object({
+    table: structuredTableSchema,
+    key: z.string(),
+    values: z.record(z.string(), scalarSchema),
+  })).optional(),
+  rowUpdates: z.array(z.object({
+    table: structuredTableSchema,
+    key: z.string(),
+    patch: z.record(z.string(), scalarSchema),
+  })).optional(),
+  session: z.object({
+    inworldStart: z.string(),
+    inworldEnd: z.string(),
+    sceneId: z.string().optional(),
+    actionSummary: z.string(),
+    deltas: z.unknown().optional(),
+    newCanon: z.unknown().optional(),
+    worldAdvances: z.unknown().optional(),
+    notes: z.string().optional(),
+    source: z.string().optional(),
+  }),
 });
 
 const commitSchema = z.object({
@@ -56,6 +134,7 @@ const commitSchema = z.object({
     documentKey: docKeySchema,
     text: z.string(),
   })).optional(),
+  semantic: semanticSchema.optional(),
 });
 
 function toolJson(data: unknown) {
@@ -111,7 +190,7 @@ function buildServer() {
     {
       title: "Get RPG turn context",
       description:
-        "Load one compact authoritative context packet for an RPG turn. Select the turn class, tags, actor ids, exact sheet lookups, and targeted canonical document queries needed for this turn.",
+        "Load one compact authoritative context packet for an RPG turn. Structured current-state tables and pregenerated district/language packs are loaded automatically from tags; legacy lookups/doc queries are optional.",
       inputSchema: turnContextSchema,
       annotations: {
         readOnlyHint: true,
@@ -128,7 +207,7 @@ function buildServer() {
     {
       title: "Prepare RPG commit",
       description:
-        "Validate the expected save id and exact preconditions and build a commit manifest without writing anything. Use before every authoritative commit.",
+        "Validate a turn and build its manifest without writing. Semantic fast-path commits resolve XP, specialization progress, row addressing and structured session logging inside the engine.",
       inputSchema: commitSchema,
       annotations: {
         readOnlyHint: true,
@@ -145,7 +224,7 @@ function buildServer() {
     {
       title: "Commit RPG turn",
       description:
-        "Write a validated RPG turn to authoritative Google runtime state and verify the resulting save id. This is a write action and is blocked while ALLOW_WRITES=false.",
+        "Commit an RPG turn. Prefer semantic fast-path payloads: the engine resolves XP/formulas, row addressing, current-state upserts, durable SESSION_LOG idempotency and final verification.",
       inputSchema: commitSchema,
       annotations: {
         readOnlyHint: false,
