@@ -65,6 +65,7 @@ const learningModifiersSchema = z.object({
 
 const semanticSchema = z.object({
   turnToken: z.string().optional(),
+  elapsedSeconds: z.number().nonnegative().optional(),
   control: z.object({
     worldDay: z.number().int().min(1).optional(),
     worldTime: z.string().optional(),
@@ -106,7 +107,7 @@ const semanticSchema = z.object({
   })).optional(),
   session: z.object({
     inworldStart: z.string(),
-    inworldEnd: z.string(),
+    inworldEnd: z.string().optional(),
     sceneId: z.string().optional(),
     actionSummary: z.string(),
     deltas: z.unknown().optional(),
