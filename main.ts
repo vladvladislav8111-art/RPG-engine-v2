@@ -86,6 +86,30 @@ Deno.serve({ port: config.port }, async (req) => {
       });
     }
 
+    if (url.pathname === "/diag/docs" && req.method === "GET") {
+      const ctx = await getTurnContext({
+        turnId: "diag-docs",
+        turnClass: "MICRO",
+        tags: [],
+        actorIds: [],
+        lookups: [],
+        docQueries: [{
+          documentKey: "LIVE_CANON_INDEX",
+          query: "V2",
+          maxMatches: 3,
+        }],
+      });
+      const doc = ctx.packet.docs[0];
+      return json({
+        ok: true,
+        docsLoaded: Boolean(doc),
+        elapsedMs: ctx.elapsedMs,
+        cache: doc?.cache ?? null,
+        revisionPresent: Boolean(doc?.revision),
+        matchCount: Array.isArray(doc?.matches) ? doc.matches.length : 0,
+      });
+    }
+
     if (!authorized(req)) return json({ error: "unauthorized" }, 401);
 
     if (url.pathname === "/health" && req.method === "GET") {
