@@ -26,7 +26,19 @@ Deno.serve({ port: config.port }, async (req) => {
   const url = new URL(req.url);
   try {
     if (url.pathname === "/" && req.method === "GET") {
-      return json({ service: "RPG V2 Deno Runtime Gateway", status: "ready", writesEnabled: config.allowWrites });
+      let googleConnected = false;
+      try {
+        await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2"]);
+        googleConnected = true;
+      } catch {
+        googleConnected = false;
+      }
+      return json({
+        service: "RPG V2 Deno Runtime Gateway",
+        status: "ready",
+        writesEnabled: config.allowWrites,
+        googleConnected,
+      });
     }
     if (!authorized(req)) return json({ error: "unauthorized" }, 401);
 
