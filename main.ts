@@ -111,6 +111,43 @@ Deno.serve({ port: config.port }, async (req) => {
       });
     }
 
+    if (url.pathname === "/diag/semantic" && req.method === "GET") {
+      const ctx = await getTurnContext({
+        turnId: "diag-semantic-ctx",
+        turnClass: "MICRO",
+        tags: ["SKILL"],
+        actorIds: [],
+        lookups: [],
+        docQueries: [],
+      });
+      const prepared = await prepareCommit({
+        turnId: "diag-semantic",
+        txId: "diag-semantic-no-write",
+        expectedSaveId: ctx.packet.saveId,
+        saveTo: ctx.packet.saveId,
+        dryRun: true,
+        semantic: {
+          turnToken: ctx.packet.turnToken,
+          elapsedSeconds: 0,
+          session: {
+            inworldStart: `Day${ctx.packet.worldDay} ${ctx.packet.worldTime}`,
+            actionSummary: "semantic dry-run diagnostic",
+            deltas: {},
+            newCanon: {},
+            worldAdvances: {},
+            source: "DIAG",
+          },
+        },
+      });
+      return json({
+        ok: true,
+        semanticPrepared: true,
+        elapsedMs: prepared.elapsedMs,
+        writes: prepared.manifest.sheetWrites.length,
+        alreadyCommitted: prepared.alreadyCommitted ?? false,
+      });
+    }
+
     if (url.pathname === "/diag/mcp" && req.method === "GET") {
       return json(await diagnoseMcp());
     }
