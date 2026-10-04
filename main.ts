@@ -40,6 +40,26 @@ Deno.serve({ port: config.port }, async (req) => {
         googleConnected,
       });
     }
+    if (url.pathname === "/diag/context" && req.method === "GET") {
+      const ctx = await getTurnContext({
+        turnId: "diag",
+        turnClass: "NORMAL",
+        tags: [],
+        actorIds: [],
+        lookups: [],
+        docQueries: [],
+      });
+      return json({
+        ok: true,
+        contextLoaded: true,
+        elapsedMs: ctx.elapsedMs,
+        savePresent: Boolean(ctx.packet.saveId),
+        resourcesLoaded: Object.keys(ctx.packet.resources ?? {}).length,
+        conditionsRows: Array.isArray(ctx.packet.conditions) ? ctx.packet.conditions.length : 0,
+        competencesRows: Array.isArray(ctx.packet.competences) ? ctx.packet.competences.length : 0,
+      });
+    }
+
     if (!authorized(req)) return json({ error: "unauthorized" }, 401);
 
     if (url.pathname === "/health" && req.method === "GET") {
