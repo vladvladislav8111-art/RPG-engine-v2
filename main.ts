@@ -1,7 +1,7 @@
 import { commitTurn, prepareCommit } from "./src/commit.ts";
 import { config } from "./src/config.ts";
 import { getTurnContext } from "./src/context.ts";
-import { sheetsBatchGet, sheetsBatchUpdate } from "./src/google.ts";
+import { sheetsBatchGet } from "./src/google.ts";
 import { intBetween } from "./src/rng.ts";
 import { diagnoseMcp, handleMcp } from "./src/mcp.ts";
 import type { CommitRequest, TurnContextRequest } from "./src/types.ts";
@@ -111,32 +111,6 @@ Deno.serve({ port: config.port }, async (req) => {
       });
     }
 
-    if (url.pathname === "/diag/write-noop" && req.method === "GET") {
-      if (!config.allowWrites) {
-        return json({
-          ok: false,
-          writeProbe: false,
-          writesEnabled: false,
-          reason: "Set ALLOW_WRITES=true temporarily to run the no-op write probe.",
-        }, 409);
-      }
-      const before = await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2"]);
-      const value = before["CONTROL!B2"]?.[0]?.[0] ?? "";
-      const write = await sheetsBatchUpdate(config.files.TEMP_RUNTIME, [
-        { range: "CONTROL!B2", values: [[value]] },
-      ]);
-      const after = await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2"]);
-      const verified = String(after["CONTROL!B2"]?.[0]?.[0] ?? "") === String(value);
-      return json({
-        ok: verified,
-        writeProbe: true,
-        noStateChange: verified,
-        writesEnabled: true,
-        totalUpdatedCells: write.totalUpdatedCells ?? null,
-        verified,
-      });
-    }
-
     if (url.pathname === "/diag/mcp" && req.method === "GET") {
       return json(await diagnoseMcp());
     }
@@ -167,7 +141,8 @@ Deno.serve({ port: config.port }, async (req) => {
     }
 
     if (url.pathname === "/prepare-commit" && req.method === "POST") {
-      return json(await prepareCommit(await body<CommitRequest>(req)));
+      const input = await body<CommitRequest>(req);
+      return json(await prepareCommit({ ...input, dryRun: true }));
     }
 
     if (url.pathname === "/commit" && req.method === "POST") {
