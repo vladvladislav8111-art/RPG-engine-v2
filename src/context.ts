@@ -110,10 +110,8 @@ export async function getTurnContext(input: TurnContextRequest) {
     addStructured("OPPORTUNITIES_CURRENT");
   }
   if (hasAny(tagSet, ["PROJECT", "CRAFT", "STUDY", "LANGUAGE"])) addStructured("PROJECTS_CURRENT");
-  if (actorIds.length || hasAny(tagSet, ["NPC", "SOCIAL", "SERVICES"])) {
-    addStructured("NPC_CURRENT");
-    addStructured("NPC_KNOWLEDGE");
-  }
+  if (actorIds.length || hasAny(tagSet, ["NPC", "SOCIAL", "SERVICES"])) addStructured("NPC_CURRENT");
+  if (actorIds.length) addStructured("NPC_KNOWLEDGE");
   if (hasAny(tagSet, ["LANGUAGE", "READ", "WRITE", "STUDY"])) {
     addStructured("PLAYER_LANGUAGE");
     addStructured("PLAYER_LEXICON");
@@ -158,6 +156,13 @@ export async function getTurnContext(input: TurnContextRequest) {
     let records = rowsToObjects(base[TABLES[name].range] ?? []);
     if (["SERVICES_CURRENT", "OPPORTUNITIES_CURRENT", "NPC_CURRENT", "MAP_KNOWLEDGE_CURRENT"].includes(name)) {
       records = filterByLocation(records, locationId);
+    }
+    if (name === "PROJECTS_CURRENT") {
+      records = records.filter((r) => {
+        const tags = String(r["Tags"] ?? "").toUpperCase().split(/[;,]/).map((x) => x.trim()).filter(Boolean);
+        const state = String(r["Current state"] ?? "").toUpperCase();
+        return !state.startsWith("COMPLETED") || tags.some((t) => tagSet.has(t));
+      });
     }
     if (name === "NPC_CURRENT" && actorIds.length) records = records.filter((r) => actorIds.includes(String(r["NPC ID"] ?? "")));
     if (name === "NPC_KNOWLEDGE" && actorIds.length) records = records.filter((r) => actorIds.includes(String(r["NPC ID"] ?? "")));
