@@ -13,6 +13,7 @@ import {
 import {
   MILESTONE_LEVELS,
   RULESET_VERSION,
+  advanceClock,
   advanceCompetence,
   computeCompetenceAward,
   computeSpecializationProgress,
@@ -133,6 +134,26 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     throw new Error(`turn token stale: expected current ${token}, got ${semantic.turnToken}`);
   }
 
+  const currentDay = asNumber(controlValue("world_day"), "world_day");
+  const currentTime = String(controlValue("world_time") ?? "");
+  let resolvedDay = semantic.control?.worldDay ?? currentDay;
+  let resolvedTime = semantic.control?.worldTime ?? currentTime;
+  if (semantic.elapsedSeconds != null) {
+    if (!Number.isFinite(semantic.elapsedSeconds) || semantic.elapsedSeconds < 0) {
+      throw new Error("elapsedSeconds must be a finite non-negative number");
+    }
+    const advancedClock = advanceClock(currentDay, currentTime, semantic.elapsedSeconds);
+    if (semantic.control?.worldDay != null && semantic.control.worldDay !== advancedClock.day) {
+      throw new Error("control.worldDay conflicts with elapsedSeconds");
+    }
+    if (semantic.control?.worldTime != null && semantic.control.worldTime !== advancedClock.time) {
+      throw new Error("control.worldTime conflicts with elapsedSeconds");
+    }
+    resolvedDay = advancedClock.day;
+    resolvedTime = advancedClock.time;
+  }
+  const resolvedInworldEnd = resolvedInworldEnd ?? `Day${resolvedDay} ${resolvedTime}`;
+
   const sessionRows = sheets[TABLES.SESSION_LOG.range] ?? [];
   const txCol = headerIndex(sessionRows, "TX ID");
   const priorTx = sessionRows.slice(1).find((r) => String(r[txCol] ?? "") === input.txId);
@@ -173,8 +194,8 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   };
 
   const c = semantic.control ?? {};
-  if (c.worldDay != null) patchControl("world_day", c.worldDay);
-  if (c.worldTime != null) patchControl("world_time", c.worldTime);
+  if (semantic.elapsedSeconds != null || c.worldDay != null) patchControl("world_day", resolvedDay);
+  if (semantic.elapsedSeconds != null || c.worldTime != null) patchControl("world_time", resolvedTime);
   if (c.locationId != null) patchControl("current_location_id", c.locationId);
   if (c.locationDisplay != null) patchControl("current_location_display", c.locationDisplay);
   if (c.sceneId != null) patchControl("current_scene_id", c.sceneId);
@@ -288,7 +309,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
         setByHeader(pendingRows, prow, "Trigger level", level);
         setByHeader(pendingRows, prow, "Status", "PENDING_GENERATION");
         setByHeader(pendingRows, prow, "Options JSON", "[]");
-        setByHeader(pendingRows, prow, "Created at", semantic.session.inworldEnd);
+        setByHeader(pendingRows, prow, "Created at", resolvedInworldEnd);
         setByHeader(pendingRows, prow, "TX ID", input.txId);
         setByHeader(pendingRows, prow, "Version", 1);
         appendRow("PENDING_CHOICES", pendingRows, prow);
@@ -298,7 +319,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
 
     const erow = Array(headers(progressionRows).length).fill("");
     setByHeader(progressionRows, erow, "TX ID", `${input.txId}#learn${eventIndex + 1}`);
-    setByHeader(progressionRows, erow, "Inworld time", semantic.session.inworldEnd);
+    setByHeader(progressionRows, erow, "Inworld time", resolvedInworldEnd);
     setByHeader(progressionRows, erow, "Competence ID", event.competenceId);
     setByHeader(progressionRows, erow, "Specialization", event.specialization ?? "");
     setByHeader(progressionRows, erow, "Event type", "learning");
@@ -355,7 +376,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   setByHeader(sessionRows, sessionRow, "Turn ID", input.turnId);
   setByHeader(sessionRows, sessionRow, "TX ID", input.txId);
   setByHeader(sessionRows, sessionRow, "Inworld start", semantic.session.inworldStart);
-  setByHeader(sessionRows, sessionRow, "Inworld end", semantic.session.inworldEnd);
+  setByHeader(sessionRows, sessionRow, "Inworld end", resolvedInworldEnd);
   setByHeader(sessionRows, sessionRow, "Scene ID", semantic.session.sceneId ?? c.sceneId ?? String(controlValue("current_scene_id") ?? ""));
   setByHeader(sessionRows, sessionRow, "Action summary", semantic.session.actionSummary);
   setByHeader(sessionRows, sessionRow, "Deltas JSON", JSON.stringify(semantic.session.deltas ?? {}));
@@ -368,7 +389,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     sessionRows,
     sessionRow,
     "State hash",
-    hash32([input.saveTo, semantic.session.inworldEnd, semantic.session.sceneId ?? c.sceneId ?? "", input.txId].join("|")).toString(16),
+    hash32([input.saveTo, resolvedInworldEnd, semantic.session.sceneId ?? c.sceneId ?? "", input.txId].join("|")).toString(16),
   );
   setByHeader(sessionRows, sessionRow, "Source", semantic.session.source ?? "ENGINE_FASTPATH");
   setByHeader(sessionRows, sessionRow, "Version", 1);
@@ -403,8 +424,8 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     },
     postState: {
       saveId: input.saveTo,
-      worldDay: c.worldDay ?? controlValue("world_day"),
-      worldTime: c.worldTime ?? controlValue("world_time"),
+      worldDay: semantic.elapsedSeconds != null || c.worldDay != null ? resolvedDay : controlValue("world_day"),
+      worldTime: semantic.elapsedSeconds != null || c.worldTime != null ? resolvedTime : controlValue("world_time"),
       locationId: c.locationId ?? controlValue("current_location_id"),
       sceneId: c.sceneId ?? controlValue("current_scene_id"),
       resources: postResources,
