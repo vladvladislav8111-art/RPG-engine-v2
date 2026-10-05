@@ -4,7 +4,7 @@ import { deriveStaminaBaseMax } from "./physiology.ts";
 import { generalXpThreshold } from "./rules.ts";
 
 export const HUD_RESOURCE_URI = "ui://rpg-v2/hud-v2.html";
-export const HUD_UI_VERSION = "hud-v2";
+export const HUD_UI_VERSION = "hud-v2.1-survival";
 
 type Scalar = string | number | boolean | null;
 
@@ -67,13 +67,15 @@ function ruStatus(value: string): string {
 export async function getHudSnapshot() {
   const ranges = [
     "CONTROL!A1:D12",
-    "PLAYER_RESOURCES!A1:D20",
+    "PLAYER_RESOURCES!A1:E30",
     "PLAYER_CONDITIONS!A1:F40",
     "CHARACTERISTICS!A1:H30",
   ];
   const data = await sheetsBatchGet(config.files.TEMP_RUNTIME, ranges);
   const control = valueMap(data["CONTROL!A1:D12"] ?? [], 0, 1);
-  const resources = valueMap(data["PLAYER_RESOURCES!A1:D20"] ?? [], 2, 3);
+  const resourceRows = data["PLAYER_RESOURCES!A1:E30"] ?? [];
+  const resources = valueMap(resourceRows, 2, 3);
+  const resourceCaps = valueMap(resourceRows, 2, 4);
   const characteristics = valueMap(data["CHARACTERISTICS!A1:H30"] ?? [], 0, 1);
   const conditions = conditionMap(data["PLAYER_CONDITIONS!A1:F40"] ?? []);
 
@@ -82,14 +84,10 @@ export async function getHudSnapshot() {
   const intelligence = n(characteristics["Intelligence"]);
   const maxima = deriveBaselineMaxima(level, endurance, intelligence);
 
-  const fatigue = conditions["cond.shura.fatigue"];
-  const nutrition = conditions["cond.shura.nutrition"];
   const wounds = conditions["cond.shura.wounds"];
   const water = conditions["cond.shura.water_carried"];
 
   const statuses = [
-    fatigue ? { label: ruStatus(fatigue.value), severity: severityFor(fatigue.value) } : null,
-    nutrition ? { label: ruStatus(nutrition.value), severity: severityFor(nutrition.value) } : null,
     wounds && !/^(0|none)/i.test(wounds.value)
       ? { label: ruStatus(wounds.value), severity: severityFor(wounds.value) }
       : null,
@@ -104,15 +102,17 @@ export async function getHudSnapshot() {
     time: String(control["world_time"] ?? ""),
     location: String(control["current_location_display"] ?? ""),
     resources: {
-      hp: { current: n(resources["HP"]), max: maxima.hp },
+      hp: { current: n(resources["HP"]), max: n(resourceCaps["HP"]) || maxima.hp },
       stamina: {
         current: n(resources["Stamina"]),
-        max: n(resources["Stamina Ceiling"]) || maxima.stamina,
-        baseMax: maxima.stamina,
+        max: n(resources["Stamina Ceiling"]) || n(resourceCaps["Stamina"]) || maxima.stamina,
+        baseMax: n(resourceCaps["Stamina"]) || maxima.stamina,
       },
-      mana: { current: n(resources["Mana"]), max: maxima.mana },
+      mana: { current: n(resources["Mana"]), max: n(resourceCaps["Mana"]) || maxima.mana },
+      satiety: { current: n(resources["Satiety"]), max: n(resourceCaps["Satiety"]) || 100 },
+      hydration: { current: n(resources["Hydration"]), max: n(resourceCaps["Hydration"]) || 100 },
       money: n(resources["Money"]),
-      generalXp: { current: n(resources["General XP"]), max: generalXpThreshold(level) },
+      generalXp: { current: n(resources["General XP"]), max: n(resourceCaps["General XP"]) || generalXpThreshold(level) },
       sup: n(resources["SUP"]),
     },
     statuses,
@@ -184,6 +184,7 @@ export const HUD_HTML = `<!doctype html>
   .title { font-size:24px; font-weight:760; letter-spacing:-.02em; min-width:0; }
   .day { border-radius:999px; padding:7px 12px; background:var(--good-bg); color:var(--good); font-weight:700; white-space:nowrap; }
   .stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+  .survival-stats { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:18px; }
   .stat { min-width:0; }
   .label { color:var(--muted); font-size:14px; margin-bottom:8px; }
   .value { font-size:30px; font-weight:760; line-height:1.08; letter-spacing:-.03em; }
@@ -225,6 +226,10 @@ export const HUD_HTML = `<!doctype html>
     <div class="stat"><div class="label">HP</div><div class="value" id="hp">—</div><div class="bar"><div class="fill" id="hpbar"></div></div></div>
     <div class="stat"><div class="label">Выносливость</div><div class="value" id="stamina">—</div><div class="bar"><div class="fill" id="staminabar"></div></div><div class="submax" id="staminaBase"></div></div>
     <div class="stat"><div class="label">Мана</div><div class="value" id="mana">—</div><div class="bar"><div class="fill" id="manabar"></div></div></div>
+  </div>
+  <div class="survival-stats">
+    <div class="stat"><div class="label">Сытость</div><div class="value" id="satiety">—</div><div class="bar"><div class="fill" id="satietybar"></div></div></div>
+    <div class="stat"><div class="label">Гидратация</div><div class="value" id="hydration">—</div><div class="bar"><div class="fill" id="hydrationbar"></div></div></div>
   </div>
   <div class="divider"></div>
   <div class="row">
@@ -272,6 +277,8 @@ export const HUD_HTML = `<!doctype html>
         ? "База " + d.resources.stamina.baseMax
         : "";
     setStat("mana", d.resources.mana);
+    setStat("satiety", d.resources.satiety);
+    setStat("hydration", d.resources.hydration);
     $("money").textContent = d.resources.money + " медяков";
     $("xp").textContent = d.resources.generalXp.current + "/" + d.resources.generalXp.max;
     $("sup").textContent = d.resources.sup;
