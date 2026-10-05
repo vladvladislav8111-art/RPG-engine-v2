@@ -113,9 +113,6 @@ function keyHeaderFor(table: StructuredRuntimeTable): string {
 export async function prepareSemanticCommit(input: CommitRequest & { semantic: SemanticCommitPlan }) {
   const started = performance.now();
   const semantic = input.semantic;
-  if ((input.docAppends?.length ?? 0) > 0) {
-    throw new Error("semantic fast path does not support docAppends; mutate structured current state instead");
-  }
   const touched = new Set<RuntimeTableName>([
     "CONTROL",
     "PLAYER_RESOURCES",
@@ -193,7 +190,11 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       alreadyCommitted: true,
       elapsedMs: Math.round(performance.now() - started),
       turnToken: token,
-      manifest: { spreadsheetId: config.files.TEMP_RUNTIME, sheetWrites: [], docAppends: [] },
+      manifest: {
+        spreadsheetId: config.files.TEMP_RUNTIME,
+        sheetWrites: [],
+        docAppends: (input.docAppends ?? []).map((d) => ({ ...d, txMarker: `[TX:${input.txId}]` })),
+      },
       outcomes: { learning: [], resources: [], pendingChoices: [] },
     };
   }
