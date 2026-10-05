@@ -44,7 +44,7 @@ const hudSnapshotSchema = z.object({
     severity: z.enum(["good", "warn", "danger", "neutral"]),
   })),
   water: z.union([
-    z.object({ value: z.string(), unit: z.string(), notes: z.string() }),
+    z.object({ value: z.string(), unit: z.string(), notes: z.string(), display: z.string() }),
     z.null(),
   ]),
 });
