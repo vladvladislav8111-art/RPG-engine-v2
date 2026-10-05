@@ -33,7 +33,7 @@ export function resourceDetailsMap(values: unknown[][]): Record<string, { curren
   const numberOrNull = (value: unknown): number | null => {
     if (typeof value !== "string" && typeof value !== "number") return null;
     if (typeof value === "string" && !value.trim()) return null;
-    const parsed = Number(value);
+    const parsed = Number(String(value).replace(",", "."));
     return Number.isFinite(parsed) ? parsed : null;
   };
   for (const row of rowsToObjects(values)) {
