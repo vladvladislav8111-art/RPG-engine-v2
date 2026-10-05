@@ -3,6 +3,7 @@ import { config } from "./src/config.ts";
 import { getTurnContext } from "./src/context.ts";
 import { sheetsBatchGet } from "./src/google.ts";
 import { intBetween } from "./src/rng.ts";
+import { HUD_UI_VERSION } from "./src/hud.ts";
 import { RULESET_VERSION } from "./src/rules.ts";
 import { diagnoseMcp, handleMcp } from "./src/mcp.ts";
 import type { CommitRequest, TurnContextRequest } from "./src/types.ts";
@@ -39,6 +40,7 @@ Deno.serve({ port: config.port }, async (req) => {
         service: "RPG V2 Deno Runtime Gateway",
         status: "ready",
         engineVersion: RULESET_VERSION,
+        hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
         googleConnected,
       });
