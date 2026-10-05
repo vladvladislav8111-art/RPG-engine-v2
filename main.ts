@@ -135,6 +135,7 @@ Deno.serve({ port: config.port }, async (req) => {
       return json({
         ok: true,
         engineVersion: RULESET_VERSION,
+        hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
         saveId: state["CONTROL!B2"]?.[0]?.[0] ?? null,
         worldTime: state["CONTROL!B5"]?.[0]?.[0] ?? null,
