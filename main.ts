@@ -165,6 +165,7 @@ Deno.serve({ port: config.port }, async (req) => {
       const state = await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2", "CONTROL!B5", "CONTROL!B6", "CONTROL!B8"]);
       return json({
         ok: true,
+        engineVersion: "2.2-fastpath-semantic",
         writesEnabled: config.allowWrites,
         saveId: state["CONTROL!B2"]?.[0]?.[0] ?? null,
         worldTime: state["CONTROL!B5"]?.[0]?.[0] ?? null,
