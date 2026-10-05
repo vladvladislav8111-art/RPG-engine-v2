@@ -1,9 +1,10 @@
 import { config } from "./config.ts";
 import { sheetsBatchGet } from "./google.ts";
+import { deriveStaminaBaseMax } from "./physiology.ts";
 import { generalXpThreshold } from "./rules.ts";
 
-export const HUD_RESOURCE_URI = "ui://rpg-v2/hud-v1.html";
-export const HUD_UI_VERSION = "hud-v1";
+export const HUD_RESOURCE_URI = "ui://rpg-v2/hud-v2.html";
+export const HUD_UI_VERSION = "hud-v2";
 
 type Scalar = string | number | boolean | null;
 
@@ -38,7 +39,7 @@ function conditionMap(rows: unknown[][]) {
 export function deriveBaselineMaxima(level: number, endurance: number, intelligence: number) {
   return {
     hp: 26 + 4 * endurance + 2 * Math.max(0, level - 1),
-    stamina: 26 + 4 * endurance + 2 * Math.max(0, level - 1),
+    stamina: deriveStaminaBaseMax(level, endurance),
     mana: 10 * intelligence,
   };
 }
@@ -104,7 +105,11 @@ export async function getHudSnapshot() {
     location: String(control["current_location_display"] ?? ""),
     resources: {
       hp: { current: n(resources["HP"]), max: maxima.hp },
-      stamina: { current: n(resources["Stamina"]), max: maxima.stamina },
+      stamina: {
+        current: n(resources["Stamina"]),
+        max: n(resources["Stamina Ceiling"]) || maxima.stamina,
+        baseMax: maxima.stamina,
+      },
       mana: { current: n(resources["Mana"]), max: maxima.mana },
       money: n(resources["Money"]),
       generalXp: { current: n(resources["General XP"]), max: generalXpThreshold(level) },
@@ -185,6 +190,7 @@ export const HUD_HTML = `<!doctype html>
   .value.warn { color:var(--warn); }
   .value.danger { color:var(--danger); }
   .bar { height:5px; margin-top:10px; border-radius:999px; background:var(--panel-2); overflow:hidden; }
+  .submax { color:var(--warn); font-size:11px; margin-top:6px; min-height:14px; }
   .fill { height:100%; border-radius:inherit; background:currentColor; opacity:.9; }
   .divider { height:1px; background:var(--line); margin:20px 0 16px; }
   .row { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:baseline; font-size:16px; line-height:1.45; }
@@ -217,7 +223,7 @@ export const HUD_HTML = `<!doctype html>
   </div>
   <div class="stats">
     <div class="stat"><div class="label">HP</div><div class="value" id="hp">—</div><div class="bar"><div class="fill" id="hpbar"></div></div></div>
-    <div class="stat"><div class="label">Выносливость</div><div class="value" id="stamina">—</div><div class="bar"><div class="fill" id="staminabar"></div></div></div>
+    <div class="stat"><div class="label">Выносливость</div><div class="value" id="stamina">—</div><div class="bar"><div class="fill" id="staminabar"></div></div><div class="submax" id="staminaBase"></div></div>
     <div class="stat"><div class="label">Мана</div><div class="value" id="mana">—</div><div class="bar"><div class="fill" id="manabar"></div></div></div>
   </div>
   <div class="divider"></div>
@@ -261,6 +267,10 @@ export const HUD_HTML = `<!doctype html>
     $("day").textContent = "День " + d.day;
     setStat("hp", d.resources.hp);
     setStat("stamina", d.resources.stamina);
+    $("staminaBase").textContent =
+      d.resources.stamina.baseMax > d.resources.stamina.max
+        ? "База " + d.resources.stamina.baseMax
+        : "";
     setStat("mana", d.resources.mana);
     $("money").textContent = d.resources.money + " медяков";
     $("xp").textContent = d.resources.generalXp.current + "/" + d.resources.generalXp.max;
