@@ -427,5 +427,6 @@ export async function diagnoseMcp(): Promise<{
     serverName: data?.result?.serverInfo?.name ?? null,
     serverVersion: data?.result?.serverInfo?.version ?? null,
     toolsCapability: Boolean(data?.result?.capabilities?.tools),
+    resourcesCapability: Boolean(data?.result?.capabilities?.resources),
   };
 }
