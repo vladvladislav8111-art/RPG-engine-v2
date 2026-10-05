@@ -3,8 +3,8 @@ import { sheetsBatchGet } from "./google.ts";
 import { deriveStaminaBaseMax } from "./physiology.ts";
 import { generalXpThreshold } from "./rules.ts";
 
-export const HUD_RESOURCE_URI = "ui://rpg-v2/hud-v2.html";
-export const HUD_UI_VERSION = "hud-v2.1-survival";
+export const HUD_RESOURCE_URI = "ui://rpg-v2/hud-v2.2.html";
+export const HUD_UI_VERSION = "hud-v2.2-bridge-compat";
 
 type Scalar = string | number | boolean | null;
 
@@ -266,7 +266,44 @@ export const HUD_HTML = `<!doctype html>
       ? "var(--warn)"
       : "var(--good)";
   }
-  function render(d) {
+  function normalizePayload(d) {
+    if (!d) return null;
+    if (d.resources) return d;
+    // Compatibility with the ChatGPT RPG Runtime Bridge normalized HUD schema.
+    if (d.kind === "hud" && d.hp && d.stamina && d.mana) {
+      return {
+        uiVersion: d.uiVersion || "bridge-normalized",
+        saveId: d.saveId || "",
+        name: d.name || "Шура",
+        level: Number(d.generalLevel || 0),
+        day: Number(d.worldDay || 0),
+        time: d.worldTime || "",
+        location: d.locationDisplay || d.locationId || "",
+        resources: {
+          hp: d.hp,
+          stamina: {
+            current: Number(d.stamina.current || 0),
+            max: Number(d.stamina.max || 0),
+            baseMax: Number((d.stamina && (d.stamina.baseMax ?? d.stamina.max)) || 0),
+          },
+          mana: d.mana,
+          satiety: d.satiety || { current: 0, max: 100 },
+          hydration: d.hydration || { current: 0, max: 100 },
+          money: Number(d.money || 0),
+          generalXp: {
+            current: Number((d.generalXp && d.generalXp.current) || 0),
+            max: Number((d.generalXp && (d.generalXp.max ?? d.generalXp.threshold)) || 0),
+          },
+          sup: Number(d.sup || 0),
+        },
+        statuses: (d.conditions || []).map(label => ({ label, severity: "neutral" })),
+        water: d.water || null,
+      };
+    }
+    return d;
+  }
+  function render(raw) {
+    const d = normalizePayload(raw);
     if (!d || !d.resources) return;
     $("title").textContent = d.name + " · Уровень " + d.level;
     $("day").textContent = "День " + d.day;
