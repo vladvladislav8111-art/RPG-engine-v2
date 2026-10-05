@@ -297,6 +297,7 @@ function buildServer() {
       return toolJson({
         ok: true,
         engineVersion: RULESET_VERSION,
+        architectureVersion: "fast-storage-v3",
         hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
         saveId: state["CONTROL!B2"]?.[0]?.[0] ?? null,
