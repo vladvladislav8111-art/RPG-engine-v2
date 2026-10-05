@@ -29,6 +29,7 @@ import {
   resolveRest,
 } from "./physiology.ts";
 import { hash32 } from "./rng.ts";
+import { computeSurvivalChange, type SurvivalActivity } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
 import type {
   CommitRequest,
@@ -289,6 +290,45 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     );
     return hit ? asNumber(hit[starIx], "specialization stars") : 0;
   };
+
+  const survivalOutcomes: unknown[] = [];
+  if (semantic.elapsedSeconds != null || semantic.survival) {
+    const elapsedMinutes = Math.max(0, Number(semantic.elapsedSeconds ?? 0) / 60);
+    let inferredActivity: SurvivalActivity = "normal";
+    if (!semantic.survival?.segments?.length && !semantic.survival?.defaultActivity) {
+      const rests = semantic.restEvents ?? [];
+      const exertions = semantic.exertionEvents ?? [];
+      const usefulSleepMinutes = rests
+        .filter((r) => r.restId === "rest.full" && r.usefulSleep !== false)
+        .reduce((sum, r) => sum + r.durationMinutes, 0);
+      const restMinutes = rests.reduce((sum, r) => sum + r.durationMinutes, 0);
+      const exertionMinutes = exertions.reduce((sum, e) => sum + Math.max(0, e.durationMinutes ?? 0), 0);
+      if (elapsedMinutes > 0 && usefulSleepMinutes >= elapsedMinutes * 0.8) inferredActivity = "sleep";
+      else if (elapsedMinutes > 0 && restMinutes >= elapsedMinutes * 0.8 && exertionMinutes === 0) inferredActivity = "rest";
+      else if (exertionMinutes >= elapsedMinutes * 0.5 && exertions.length) {
+        const ids = exertions.map((e) => e.actionId.toLocaleLowerCase()).join(" ");
+        inferredActivity = /sprint|heavy|haul|carry|climb/.test(ids)
+          ? "heavy"
+          : /walk|travel|march|hike/.test(ids)
+          ? "travel"
+          : "work";
+      }
+    }
+
+    const survival = computeSurvivalChange({
+      satiety: readResource("Satiety"),
+      hydration: readResource("Hydration"),
+      elapsedSeconds: semantic.elapsedSeconds ?? 0,
+      segments: semantic.survival?.segments,
+      defaultActivity: semantic.survival?.defaultActivity ?? inferredActivity,
+      foodIntakes: semantic.survival?.foodIntakes,
+      waterLiters: semantic.survival?.waterLiters,
+      heatMultiplier: semantic.survival?.heatMultiplier,
+    });
+    applyResource("Satiety", survival.newSatiety);
+    applyResource("Hydration", survival.newHydration);
+    survivalOutcomes.push(survival);
+  }
 
   for (const event of semantic.exertionEvents ?? []) {
     const profile = ACTION_PROFILES[event.actionId];
@@ -758,6 +798,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       exertion: exertionOutcomes,
       rest: restOutcomes,
       injury: injuryOutcomes,
+      survival: survivalOutcomes,
       generalXp: generalXpOutcomes,
       choiceResolutions: choiceResolutionOutcomes,
       learning: learningOutcomes,
