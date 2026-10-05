@@ -268,7 +268,7 @@ function buildServer() {
     {
       name: "rpg-v2-runtime",
       title: "RPG V2 Runtime",
-      version: "2.4.0",
+      version: "2.4.1",
     },
     { capabilities: { tools: {}, resources: {} } },
   );
@@ -312,7 +312,7 @@ function buildServer() {
     {
       title: "Get RPG turn context",
       description:
-        "Load one compact authoritative context packet for an RPG turn. Structured current-state tables and pregenerated district/language packs are loaded automatically from tags; legacy lookups/doc queries are optional.",
+        "Load one compact authoritative context packet for an RPG turn. Structured current-state tables are the live layer; targeted document queries load only the permanent long-form canon needed for this action. Broad history reads are not part of the normal path.",
       inputSchema: turnContextSchema,
       annotations: {
         readOnlyHint: true,
@@ -346,7 +346,7 @@ function buildServer() {
     {
       title: "Commit RPG turn",
       description:
-        "Commit an RPG turn. Prefer semantic fast-path payloads: the engine resolves XP/formulas, row addressing, current-state upserts, durable SESSION_LOG idempotency and final verification.",
+        "Commit an RPG turn. Prefer one semantic fast-path payload: update only affected live-state rows, append reusable permanent knowledge to the appropriate LIVE document via docAppends, write the valid SESSION_LOG transaction, then verify current state.",
       inputSchema: commitSchema,
       annotations: {
         readOnlyHint: false,
