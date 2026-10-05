@@ -40,7 +40,7 @@ const hudSnapshotSchema = z.object({
   location: z.string(),
   resources: z.object({
     hp: z.object({ current: z.number(), max: z.number() }),
-    stamina: z.object({ current: z.number(), max: z.number() }),
+    stamina: z.object({ current: z.number(), max: z.number(), baseMax: z.number() }),
     mana: z.object({ current: z.number(), max: z.number() }),
     money: z.number(),
     generalXp: z.object({ current: z.number(), max: z.number() }),
@@ -334,7 +334,7 @@ function buildServer() {
 
 
   server.registerResource(
-    "rpg-hud-v1",
+    "rpg-hud-v2",
     HUD_RESOURCE_URI,
     {},
     async () => ({
