@@ -68,6 +68,19 @@ function hasAny(tags: Set<string>, wanted: string[]): boolean {
   return wanted.some((x) => tags.has(x));
 }
 
+function relevantCompetenceIds(tags: Set<string>): Set<string> | null {
+  const ids = new Set<string>();
+  if (hasAny(tags, ["LANGUAGE", "SOCIAL", "SERVICES", "ECONOMY"])) ids.add("competence.society.communication");
+  if (hasAny(tags, ["RESEARCH", "STUDY", "READ", "WRITE"])) ids.add("competence.knowledge.research");
+  if (hasAny(tags, ["COMBAT", "WEAPON", "ARCHERY"])) ids.add("competence.combat.melee");
+  if (hasAny(tags, ["CRAFT", "BUILD", "REPAIR", "COOK"])) ids.add("competence.crafting.practical_creation");
+  if (hasAny(tags, ["SURVIVAL", "TRAVEL", "HUNT", "TRACK"])) ids.add("competence.survival.general");
+  if (hasAny(tags, ["MAGIC", "MANA"])) ids.add("competence.magic.perception");
+  if (hasAny(tags, ["BODY", "PHYSICAL", "TRAVEL"])) ids.add("competence.body.physical_conditioning");
+  if (tags.has("SKILL") && ids.size === 0) return null;
+  return ids.size ? ids : null;
+}
+
 function compactPregenRecords(key: string, records: Array<Record<string, unknown>>): unknown {
   if (key === "languageMeta") {
     return Object.fromEntries(records.map((r) => [String(r["Key"] ?? ""), r["Value"] ?? null]).filter(([k]) => k));
@@ -144,8 +157,7 @@ export async function getTurnContext(input: TurnContextRequest) {
     "CONTROL!A1:D12",
     "PLAYER_RESOURCES!A1:D20",
     "PLAYER_CONDITIONS!A1:F100",
-    "ACTIVE_CONTEXT!A1:H50",
-    ...(needsCompetences ? ["COMPETENCES!A1:K100"] : []),
+    ...(needsCompetences ? [TABLES.COMPETENCES.range] : []),
   ]);
 
   const structuredNames: Array<keyof typeof TABLES> = [];
@@ -173,6 +185,8 @@ export async function getTurnContext(input: TurnContextRequest) {
     addStructured("PLAYER_GRAMMAR");
   }
   if (hasAny(tagSet, ["TRAVEL", "MAP", "EXPLORATION"])) addStructured("MAP_KNOWLEDGE_CURRENT");
+  if (hasAny(tagSet, ["WORLD", "CLOCK", "WAIT", "REST", "TRAVEL", "WORK", "STUDY", "CRAFT"])) addStructured("WORLD_CLOCKS");
+  if (hasAny(tagSet, ["WEATHER", "TRAVEL", "EXPLORATION", "SURVIVAL"])) addStructured("WEATHER_CURRENT");
 
   const pregenRequests: Array<{ key: string; range: string }> = [];
   if (hasAny(tagSet, ["SERVICES", "SOCIAL", "ECONOMY", "LANGUAGE", "WORK"])) {
@@ -212,6 +226,14 @@ export async function getTurnContext(input: TurnContextRequest) {
     if (["SERVICES_CURRENT", "OPPORTUNITIES_CURRENT", "NPC_CURRENT", "MAP_KNOWLEDGE_CURRENT"].includes(name)) {
       records = filterByLocation(records, locationId);
     }
+    if (name === "WORLD_CLOCKS") records = records.filter((r) => String(r["State"] ?? "").toUpperCase().includes("ACTIVE"));
+    if (name === "SPECIALIZATIONS" || name === "MILESTONES") {
+      const relevant = relevantCompetenceIds(tagSet);
+      if (relevant) {
+        const field = name === "SPECIALIZATIONS" ? "Competence ID" : "Parent competence";
+        records = records.filter((r) => relevant.has(String(r[field] ?? "")));
+      }
+    }
     if (name === "PROJECTS_CURRENT") {
       records = records.filter((r) => {
         const tags = String(r["Tags"] ?? "").toUpperCase().split(/[;,]/).map((x) => x.trim()).filter(Boolean);
@@ -239,7 +261,25 @@ export async function getTurnContext(input: TurnContextRequest) {
   let languageLookup: unknown[] = [];
   if (languageConcepts.length && languageLexiconRows.length) {
     const lexicon = parseTarenLexicon(languageLexiconRows);
-    languageLookup = languageConcepts.map((concept) => ({ concept, ...proposeTarenLexeme(lexicon, concept) }));
+    const playerLexicon =
+      (structured.PLAYER_LEXICON as Array<Record<string, unknown>> | undefined) ?? [];
+    const knownByForm = new Map(
+      playerLexicon.map((r) => [String(r["Form"] ?? "").normalize("NFC"), r]),
+    );
+    languageLookup = languageConcepts.map((concept) => {
+      const proposal = proposeTarenLexeme(lexicon, concept);
+      const known = knownByForm.get(proposal.lexeme.form.normalize("NFC"));
+      return {
+        concept,
+        ...proposal,
+        lexeme: {
+          ...proposal.lexeme,
+          playerKnown: Boolean(known),
+          playerKnownMeaning: known?.["Known meaning"] ?? null,
+          playerConfidence: known?.["Confidence"] ?? null,
+        },
+      };
+    });
   }
 
   const actorCurrent = (structured.NPC_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
@@ -279,7 +319,7 @@ export async function getTurnContext(input: TurnContextRequest) {
       sceneId,
       resources: resourceMap(base["PLAYER_RESOURCES!A1:D20"] ?? []),
       conditions: rowsToObjects(base["PLAYER_CONDITIONS!A1:F100"] ?? []),
-      competences: needsCompetences ? rowsToObjects(base["COMPETENCES!A1:K100"] ?? []) : [],
+      competences: needsCompetences ? rowsToObjects(base[TABLES.COMPETENCES.range] ?? []) : [],
       structured,
       pregen,
       languageLookup,

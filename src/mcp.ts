@@ -54,6 +54,9 @@ const structuredTableSchema = z.enum([
   "SERVICES_CURRENT",
   "MAP_KNOWLEDGE_CURRENT",
   "ENTITY_INDEX",
+  "MILESTONES",
+  "WORLD_CLOCKS",
+  "WEATHER_CURRENT",
 ]);
 
 const learningModifiersSchema = z.object({
@@ -84,6 +87,11 @@ const semanticSchema = z.object({
     unit: z.string().optional(),
     notes: z.string().optional(),
     updatedAt: z.string().optional(),
+  })).optional(),
+  choiceResolutions: z.array(z.object({
+    choiceId: z.string().min(1),
+    selectedOption: z.string().min(1),
+    notes: z.string().optional(),
   })).optional(),
   generalXpEvents: z.array(z.object({
     sourceType: z.enum(["combat", "objective", "discovery", "survival", "breakthrough", "other"]),

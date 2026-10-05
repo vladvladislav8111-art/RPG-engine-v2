@@ -24,7 +24,7 @@ export function parseTarenLexicon(rows: unknown[][]): TarenLexeme[] {
     pos: String(r[idx(h, "POS")] ?? ""),
     domain: String(r[idx(h, "Domain")] ?? ""),
     conceptKey: String(r[idx(h, "Concept key")] ?? ""),
-    playerKnown: String(r[idx(h, "Player known by T0275")] ?? "").toUpperCase() === "TRUE",
+    playerKnown: false,
   }));
 }
 

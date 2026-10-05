@@ -61,6 +61,11 @@ function rowToScalars(row: unknown[]): Scalar[] {
   return row.map((v) => (v == null ? "" : v) as Scalar);
 }
 
+function competenceThresholdForRow(rows: unknown[][], row: unknown[]): number | null {
+  const value = Number(row[headerIndex(rows, "Next threshold")] ?? NaN);
+  return Number.isFinite(value) ? value : null;
+}
+
 function visibleBand(stars: number): string {
   if (stars <= 2) return "familiarity";
   if (stars <= 4) return "practical use";
@@ -81,6 +86,9 @@ const GENERIC_TABLES = new Set<StructuredRuntimeTable>([
   "SERVICES_CURRENT",
   "MAP_KNOWLEDGE_CURRENT",
   "ENTITY_INDEX",
+  "MILESTONES",
+  "WORLD_CLOCKS",
+  "WEATHER_CURRENT",
 ]);
 
 function ensureGenericTable(name: string): asserts name is StructuredRuntimeTable {
@@ -109,6 +117,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     "PROGRESSION_EVENTS",
     "SESSION_LOG",
   ]);
+  if ((semantic.choiceResolutions?.length ?? 0) > 0) touched.add("MILESTONES");
   for (const item of semantic.rowUpserts ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowUpdates ?? []) touched.add(item.table as RuntimeTableName);
 
@@ -301,6 +310,87 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   const pendingRows = sheets[TABLES.PENDING_CHOICES.range] ?? [];
   const learningOutcomes: unknown[] = [];
   const pendingChoices: unknown[] = [];
+  const choiceResolutionOutcomes: unknown[] = [];
+
+  for (let resolutionIndex = 0; resolutionIndex < (semantic.choiceResolutions ?? []).length; resolutionIndex++) {
+    const resolution = semantic.choiceResolutions![resolutionIndex];
+    const choiceIndex = findDataRow(pendingRows, "Choice ID", resolution.choiceId);
+    if (choiceIndex < 0) throw new Error(`pending choice not found: ${resolution.choiceId}`);
+    const choiceRow = cloneRow(pendingRows, choiceIndex);
+    const status = String(choiceRow[headerIndex(pendingRows, "Status")] ?? "");
+    if (!status.startsWith("PENDING")) throw new Error(`choice is not pending: ${resolution.choiceId} status=${status}`);
+    const parentId = String(choiceRow[headerIndex(pendingRows, "Parent ID")] ?? "");
+    const competenceIndex = findDataRow(competenceRows, "Competence ID", parentId);
+    if (competenceIndex < 0) throw new Error(`choice parent competence missing: ${parentId}`);
+    const competenceRow = cloneRow(competenceRows, competenceIndex);
+    const pendingId = String(competenceRow[headerIndex(competenceRows, "Pending milestone")] ?? "");
+    if (pendingId && pendingId !== resolution.choiceId) {
+      throw new Error(`competence pending milestone mismatch: ${pendingId} vs ${resolution.choiceId}`);
+    }
+
+    setByHeader(pendingRows, choiceRow, "Status", "RESOLVED");
+    setByHeader(pendingRows, choiceRow, "Resolved at", resolvedInworldEnd);
+    setByHeader(pendingRows, choiceRow, "Selected option", resolution.selectedOption);
+    setByHeader(pendingRows, choiceRow, "TX ID", input.txId);
+    if (resolution.notes != null) setByHeader(pendingRows, choiceRow, "Notes", resolution.notes);
+    writeRow("PENDING_CHOICES", pendingRows, choiceIndex, choiceRow);
+
+    const oldLevel = asNumber(competenceRow[headerIndex(competenceRows, "Level")], "competence level");
+    const oldXp = asNumber(competenceRow[headerIndex(competenceRows, "Carried XP")], "competence XP");
+    const deferred = Number(competenceRow[headerIndex(competenceRows, "Deferred XP")] ?? 0) || 0;
+    setByHeader(competenceRows, competenceRow, "Pending milestone", "");
+    setByHeader(competenceRows, competenceRow, "Deferred XP", 0);
+
+    let released = null;
+    if (deferred > 0) {
+      released = advanceCompetence(oldLevel, oldXp, deferred);
+      setByHeader(competenceRows, competenceRow, "Level", released.newLevel);
+      setByHeader(competenceRows, competenceRow, "Carried XP", released.newXp);
+      setByHeader(competenceRows, competenceRow, "Deferred XP", released.deferredXp ?? 0);
+      if (released.nextThreshold != null) setByHeader(competenceRows, competenceRow, "Next threshold", released.nextThreshold);
+
+      for (const level of released.milestoneLevels) {
+        const nextChoiceId = `choice.${parentId}.lv${level}`;
+        if (findDataRow(pendingRows, "Choice ID", nextChoiceId) < 0) {
+          const prow = Array(headers(pendingRows).length).fill("");
+          setByHeader(pendingRows, prow, "Choice ID", nextChoiceId);
+          setByHeader(pendingRows, prow, "Choice type", "MILESTONE");
+          setByHeader(pendingRows, prow, "Parent ID", parentId);
+          setByHeader(pendingRows, prow, "Trigger level", level);
+          setByHeader(pendingRows, prow, "Status", "PENDING_GENERATION");
+          setByHeader(pendingRows, prow, "Options JSON", "[]");
+          setByHeader(pendingRows, prow, "Created at", resolvedInworldEnd);
+          setByHeader(pendingRows, prow, "TX ID", input.txId);
+          setByHeader(pendingRows, prow, "Version", 1);
+          appendRow("PENDING_CHOICES", pendingRows, prow);
+          setByHeader(competenceRows, competenceRow, "Pending milestone", nextChoiceId);
+          pendingChoices.push({ choiceId: nextChoiceId, competenceId: parentId, triggerLevel: level });
+        }
+      }
+
+      const erow = Array(headers(progressionRows).length).fill("");
+      setByHeader(progressionRows, erow, "TX ID", `${input.txId}#release${resolutionIndex + 1}`);
+      setByHeader(progressionRows, erow, "Inworld time", resolvedInworldEnd);
+      setByHeader(progressionRows, erow, "Competence ID", parentId);
+      setByHeader(progressionRows, erow, "Event type", "deferred_xp_release");
+      setByHeader(progressionRows, erow, "Old XP", oldXp);
+      setByHeader(progressionRows, erow, "Delta", deferred);
+      setByHeader(progressionRows, erow, "New XP", released.newXp);
+      setByHeader(progressionRows, erow, "Old level", oldLevel);
+      setByHeader(progressionRows, erow, "New level", released.newLevel);
+      setByHeader(progressionRows, erow, "Notes", `choice ${resolution.choiceId} resolved as ${resolution.selectedOption}`);
+      appendRow("PROGRESSION_EVENTS", progressionRows, erow);
+    }
+
+    setByHeader(competenceRows, competenceRow, "Last TX", input.txId);
+    writeRow("COMPETENCES", competenceRows, competenceIndex, competenceRow);
+    choiceResolutionOutcomes.push({
+      choiceId: resolution.choiceId,
+      selectedOption: resolution.selectedOption,
+      releasedDeferredXp: deferred,
+      progression: released,
+    });
+  }
 
   for (let eventIndex = 0; eventIndex < (semantic.learningEvents ?? []).length; eventIndex++) {
     const event = semantic.learningEvents![eventIndex];
@@ -315,11 +405,34 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       modifiers: event.modifiers,
       exactOverride: event.exactXpOverride,
     });
-    const advanced = advanceCompetence(oldLevel, oldXp, delta);
+    const pendingBefore = String(row[headerIndex(competenceRows, "Pending milestone")] ?? "").trim();
+    const oldDeferred = Number(row[headerIndex(competenceRows, "Deferred XP")] ?? 0) || 0;
+    const advanced = pendingBefore
+      ? {
+          oldLevel,
+          newLevel: oldLevel,
+          oldXp,
+          newXp: oldXp,
+          delta,
+          deferredXp: delta,
+          nextThreshold: competenceThresholdForRow(competenceRows, row),
+          crossedLevels: [] as number[],
+          milestoneLevels: [] as number[],
+        }
+      : advanceCompetence(oldLevel, oldXp, delta);
+    const newDeferred = oldDeferred + (advanced.deferredXp ?? 0);
     setByHeader(competenceRows, row, "Level", advanced.newLevel);
     setByHeader(competenceRows, row, "Carried XP", advanced.newXp);
+    setByHeader(competenceRows, row, "Deferred XP", newDeferred);
     if (advanced.nextThreshold != null) setByHeader(competenceRows, row, "Next threshold", advanced.nextThreshold);
-    setByHeader(competenceRows, row, "Last delta", `+${delta} — ${event.reason ?? event.band}`);
+    setByHeader(
+      competenceRows,
+      row,
+      "Last delta",
+      pendingBefore || (advanced.deferredXp ?? 0) > 0
+        ? `+${delta} awarded; ${advanced.deferredXp ?? delta} deferred pending milestone — ${event.reason ?? event.band}`
+        : `+${delta} — ${event.reason ?? event.band}`,
+    );
     setByHeader(competenceRows, row, "Last TX", input.txId);
 
     let specializationOutcome: unknown = null;
@@ -400,9 +513,20 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     setByHeader(progressionRows, erow, "New XP", advanced.newXp);
     setByHeader(progressionRows, erow, "Old level", oldLevel);
     setByHeader(progressionRows, erow, "New level", advanced.newLevel);
-    setByHeader(progressionRows, erow, "Notes", event.reason ?? "");
+    setByHeader(
+      progressionRows,
+      erow,
+      "Notes",
+      `${event.reason ?? ""}${pendingBefore || (advanced.deferredXp ?? 0) > 0 ? ` | deferredXP=${advanced.deferredXp ?? delta}; totalDeferred=${newDeferred}` : ""}`,
+    );
     appendRow("PROGRESSION_EVENTS", progressionRows, erow);
-    learningOutcomes.push({ competenceId: event.competenceId, ...advanced, specialization: specializationOutcome });
+    learningOutcomes.push({
+      competenceId: event.competenceId,
+      ...advanced,
+      deferredTotal: newDeferred,
+      pendingBefore: pendingBefore || null,
+      specialization: specializationOutcome,
+    });
   }
 
   const genericRows = new Map<StructuredRuntimeTable, unknown[][]>();
@@ -488,6 +612,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     },
     outcomes: {
       generalXp: generalXpOutcomes,
+      choiceResolutions: choiceResolutionOutcomes,
       learning: learningOutcomes,
       resources: resourceOutcomes,
       pendingChoices,

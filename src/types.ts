@@ -74,6 +74,12 @@ export type SemanticGeneralXpEvent = {
   thresholdFraction?: number;
 };
 
+export type SemanticChoiceResolution = {
+  choiceId: string;
+  selectedOption: string;
+  notes?: string;
+};
+
 export type SemanticLearningEvent = {
   competenceId: string;
   specialization?: string;
@@ -125,7 +131,10 @@ export type StructuredRuntimeTable =
   | "PLAYER_GRAMMAR"
   | "SERVICES_CURRENT"
   | "MAP_KNOWLEDGE_CURRENT"
-  | "ENTITY_INDEX";
+  | "ENTITY_INDEX"
+  | "MILESTONES"
+  | "WORLD_CLOCKS"
+  | "WEATHER_CURRENT";
 
 export type SemanticRowUpsert = {
   table: StructuredRuntimeTable;
@@ -158,6 +167,7 @@ export type SemanticCommitPlan = {
   resourceDeltas?: SemanticResourceDelta[];
   resourceSets?: SemanticResourceSet[];
   conditions?: SemanticConditionSet[];
+  choiceResolutions?: SemanticChoiceResolution[];
   generalXpEvents?: SemanticGeneralXpEvent[];
   learningEvents?: SemanticLearningEvent[];
   rowUpserts?: SemanticRowUpsert[];

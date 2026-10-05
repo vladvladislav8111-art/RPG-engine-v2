@@ -1,6 +1,7 @@
 import { assertEquals } from "jsr:@std/assert";
 import {
   advanceClock,
+  advanceCompetence,
   advanceGeneralXp,
   combatThreatMultiplier,
   computeCompetenceAward,
@@ -37,4 +38,12 @@ Deno.test("competence learning formula is deterministic", () => {
 
 Deno.test("clock rollover is exact", () => {
   assertEquals(advanceClock(31, "23:59:30", 90), { day: 32, time: "00:01:00" });
+});
+
+Deno.test("competence milestone locks overflow into deferred XP", () => {
+  const r = advanceCompetence(2, 590, 50);
+  assertEquals(r.newLevel, 3);
+  assertEquals(r.newXp, 0);
+  assertEquals(r.deferredXp, 40);
+  assertEquals(r.milestoneLevels, [3]);
 });

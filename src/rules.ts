@@ -105,6 +105,7 @@ export function advanceCompetence(level: number, carriedXp: number, delta: numbe
   let nextLevel = level;
   let xp = carriedXp + delta;
   const crossed: number[] = [];
+  let deferredXp = 0;
 
   while (nextLevel < 13) {
     const threshold = competenceThreshold(nextLevel);
@@ -112,6 +113,11 @@ export function advanceCompetence(level: number, carriedXp: number, delta: numbe
     xp -= threshold;
     nextLevel += 1;
     crossed.push(nextLevel);
+    if (MILESTONE_LEVELS.has(nextLevel)) {
+      deferredXp = xp;
+      xp = 0;
+      break;
+    }
   }
 
   return {
@@ -120,6 +126,7 @@ export function advanceCompetence(level: number, carriedXp: number, delta: numbe
     oldXp: carriedXp,
     newXp: xp,
     delta,
+    deferredXp,
     nextThreshold: competenceThreshold(nextLevel),
     crossedLevels: crossed,
     milestoneLevels: crossed.filter((l) => MILESTONE_LEVELS.has(l)),

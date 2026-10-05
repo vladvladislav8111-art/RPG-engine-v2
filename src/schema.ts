@@ -2,7 +2,7 @@ export const TABLES = {
   CONTROL: { range: "CONTROL!A1:D100", keyHeader: "Key" },
   PLAYER_RESOURCES: { range: "PLAYER_RESOURCES!A1:D100", keyHeader: "Resource" },
   PLAYER_CONDITIONS: { range: "PLAYER_CONDITIONS!A1:F100", keyHeader: "Condition ID" },
-  COMPETENCES: { range: "COMPETENCES!A1:K100", keyHeader: "Competence ID" },
+  COMPETENCES: { range: "COMPETENCES!A1:L100", keyHeader: "Competence ID" },
   SPECIALIZATIONS: { range: "SPECIALIZATIONS!A1:I200", keyHeader: "Specialization" },
   MILESTONES: { range: "MILESTONES!A1:K100", keyHeader: "Milestone ID" },
   PENDING_CHOICES: { range: "PENDING_CHOICES!A1:L300", keyHeader: "Choice ID" },
