@@ -80,6 +80,48 @@ export type SemanticChoiceResolution = {
   notes?: string;
 };
 
+export type SemanticExertionEvent = {
+  actionId: string;
+  durationMinutes?: number;
+  count?: number;
+  loadMultiplier?: number;
+  environmentMultiplier?: number;
+  conditionMultiplier?: number;
+  recoveryMultiplier?: number;
+  explicitEfficiencyMultiplier?: number;
+  explicitCeilingMultiplier?: number;
+  allowForcedExertion?: boolean;
+  reason?: string;
+};
+
+export type SemanticRestEvent = {
+  restId: "rest.break" | "rest.short" | "rest.full";
+  durationMinutes: number;
+  recoveryMultiplier?: number;
+  usefulSleep?: boolean;
+  reason?: string;
+};
+
+export type SemanticInjuryEvent = {
+  injuryId?: string;
+  targetEntityId?: string;
+  seed: string;
+  weaponForce: "light" | "solid" | "heavy" | "extreme";
+  hitQuality: "glancing" | "ordinary" | "direct" | "exceptional";
+  location: "head_face" | "neck" | "torso_chest" | "torso_abdomen" | "arm" | "hand" | "leg" | "foot";
+  armorMitigation?: number;
+  tags?: string[];
+  toxin?: {
+    class: "weak" | "medium" | "strong" | "extreme";
+    doseModifier?: number;
+    deliveryModifier?: number;
+    specificImmunity?: number;
+    protection?: number;
+  };
+  simulationOnly?: boolean;
+  reason?: string;
+};
+
 export type SemanticLearningEvent = {
   competenceId: string;
   specialization?: string;
@@ -134,7 +176,8 @@ export type StructuredRuntimeTable =
   | "ENTITY_INDEX"
   | "MILESTONES"
   | "WORLD_CLOCKS"
-  | "WEATHER_CURRENT";
+  | "WEATHER_CURRENT"
+  | "BODY_INJURIES_CURRENT";
 
 export type SemanticRowUpsert = {
   table: StructuredRuntimeTable;
@@ -168,6 +211,9 @@ export type SemanticCommitPlan = {
   resourceSets?: SemanticResourceSet[];
   conditions?: SemanticConditionSet[];
   choiceResolutions?: SemanticChoiceResolution[];
+  exertionEvents?: SemanticExertionEvent[];
+  restEvents?: SemanticRestEvent[];
+  injuryEvents?: SemanticInjuryEvent[];
   generalXpEvents?: SemanticGeneralXpEvent[];
   learningEvents?: SemanticLearningEvent[];
   rowUpserts?: SemanticRowUpsert[];
