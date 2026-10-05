@@ -21,6 +21,13 @@ import {
   computeSpecializationProgress,
   nextStarThreshold,
 } from "./rules.ts";
+import {
+  ACTION_PROFILES,
+  deriveStaminaBaseMax,
+  resolveExertion,
+  resolveInjurySimulation,
+  resolveRest,
+} from "./physiology.ts";
 import { hash32 } from "./rng.ts";
 import { makeTurnToken } from "./turn_token.ts";
 import type {
@@ -89,6 +96,7 @@ const GENERIC_TABLES = new Set<StructuredRuntimeTable>([
   "MILESTONES",
   "WORLD_CLOCKS",
   "WEATHER_CURRENT",
+  "BODY_INJURIES_CURRENT",
 ]);
 
 function ensureGenericTable(name: string): asserts name is StructuredRuntimeTable {
@@ -118,6 +126,10 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     "SESSION_LOG",
   ]);
   if ((semantic.choiceResolutions?.length ?? 0) > 0) touched.add("MILESTONES");
+  if ((semantic.exertionEvents?.length ?? 0) > 0 || (semantic.restEvents?.length ?? 0) > 0 || (semantic.injuryEvents?.length ?? 0) > 0) {
+    touched.add("CHARACTERISTICS");
+  }
+  if ((semantic.injuryEvents ?? []).some((e) => e.simulationOnly !== true)) touched.add("BODY_INJURIES_CURRENT");
   for (const item of semantic.rowUpserts ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowUpdates ?? []) touched.add(item.table as RuntimeTableName);
 
@@ -239,12 +251,146 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
 
   const progressionRows = sheets[TABLES.PROGRESSION_EVENTS.range] ?? [];
   const generalXpOutcomes: unknown[] = [];
+  const exertionOutcomes: unknown[] = [];
+  const restOutcomes: unknown[] = [];
+  const injuryOutcomes: unknown[] = [];
+
+  const competenceRows = sheets[TABLES.COMPETENCES.range] ?? [];
+  const specRows = sheets[TABLES.SPECIALIZATIONS.range] ?? [];
+  const characteristicRows = sheets[TABLES.CHARACTERISTICS.range] ?? [];
+  const bodyRows = sheets[TABLES.BODY_INJURIES_CURRENT.range] ?? [];
 
   const readResource = (resource: string): number => {
     const i = findDataRow(resourceRows, "Resource", resource);
     if (i < 0) throw new Error(`unknown resource: ${resource}`);
     return asNumber(resourceRows[i + 1]?.[headerIndex(resourceRows, "Current")], resource);
   };
+
+  const readCharacteristic = (name: string): number => {
+    const i = findDataRow(characteristicRows, "Characteristic", name);
+    if (i < 0) throw new Error(`unknown characteristic: ${name}`);
+    return asNumber(characteristicRows[i + 1]?.[headerIndex(characteristicRows, "Value")], name);
+  };
+
+  const competenceLevel = (competenceId?: string): number => {
+    if (!competenceId) return 0;
+    const i = findDataRow(competenceRows, "Competence ID", competenceId);
+    if (i < 0) return 0;
+    return asNumber(competenceRows[i + 1]?.[headerIndex(competenceRows, "Level")], "competence level");
+  };
+
+  const specializationStars = (competenceId?: string, specialization?: string): number => {
+    if (!competenceId || !specialization || !specRows.length) return 0;
+    const cix = headerIndex(specRows, "Competence ID");
+    const six = headerIndex(specRows, "Specialization");
+    const starIx = headerIndex(specRows, "Stars");
+    const hit = specRows.slice(1).find((r) =>
+      String(r[cix] ?? "") === competenceId && String(r[six] ?? "") === specialization
+    );
+    return hit ? asNumber(hit[starIx], "specialization stars") : 0;
+  };
+
+  for (const event of semantic.exertionEvents ?? []) {
+    const profile = ACTION_PROFILES[event.actionId];
+    if (!profile) throw new Error(`unknown stamina action profile: ${event.actionId}`);
+    const endurance = readCharacteristic("Endurance");
+    const level = readResource("General Level");
+    const baseMax = deriveStaminaBaseMax(level, endurance);
+    const result = resolveExertion({
+      actionId: event.actionId,
+      durationMinutes: event.durationMinutes,
+      count: event.count,
+      current: readResource("Stamina"),
+      ceiling: readResource("Stamina Ceiling"),
+      baseMax,
+      endurance,
+      competenceLevel: competenceLevel(profile.competenceId),
+      specializationStars: specializationStars(profile.competenceId, profile.specialization),
+      loadMultiplier: event.loadMultiplier,
+      environmentMultiplier: event.environmentMultiplier,
+      conditionMultiplier: event.conditionMultiplier,
+      recoveryMultiplier: event.recoveryMultiplier,
+      explicitEfficiencyMultiplier: event.explicitEfficiencyMultiplier,
+      explicitCeilingMultiplier: event.explicitCeilingMultiplier,
+    });
+    if (result.overexertionDeficit > 0 && event.allowForcedExertion !== true) {
+      throw new Error(`exertion exceeds available Stamina by ${result.overexertionDeficit}; resolve forced exertion consequence explicitly`);
+    }
+    applyResource("Stamina Ceiling", result.newCeiling);
+    applyResource("Stamina", result.newCurrent);
+    exertionOutcomes.push({ ...result, reason: event.reason ?? null });
+  }
+
+  for (const event of semantic.restEvents ?? []) {
+    const endurance = readCharacteristic("Endurance");
+    const level = readResource("General Level");
+    const baseMax = deriveStaminaBaseMax(level, endurance);
+    const result = resolveRest({
+      restId: event.restId,
+      durationMinutes: event.durationMinutes,
+      current: readResource("Stamina"),
+      ceiling: readResource("Stamina Ceiling"),
+      baseMax,
+      endurance,
+      recoveryMultiplier: event.recoveryMultiplier,
+      usefulSleep: event.usefulSleep,
+    });
+    applyResource("Stamina Ceiling", result.newCeiling);
+    applyResource("Stamina", result.newCurrent);
+    restOutcomes.push({ ...result, reason: event.reason ?? null });
+  }
+
+  for (let injuryIndex = 0; injuryIndex < (semantic.injuryEvents ?? []).length; injuryIndex++) {
+    const event = semantic.injuryEvents![injuryIndex];
+    const endurance = readCharacteristic("Endurance");
+    const result = resolveInjurySimulation({
+      seed: event.seed,
+      weaponForce: event.weaponForce,
+      hitQuality: event.hitQuality,
+      location: event.location,
+      armorMitigation: event.armorMitigation,
+      endurance,
+      tags: event.tags,
+      toxin: event.toxin,
+    });
+    injuryOutcomes.push({ ...result, simulationOnly: event.simulationOnly === true, reason: event.reason ?? null });
+
+    if (event.simulationOnly === true) continue;
+
+    const oldHp = readResource("HP");
+    applyResource("HP", Math.max(0, oldHp - result.hpLoss));
+
+    const injuryId = event.injuryId ?? `injury.${input.txId}.${injuryIndex + 1}`;
+    const row = Array(headers(bodyRows).length).fill("");
+    setByHeader(bodyRows, row, "Injury ID", injuryId);
+    setByHeader(bodyRows, row, "Entity ID", event.targetEntityId ?? "player.shura");
+    setByHeader(bodyRows, row, "Location", event.location);
+    setByHeader(bodyRows, row, "Severity", result.severity);
+    setByHeader(bodyRows, row, "Tags", (event.tags ?? []).join(";"));
+    setByHeader(bodyRows, row, "HP Loss", result.hpLoss);
+    setByHeader(bodyRows, row, "Bleeding", result.bleeding);
+    setByHeader(bodyRows, row, "Pain", result.severity === "SUPERFICIAL" ? "minor" : result.severity === "LIGHT" ? "low" : result.severity === "SERIOUS" ? "moderate" : result.severity === "SEVERE" ? "high" : "extreme");
+    setByHeader(bodyRows, row, "Shock", result.severity === "SUPERFICIAL" ? "none" : result.severity === "LIGHT" ? "low" : result.severity === "SERIOUS" ? "moderate" : result.severity === "SEVERE" ? "high" : "very high");
+    setByHeader(
+      bodyRows,
+      row,
+      "Functional consequence",
+      result.criticalStructureHit
+        ? `critical structure: ${result.criticalStructure}`
+        : result.severity === "SUPERFICIAL"
+        ? "local nuisance"
+        : result.severity === "LIGHT"
+        ? "local impairment possible"
+        : "location-dependent functional impairment likely",
+    );
+    setByHeader(bodyRows, row, "Toxin", result.toxin ? JSON.stringify(result.toxin) : "");
+    setByHeader(bodyRows, row, "Status", "ACTIVE");
+    setByHeader(bodyRows, row, "Created at", resolvedInworldEnd);
+    setByHeader(bodyRows, row, "Last updated", resolvedInworldEnd);
+    setByHeader(bodyRows, row, "Source TX", input.txId);
+    setByHeader(bodyRows, row, "Version", 1);
+    appendRow("BODY_INJURIES_CURRENT", bodyRows, row);
+  }
 
   for (let eventIndex = 0; eventIndex < (semantic.generalXpEvents ?? []).length; eventIndex++) {
     const event = semantic.generalXpEvents![eventIndex];
@@ -305,8 +451,6 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     writeRow("PLAYER_CONDITIONS", conditionRows, i, row);
   }
 
-  const competenceRows = sheets[TABLES.COMPETENCES.range] ?? [];
-  const specRows = sheets[TABLES.SPECIALIZATIONS.range] ?? [];
   const pendingRows = sheets[TABLES.PENDING_CHOICES.range] ?? [];
   const learningOutcomes: unknown[] = [];
   const pendingChoices: unknown[] = [];
@@ -611,6 +755,9 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       docAppends: [],
     },
     outcomes: {
+      exertion: exertionOutcomes,
+      rest: restOutcomes,
+      injury: injuryOutcomes,
       generalXp: generalXpOutcomes,
       choiceResolutions: choiceResolutionOutcomes,
       learning: learningOutcomes,
