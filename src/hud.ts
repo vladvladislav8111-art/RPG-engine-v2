@@ -73,7 +73,7 @@ export async function getHudSnapshot() {
   const data = await sheetsBatchGet(config.files.TEMP_RUNTIME, ranges);
   const control = valueMap(data["CONTROL!A1:D12"] ?? [], 0, 1);
   const resources = valueMap(data["PLAYER_RESOURCES!A1:D20"] ?? [], 2, 3);
-  const characteristics = valueMap(data["CHARACTERISTICS!A1:H30"] ?? [], 2, 3);
+  const characteristics = valueMap(data["CHARACTERISTICS!A1:H30"] ?? [], 0, 1);
   const conditions = conditionMap(data["PLAYER_CONDITIONS!A1:F40"] ?? []);
 
   const level = n(resources["General Level"]);
