@@ -29,7 +29,7 @@ import {
   resolveRest,
 } from "./physiology.ts";
 import { hash32 } from "./rng.ts";
-import { computeSurvivalChange, type SurvivalActivity } from "./survival.ts";
+import { computeSurvivalChange, survivalStaminaModifiers, type SurvivalActivity } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
 import type {
   CommitRequest,
@@ -348,10 +348,16 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       specializationStars: specializationStars(profile.competenceId, profile.specialization),
       loadMultiplier: event.loadMultiplier,
       environmentMultiplier: event.environmentMultiplier,
-      conditionMultiplier: event.conditionMultiplier,
-      recoveryMultiplier: event.recoveryMultiplier,
+      conditionMultiplier:
+        (event.conditionMultiplier ?? 1) *
+        survivalStaminaModifiers(readResource("Satiety"), readResource("Hydration")).exertionCost,
+      recoveryMultiplier:
+        (event.recoveryMultiplier ?? 1) *
+        survivalStaminaModifiers(readResource("Satiety"), readResource("Hydration")).recovery,
       explicitEfficiencyMultiplier: event.explicitEfficiencyMultiplier,
-      explicitCeilingMultiplier: event.explicitCeilingMultiplier,
+      explicitCeilingMultiplier:
+        (event.explicitCeilingMultiplier ?? 1) *
+        survivalStaminaModifiers(readResource("Satiety"), readResource("Hydration")).ceilingLoss,
     });
     if (result.overexertionDeficit > 0 && event.allowForcedExertion !== true) {
       throw new Error(`exertion exceeds available Stamina by ${result.overexertionDeficit}; resolve forced exertion consequence explicitly`);
@@ -372,7 +378,9 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       ceiling: readResource("Stamina Ceiling"),
       baseMax,
       endurance,
-      recoveryMultiplier: event.recoveryMultiplier,
+      recoveryMultiplier:
+        (event.recoveryMultiplier ?? 1) *
+        survivalStaminaModifiers(readResource("Satiety"), readResource("Hydration")).recovery,
       usefulSleep: event.usefulSleep,
     });
     applyResource("Stamina Ceiling", result.newCeiling);
