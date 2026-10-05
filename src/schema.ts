@@ -1,6 +1,7 @@
 export const TABLES = {
   CONTROL: { range: "CONTROL!A1:D100", keyHeader: "Key" },
   PLAYER_RESOURCES: { range: "PLAYER_RESOURCES!A1:D100", keyHeader: "Resource" },
+  CHARACTERISTICS: { range: "CHARACTERISTICS!A1:H100", keyHeader: "Characteristic" },
   PLAYER_CONDITIONS: { range: "PLAYER_CONDITIONS!A1:F100", keyHeader: "Condition ID" },
   COMPETENCES: { range: "COMPETENCES!A1:L100", keyHeader: "Competence ID" },
   SPECIALIZATIONS: { range: "SPECIALIZATIONS!A1:I200", keyHeader: "Specialization" },
@@ -21,6 +22,7 @@ export const TABLES = {
   ENTITY_INDEX: { range: "ENTITY_INDEX!A1:L1000", keyHeader: "Entity ID" },
   WORLD_CLOCKS: { range: "WORLD_CLOCKS!A1:H200", keyHeader: "Process ID" },
   WEATHER_CURRENT: { range: "WEATHER_CURRENT!A1:J100", keyHeader: "Weather ID" },
+  BODY_INJURIES_CURRENT: { range: "BODY_INJURIES_CURRENT!A1:P500", keyHeader: "Injury ID" },
   ACTIVE_CONTEXT: { range: "ACTIVE_CONTEXT!A1:H50", keyHeader: "Slot" },
 } as const;
 
@@ -38,6 +40,11 @@ export const PREGEN_TABLES = {
   DISTRICT_PACKS: "DISTRICT_PACKS!A1:N500",
   SERVICE_DIRECTORY: "SERVICE_DIRECTORY!A1:N1500",
   ENTITY_BLUEPRINTS: "ENTITY_BLUEPRINTS!A1:N1000",
+  ACTION_STAMINA_PROFILES: "ACTION_STAMINA_PROFILES!A1:P500",
+  REST_PROFILES: "REST_PROFILES!A1:P500",
+  INJURY_SEVERITY: "INJURY_SEVERITY!A1:P500",
+  HIT_LOCATION_PROFILES: "HIT_LOCATION_PROFILES!A1:P500",
+  TOXIN_PROFILES: "TOXIN_PROFILES!A1:P500",
 } as const;
 
 export function columnLetter(indexZeroBased: number): string {
