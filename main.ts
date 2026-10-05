@@ -3,7 +3,7 @@ import { config } from "./src/config.ts";
 import { getTurnContext } from "./src/context.ts";
 import { sheetsBatchGet } from "./src/google.ts";
 import { intBetween } from "./src/rng.ts";
-import { getHudSnapshot, HUD_UI_VERSION } from "./src/hud.ts";
+import { HUD_UI_VERSION } from "./src/hud.ts";
 import { RULESET_VERSION } from "./src/rules.ts";
 import { diagnoseMcp, handleMcp } from "./src/mcp.ts";
 import type { CommitRequest, TurnContextRequest } from "./src/types.ts";
@@ -131,17 +131,11 @@ Deno.serve({ port: config.port }, async (req) => {
     if (!authorized(req)) return json({ error: "unauthorized" }, 401);
 
     if (url.pathname === "/health" && req.method === "GET") {
-      const [state, mcpSelfTest, hudSnapshot] = await Promise.all([
-        sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2", "CONTROL!B5", "CONTROL!B6", "CONTROL!B8"]),
-        diagnoseMcp(),
-        getHudSnapshot(),
-      ]);
+      const state = await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2", "CONTROL!B5", "CONTROL!B6", "CONTROL!B8"]);
       return json({
         ok: true,
         engineVersion: RULESET_VERSION,
         hudUiVersion: HUD_UI_VERSION,
-        mcpSelfTest,
-        hudSnapshot,
         writesEnabled: config.allowWrites,
         saveId: state["CONTROL!B2"]?.[0]?.[0] ?? null,
         worldTime: state["CONTROL!B5"]?.[0]?.[0] ?? null,
