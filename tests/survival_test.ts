@@ -4,6 +4,7 @@ import {
   FOOD_PROFILES,
   HYDRATION_PER_LITER,
   survivalBand,
+  survivalStaminaModifiers,
 } from "../src/survival.ts";
 
 Deno.test("bread and ordinary meal have fixed satiety values", () => {
@@ -67,4 +68,18 @@ Deno.test("survival bands are stable", () => {
   assertEquals(survivalBand(30), "low");
   assertEquals(survivalBand(15), "severe");
   assertEquals(survivalBand(5), "critical");
+});
+
+
+Deno.test("low satiety and hydration penalize stamina economy deterministically", () => {
+  assertEquals(survivalStaminaModifiers(80, 80), {
+    exertionCost: 1,
+    recovery: 1,
+    ceilingLoss: 1,
+  });
+  assertEquals(survivalStaminaModifiers(20, 20), {
+    exertionCost: 1.3,
+    recovery: 0.6,
+    ceilingLoss: 1.3,
+  });
 });
