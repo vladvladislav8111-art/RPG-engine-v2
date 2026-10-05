@@ -130,3 +130,28 @@ export function computeSurvivalChange(input: {
     foodIntakes: intakeOutcomes,
   };
 }
+
+
+export function survivalStaminaModifiers(satiety: number, hydration: number) {
+  const food = satiety >= 50
+    ? { exertion: 1, recovery: 1, ceiling: 1 }
+    : satiety >= 25
+    ? { exertion: 1.05, recovery: 0.92, ceiling: 1.05 }
+    : satiety >= 10
+    ? { exertion: 1.12, recovery: 0.80, ceiling: 1.12 }
+    : { exertion: 1.25, recovery: 0.65, ceiling: 1.25 };
+
+  const water = hydration >= 50
+    ? { exertion: 1, recovery: 1, ceiling: 1 }
+    : hydration >= 25
+    ? { exertion: 1.08, recovery: 0.88, ceiling: 1.08 }
+    : hydration >= 10
+    ? { exertion: 1.20, recovery: 0.70, ceiling: 1.20 }
+    : { exertion: 1.40, recovery: 0.50, ceiling: 1.40 };
+
+  return {
+    exertionCost: oneDecimal(Math.min(1.75, food.exertion * water.exertion)),
+    recovery: oneDecimal(Math.max(0.35, food.recovery * water.recovery)),
+    ceilingLoss: oneDecimal(Math.min(1.75, food.ceiling * water.ceiling)),
+  };
+}
