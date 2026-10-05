@@ -131,11 +131,15 @@ Deno.serve({ port: config.port }, async (req) => {
     if (!authorized(req)) return json({ error: "unauthorized" }, 401);
 
     if (url.pathname === "/health" && req.method === "GET") {
-      const state = await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2", "CONTROL!B5", "CONTROL!B6", "CONTROL!B8"]);
+      const [state, mcpSelfTest] = await Promise.all([
+        sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2", "CONTROL!B5", "CONTROL!B6", "CONTROL!B8"]),
+        diagnoseMcp(),
+      ]);
       return json({
         ok: true,
         engineVersion: RULESET_VERSION,
         hudUiVersion: HUD_UI_VERSION,
+        mcpSelfTest,
         writesEnabled: config.allowWrites,
         saveId: state["CONTROL!B2"]?.[0]?.[0] ?? null,
         worldTime: state["CONTROL!B5"]?.[0]?.[0] ?? null,
