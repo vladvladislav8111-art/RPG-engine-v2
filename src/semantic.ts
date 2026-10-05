@@ -15,7 +15,9 @@ import {
   RULESET_VERSION,
   advanceClock,
   advanceCompetence,
+  advanceGeneralXp,
   computeCompetenceAward,
+  computeGeneralXpAward,
   computeSpecializationProgress,
   nextStarThreshold,
 } from "./rules.ts";
@@ -94,6 +96,9 @@ function keyHeaderFor(table: StructuredRuntimeTable): string {
 export async function prepareSemanticCommit(input: CommitRequest & { semantic: SemanticCommitPlan }) {
   const started = performance.now();
   const semantic = input.semantic;
+  if ((input.docAppends?.length ?? 0) > 0) {
+    throw new Error("semantic fast path does not support docAppends; mutate structured current state instead");
+  }
   const touched = new Set<RuntimeTableName>([
     "CONTROL",
     "PLAYER_RESOURCES",
@@ -152,7 +157,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     resolvedDay = advancedClock.day;
     resolvedTime = advancedClock.time;
   }
-  const resolvedInworldEnd = resolvedInworldEnd ?? `Day${resolvedDay} ${resolvedTime}`;
+  const resolvedInworldEnd = semantic.session.inworldEnd ?? `Day${resolvedDay} ${resolvedTime}`;
 
   const sessionRows = sheets[TABLES.SESSION_LOG.range] ?? [];
   const txCol = headerIndex(sessionRows, "TX ID");
@@ -223,6 +228,62 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     applyResource(item.resource, old + item.delta);
   }
 
+  const progressionRows = sheets[TABLES.PROGRESSION_EVENTS.range] ?? [];
+  const generalXpOutcomes: unknown[] = [];
+
+  const readResource = (resource: string): number => {
+    const i = findDataRow(resourceRows, "Resource", resource);
+    if (i < 0) throw new Error(`unknown resource: ${resource}`);
+    return asNumber(resourceRows[i + 1]?.[headerIndex(resourceRows, "Current")], resource);
+  };
+
+  for (let eventIndex = 0; eventIndex < (semantic.generalXpEvents ?? []).length; eventIndex++) {
+    const event = semantic.generalXpEvents![eventIndex];
+    const oldLevel = readResource("General Level");
+    const oldXp = readResource("General XP");
+    const delta = computeGeneralXpAward({
+      level: oldLevel,
+      exactOverride: event.exactXpOverride,
+      effectiveThreatRating: event.effectiveThreatRating,
+      contribution: event.contribution,
+      complexityBonus: event.complexityBonus,
+      thresholdFraction: event.thresholdFraction,
+    });
+    const advanced = advanceGeneralXp(oldLevel, oldXp, delta);
+
+    applyResource("General Level", advanced.newLevel);
+    applyResource("General XP", advanced.newXp);
+    if (advanced.characteristicPointsGranted) {
+      applyResource("Free Characteristic Points", readResource("Free Characteristic Points") + advanced.characteristicPointsGranted);
+    }
+    if (advanced.skillPointsGranted) {
+      applyResource("Free Skill Points", readResource("Free Skill Points") + advanced.skillPointsGranted);
+    }
+    if (advanced.classPointsGranted) {
+      applyResource("Free Class Points", readResource("Free Class Points") + advanced.classPointsGranted);
+    }
+
+    const erow = Array(headers(progressionRows).length).fill("");
+    setByHeader(progressionRows, erow, "TX ID", `${input.txId}#general${eventIndex + 1}`);
+    setByHeader(progressionRows, erow, "Inworld time", resolvedInworldEnd);
+    setByHeader(progressionRows, erow, "Event type", `general_xp:${event.sourceType}`);
+    setByHeader(progressionRows, erow, "Modifiers JSON", JSON.stringify({
+      effectiveThreatRating: event.effectiveThreatRating ?? null,
+      contribution: event.contribution ?? null,
+      complexityBonus: event.complexityBonus ?? null,
+      thresholdFraction: event.thresholdFraction ?? null,
+      sourceRef: event.sourceRef ?? null,
+    }));
+    setByHeader(progressionRows, erow, "Old XP", oldXp);
+    setByHeader(progressionRows, erow, "Delta", delta);
+    setByHeader(progressionRows, erow, "New XP", advanced.newXp);
+    setByHeader(progressionRows, erow, "Old level", oldLevel);
+    setByHeader(progressionRows, erow, "New level", advanced.newLevel);
+    setByHeader(progressionRows, erow, "Notes", event.reason);
+    appendRow("PROGRESSION_EVENTS", progressionRows, erow);
+    generalXpOutcomes.push({ sourceType: event.sourceType, sourceRef: event.sourceRef ?? null, ...advanced });
+  }
+
   const conditionRows = sheets[TABLES.PLAYER_CONDITIONS.range] ?? [];
   for (const item of semantic.conditions ?? []) {
     const i = findDataRow(conditionRows, "Condition ID", item.conditionId);
@@ -238,7 +299,6 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   const competenceRows = sheets[TABLES.COMPETENCES.range] ?? [];
   const specRows = sheets[TABLES.SPECIALIZATIONS.range] ?? [];
   const pendingRows = sheets[TABLES.PENDING_CHOICES.range] ?? [];
-  const progressionRows = sheets[TABLES.PROGRESSION_EVENTS.range] ?? [];
   const learningOutcomes: unknown[] = [];
   const pendingChoices: unknown[] = [];
 
@@ -259,7 +319,8 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     setByHeader(competenceRows, row, "Level", advanced.newLevel);
     setByHeader(competenceRows, row, "Carried XP", advanced.newXp);
     if (advanced.nextThreshold != null) setByHeader(competenceRows, row, "Next threshold", advanced.nextThreshold);
-    writeRow("COMPETENCES", competenceRows, i, row);
+    setByHeader(competenceRows, row, "Last delta", `+${delta} — ${event.reason ?? event.band}`);
+    setByHeader(competenceRows, row, "Last TX", input.txId);
 
     let specializationOutcome: unknown = null;
     if (event.specialization) {
@@ -268,7 +329,10 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       const specDataIndex = specRows.slice(1).findIndex((r) =>
         String(r[cix] ?? "") === event.competenceId && String(r[six] ?? "") === event.specialization
       );
-      if (specDataIndex >= 0) {
+      if (specDataIndex < 0) {
+        throw new Error(`unknown specialization: ${event.competenceId}/${event.specialization}`);
+      }
+      {
         const srow = cloneRow(specRows, specDataIndex);
         let stars = asNumber(srow[headerIndex(specRows, "Stars")], "specialization stars");
         let progress = Number(srow[headerIndex(specRows, "Internal progress")] ?? 0) || 0;
@@ -297,6 +361,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       }
     }
 
+    const newChoiceIds: string[] = [];
     for (const level of advanced.milestoneLevels) {
       if (!MILESTONE_LEVELS.has(level)) continue;
       const choiceId = `choice.${event.competenceId}.lv${level}`;
@@ -314,8 +379,12 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
         setByHeader(pendingRows, prow, "Version", 1);
         appendRow("PENDING_CHOICES", pendingRows, prow);
         pendingChoices.push({ choiceId, competenceId: event.competenceId, triggerLevel: level });
+        newChoiceIds.push(choiceId);
       }
     }
+
+    if (newChoiceIds.length) setByHeader(competenceRows, row, "Pending milestone", newChoiceIds.join(";"));
+    writeRow("COMPETENCES", competenceRows, i, row);
 
     const erow = Array(headers(progressionRows).length).fill("");
     setByHeader(progressionRows, erow, "TX ID", `${input.txId}#learn${eventIndex + 1}`);
@@ -418,6 +487,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       docAppends: [],
     },
     outcomes: {
+      generalXp: generalXpOutcomes,
       learning: learningOutcomes,
       resources: resourceOutcomes,
       pendingChoices,

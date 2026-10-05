@@ -68,6 +68,61 @@ function hasAny(tags: Set<string>, wanted: string[]): boolean {
   return wanted.some((x) => tags.has(x));
 }
 
+function compactPregenRecords(key: string, records: Array<Record<string, unknown>>): unknown {
+  if (key === "languageMeta") {
+    return Object.fromEntries(records.map((r) => [String(r["Key"] ?? ""), r["Value"] ?? null]).filter(([k]) => k));
+  }
+  if (key === "languageGrammar") {
+    return records.filter((r) => String(r["Status"] ?? "") === "ACTIVE").map((r) => ({
+      id: r["Grammar ID"],
+      category: r["Category"],
+      form: r["Form/pattern"],
+      meaning: r["Meaning/function"],
+      position: r["Position"],
+      productive: r["Productive"],
+      playerKnown: r["Player-known by T0275"],
+      register: r["Register"],
+    }));
+  }
+  if (key === "languageDerivation") {
+    return records.filter((r) => String(r["Status"] ?? "") === "ACTIVE").map((r) => ({
+      id: r["Rule ID"],
+      type: r["Type"],
+      input: r["Input"],
+      output: r["Output pattern"],
+      meaning: r["Meaning"],
+      productivity: r["Productivity"],
+      repair: r["Phonological repair"],
+      collision: r["Collision policy"],
+    }));
+  }
+  if (key === "serviceDirectory") {
+    return records.map((r) => ({
+      id: r["Service ID"],
+      location: r["Location"],
+      provider: r["Provider class"],
+      service: r["Service"],
+      price: r["Price model"],
+      duration: r["Typical duration"],
+      availability: r["Availability rule"],
+      requirements: r["Requirements"],
+      risk: r["Risk"],
+      tags: r["Tags"],
+    }));
+  }
+  if (key === "districtPacks") {
+    return records.map((r) => ({
+      packId: r["Pack ID"],
+      location: r["Location ID"],
+      status: r["Materialization state"] ?? r["Status"],
+      institutions: r["Institutions/services"] ?? r["Institutions"],
+      economy: r["Economy anchors"],
+      notes: r["Notes"],
+    }));
+  }
+  return records;
+}
+
 function filterByLocation(records: Array<Record<string, unknown>>, locationId: string): Array<Record<string, unknown>> {
   if (!locationId) return records;
   const locationHeaders = ["Location", "Location/start", "District/location", "Current/last-known location", "Location / anchor"];
@@ -175,7 +230,9 @@ export async function getTurnContext(input: TurnContextRequest) {
     let records = rowsToObjects(p.rows);
     if (p.key === "districtPacks" || p.key === "serviceDirectory") records = filterByLocation(records, locationId);
     if (p.key === "languageLexicon") languageLexiconRows = p.rows;
-    if (p.key !== "languageLexicon" || input.includeWorldLanguage) pregen[p.key] = { records, revision: p.revision, cache: p.cache };
+    if (p.key !== "languageLexicon" || input.includeWorldLanguage) {
+      pregen[p.key] = { data: compactPregenRecords(p.key, records), revision: p.revision, cache: p.cache };
+    }
   }
 
   const languageConcepts = (input.languageConcepts ?? []).map((q) => q.trim()).filter(Boolean);

@@ -6,6 +6,7 @@ import { config } from "./config.ts";
 import { getTurnContext } from "./context.ts";
 import { sheetsBatchGet } from "./google.ts";
 import { intBetween } from "./rng.ts";
+import { RULESET_VERSION } from "./rules.ts";
 
 const docKeySchema = z.enum([
   "LIVE_CANON_INDEX",
@@ -84,6 +85,16 @@ const semanticSchema = z.object({
     notes: z.string().optional(),
     updatedAt: z.string().optional(),
   })).optional(),
+  generalXpEvents: z.array(z.object({
+    sourceType: z.enum(["combat", "objective", "discovery", "survival", "breakthrough", "other"]),
+    reason: z.string(),
+    sourceRef: z.string().optional(),
+    exactXpOverride: z.number().nonnegative().optional(),
+    effectiveThreatRating: z.number().optional(),
+    contribution: z.number().min(0).max(1).optional(),
+    complexityBonus: z.number().min(0).max(0.5).optional(),
+    thresholdFraction: z.number().min(0).max(0.25).optional(),
+  })).optional(),
   learningEvents: z.array(z.object({
     competenceId: z.string(),
     specialization: z.string().optional(),
@@ -149,7 +160,7 @@ function buildServer() {
     {
       name: "rpg-v2-runtime",
       title: "RPG V2 Runtime",
-      version: "1.0.0",
+      version: "2.2.0",
     },
     { capabilities: { tools: {} } },
   );
@@ -177,6 +188,7 @@ function buildServer() {
       ]);
       return toolJson({
         ok: true,
+        engineVersion: RULESET_VERSION,
         writesEnabled: config.allowWrites,
         saveId: state["CONTROL!B2"]?.[0]?.[0] ?? null,
         worldTime: state["CONTROL!B5"]?.[0]?.[0] ?? null,

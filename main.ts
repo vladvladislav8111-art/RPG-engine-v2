@@ -3,6 +3,7 @@ import { config } from "./src/config.ts";
 import { getTurnContext } from "./src/context.ts";
 import { sheetsBatchGet } from "./src/google.ts";
 import { intBetween } from "./src/rng.ts";
+import { RULESET_VERSION } from "./src/rules.ts";
 import { diagnoseMcp, handleMcp } from "./src/mcp.ts";
 import type { CommitRequest, TurnContextRequest } from "./src/types.ts";
 
@@ -37,10 +38,13 @@ Deno.serve({ port: config.port }, async (req) => {
       return json({
         service: "RPG V2 Deno Runtime Gateway",
         status: "ready",
+        engineVersion: RULESET_VERSION,
         writesEnabled: config.allowWrites,
         googleConnected,
       });
     }
+    if (url.pathname.startsWith("/diag/") && !authorized(req)) return json({ error: "unauthorized" }, 401);
+
     if (url.pathname === "/diag/context" && req.method === "GET") {
       const ctx = await getTurnContext({
         turnId: "diag",
@@ -111,43 +115,6 @@ Deno.serve({ port: config.port }, async (req) => {
       });
     }
 
-    if (url.pathname === "/diag/semantic" && req.method === "GET") {
-      const ctx = await getTurnContext({
-        turnId: "diag-semantic-ctx",
-        turnClass: "MICRO",
-        tags: ["SKILL"],
-        actorIds: [],
-        lookups: [],
-        docQueries: [],
-      });
-      const prepared = await prepareCommit({
-        turnId: "diag-semantic",
-        txId: "diag-semantic-no-write",
-        expectedSaveId: ctx.packet.saveId,
-        saveTo: ctx.packet.saveId,
-        dryRun: true,
-        semantic: {
-          turnToken: ctx.packet.turnToken,
-          elapsedSeconds: 0,
-          session: {
-            inworldStart: `Day${ctx.packet.worldDay} ${ctx.packet.worldTime}`,
-            actionSummary: "semantic dry-run diagnostic",
-            deltas: {},
-            newCanon: {},
-            worldAdvances: {},
-            source: "DIAG",
-          },
-        },
-      });
-      return json({
-        ok: true,
-        semanticPrepared: true,
-        elapsedMs: prepared.elapsedMs,
-        writes: prepared.manifest.sheetWrites.length,
-        alreadyCommitted: prepared.alreadyCommitted ?? false,
-      });
-    }
-
     if (url.pathname === "/diag/mcp" && req.method === "GET") {
       return json(await diagnoseMcp());
     }
@@ -165,7 +132,7 @@ Deno.serve({ port: config.port }, async (req) => {
       const state = await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2", "CONTROL!B5", "CONTROL!B6", "CONTROL!B8"]);
       return json({
         ok: true,
-        engineVersion: "2.2-fastpath-semantic",
+        engineVersion: RULESET_VERSION,
         writesEnabled: config.allowWrites,
         saveId: state["CONTROL!B2"]?.[0]?.[0] ?? null,
         worldTime: state["CONTROL!B5"]?.[0]?.[0] ?? null,
@@ -180,14 +147,7 @@ Deno.serve({ port: config.port }, async (req) => {
 
     if (url.pathname === "/prepare-commit" && req.method === "POST") {
       const input = await body<CommitRequest>(req);
-      try {
-        return json(await prepareCommit({ ...input, dryRun: true }));
-      } catch (error) {
-        return json({
-          ok: false,
-          prepareError: error instanceof Error ? error.message : String(error),
-        });
-      }
+      return json(await prepareCommit({ ...input, dryRun: true }));
     }
 
     if (url.pathname === "/commit" && req.method === "POST") {

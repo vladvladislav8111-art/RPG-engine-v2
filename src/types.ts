@@ -63,6 +63,17 @@ export type LearningModifiers = {
   fatigue?: number;
 };
 
+export type SemanticGeneralXpEvent = {
+  sourceType: "combat" | "objective" | "discovery" | "survival" | "breakthrough" | "other";
+  reason: string;
+  sourceRef?: string;
+  exactXpOverride?: number;
+  effectiveThreatRating?: number;
+  contribution?: number;
+  complexityBonus?: number;
+  thresholdFraction?: number;
+};
+
 export type SemanticLearningEvent = {
   competenceId: string;
   specialization?: string;
@@ -147,6 +158,7 @@ export type SemanticCommitPlan = {
   resourceDeltas?: SemanticResourceDelta[];
   resourceSets?: SemanticResourceSet[];
   conditions?: SemanticConditionSet[];
+  generalXpEvents?: SemanticGeneralXpEvent[];
   learningEvents?: SemanticLearningEvent[];
   rowUpserts?: SemanticRowUpsert[];
   rowUpdates?: SemanticRowUpdate[];

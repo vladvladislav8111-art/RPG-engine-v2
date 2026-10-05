@@ -140,3 +140,77 @@ export function advanceClock(day: number, hhmmss: string, seconds: number) {
   const pad = (v: number) => String(v).padStart(2, "0");
   return { day: nextDay, time: `${pad(h)}:${pad(min)}:${pad(sec)}` };
 }
+
+
+export type GeneralXpEventInput = {
+  level: number;
+  exactOverride?: number;
+  effectiveThreatRating?: number;
+  contribution?: number;
+  complexityBonus?: number;
+  thresholdFraction?: number;
+};
+
+export function combatThreatMultiplier(delta: number): number {
+  if (delta <= -8) return 0.05;
+  if (delta <= -5) return 0.20;
+  if (delta <= -2) return 0.50;
+  if (delta <= 1) return 1.00;
+  if (delta <= 3) return 1.35;
+  if (delta <= 5) return 1.75;
+  if (delta <= 8) return 2.25;
+  return 3.00;
+}
+
+export function computeGeneralXpAward(input: GeneralXpEventInput): number {
+  if (input.exactOverride != null) {
+    if (!Number.isFinite(input.exactOverride) || input.exactOverride < 0) {
+      throw new Error("general XP exactOverride must be a finite non-negative number");
+    }
+    return Math.round(input.exactOverride);
+  }
+
+  const threshold = generalXpThreshold(input.level);
+  if (input.effectiveThreatRating != null) {
+    const contribution = clamp(input.contribution ?? 1, 0, 1);
+    const complexity = clamp(input.complexityBonus ?? 0, 0, 0.5);
+    const delta = input.effectiveThreatRating - input.level;
+    return Math.max(0, Math.round(0.025 * threshold * combatThreatMultiplier(delta) * contribution * (1 + complexity)));
+  }
+
+  if (input.thresholdFraction != null) {
+    if (!Number.isFinite(input.thresholdFraction) || input.thresholdFraction < 0 || input.thresholdFraction > 0.25) {
+      throw new Error("general XP thresholdFraction must be between 0 and 0.25");
+    }
+    return Math.max(0, Math.round(threshold * input.thresholdFraction));
+  }
+
+  throw new Error("general XP event requires exactOverride, combat ETR, or thresholdFraction");
+}
+
+export function advanceGeneralXp(level: number, carriedXp: number, delta: number) {
+  let nextLevel = Math.max(1, Math.floor(level));
+  let xp = Math.max(0, Math.floor(carriedXp)) + Math.max(0, Math.floor(delta));
+  const crossedLevels: number[] = [];
+
+  for (let guard = 0; guard < 100; guard++) {
+    const threshold = generalXpThreshold(nextLevel);
+    if (xp < threshold) break;
+    xp -= threshold;
+    nextLevel += 1;
+    crossedLevels.push(nextLevel);
+  }
+
+  return {
+    oldLevel: level,
+    newLevel: nextLevel,
+    oldXp: carriedXp,
+    newXp: xp,
+    delta,
+    nextThreshold: generalXpThreshold(nextLevel),
+    crossedLevels,
+    characteristicPointsGranted: crossedLevels.length,
+    skillPointsGranted: crossedLevels.length,
+    classPointsGranted: crossedLevels.filter((l) => l % 5 === 0).length,
+  };
+}
