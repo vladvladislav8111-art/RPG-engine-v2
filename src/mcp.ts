@@ -6,6 +6,13 @@ import { config } from "./config.ts";
 import { getTurnContext } from "./context.ts";
 import { sheetsBatchGet } from "./google.ts";
 import { getHudSnapshot, HUD_HTML, HUD_RESOURCE_URI, HUD_UI_VERSION } from "./hud.ts";
+import {
+  ACTION_PROFILES,
+  deriveStaminaBaseMax,
+  resolveExertion,
+  resolveInjurySimulation,
+  resolveRest,
+} from "./physiology.ts";
 import { intBetween } from "./rng.ts";
 import { RULESET_VERSION } from "./rules.ts";
 
@@ -84,6 +91,7 @@ const structuredTableSchema = z.enum([
   "MILESTONES",
   "WORLD_CLOCKS",
   "WEATHER_CURRENT",
+  "BODY_INJURIES_CURRENT",
 ]);
 
 const learningModifiersSchema = z.object({
@@ -119,6 +127,45 @@ const semanticSchema = z.object({
     choiceId: z.string().min(1),
     selectedOption: z.string().min(1),
     notes: z.string().optional(),
+  })).optional(),
+  exertionEvents: z.array(z.object({
+    actionId: z.string().min(1),
+    durationMinutes: z.number().nonnegative().optional(),
+    count: z.number().nonnegative().optional(),
+    loadMultiplier: z.number().nonnegative().optional(),
+    environmentMultiplier: z.number().nonnegative().optional(),
+    conditionMultiplier: z.number().nonnegative().optional(),
+    recoveryMultiplier: z.number().nonnegative().optional(),
+    explicitEfficiencyMultiplier: z.number().nonnegative().optional(),
+    explicitCeilingMultiplier: z.number().nonnegative().optional(),
+    allowForcedExertion: z.boolean().optional(),
+    reason: z.string().optional(),
+  })).optional(),
+  restEvents: z.array(z.object({
+    restId: z.enum(["rest.break", "rest.short", "rest.full"]),
+    durationMinutes: z.number().nonnegative(),
+    recoveryMultiplier: z.number().nonnegative().optional(),
+    usefulSleep: z.boolean().optional(),
+    reason: z.string().optional(),
+  })).optional(),
+  injuryEvents: z.array(z.object({
+    injuryId: z.string().optional(),
+    targetEntityId: z.string().optional(),
+    seed: z.string().min(1),
+    weaponForce: z.enum(["light", "solid", "heavy", "extreme"]),
+    hitQuality: z.enum(["glancing", "ordinary", "direct", "exceptional"]),
+    location: z.enum(["head_face", "neck", "torso_chest", "torso_abdomen", "arm", "hand", "leg", "foot"]),
+    armorMitigation: z.number().nonnegative().optional(),
+    tags: z.array(z.string()).optional(),
+    toxin: z.object({
+      class: z.enum(["weak", "medium", "strong", "extreme"]),
+      doseModifier: z.number().optional(),
+      deliveryModifier: z.number().optional(),
+      specificImmunity: z.number().nonnegative().optional(),
+      protection: z.number().nonnegative().optional(),
+    }).optional(),
+    simulationOnly: z.boolean().optional(),
+    reason: z.string().optional(),
   })).optional(),
   generalXpEvents: z.array(z.object({
     sourceType: z.enum(["combat", "objective", "discovery", "survival", "breakthrough", "other"]),
@@ -195,7 +242,7 @@ function buildServer() {
     {
       name: "rpg-v2-runtime",
       title: "RPG V2 Runtime",
-      version: "2.3.0",
+      version: "2.3.1",
     },
     { capabilities: { tools: {}, resources: {} } },
   );
@@ -341,6 +388,83 @@ function buildServer() {
         }],
       };
     },
+  );
+
+
+  server.registerTool(
+    "simulate_exertion",
+    {
+      title: "Simulate stamina exertion",
+      description:
+        "Read-only deterministic calculator for Current Stamina and Stamina Ceiling costs. It never changes campaign state.",
+      inputSchema: z.object({
+        actionId: z.string().min(1),
+        durationMinutes: z.number().nonnegative().optional(),
+        count: z.number().nonnegative().optional(),
+        current: z.number().nonnegative(),
+        ceiling: z.number().nonnegative(),
+        baseMax: z.number().positive(),
+        endurance: z.number().positive(),
+        competenceLevel: z.number().nonnegative().optional(),
+        specializationStars: z.number().nonnegative().optional(),
+        loadMultiplier: z.number().nonnegative().optional(),
+        environmentMultiplier: z.number().nonnegative().optional(),
+        conditionMultiplier: z.number().nonnegative().optional(),
+        recoveryMultiplier: z.number().nonnegative().optional(),
+        explicitEfficiencyMultiplier: z.number().nonnegative().optional(),
+        explicitCeilingMultiplier: z.number().nonnegative().optional(),
+      }),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async (input) => toolJson(resolveExertion(input)),
+  );
+
+  server.registerTool(
+    "simulate_rest",
+    {
+      title: "Simulate stamina recovery",
+      description:
+        "Read-only deterministic calculator for ordinary break, short rest, or full useful sleep. It never changes campaign state.",
+      inputSchema: z.object({
+        restId: z.enum(["rest.break", "rest.short", "rest.full"]),
+        durationMinutes: z.number().nonnegative(),
+        current: z.number().nonnegative(),
+        ceiling: z.number().nonnegative(),
+        baseMax: z.number().positive(),
+        endurance: z.number().positive(),
+        recoveryMultiplier: z.number().nonnegative().optional(),
+        usefulSleep: z.boolean().optional(),
+      }),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async (input) => toolJson(resolveRest(input)),
+  );
+
+  server.registerTool(
+    "simulate_injury",
+    {
+      title: "Simulate physical injury",
+      description:
+        "Read-only deterministic physical injury/toxin simulation. The physically plausible severity range is established first; seeded randomness then selects within it. It never changes campaign state.",
+      inputSchema: z.object({
+        seed: z.string().min(1),
+        weaponForce: z.enum(["light", "solid", "heavy", "extreme"]),
+        hitQuality: z.enum(["glancing", "ordinary", "direct", "exceptional"]),
+        location: z.enum(["head_face", "neck", "torso_chest", "torso_abdomen", "arm", "hand", "leg", "foot"]),
+        armorMitigation: z.number().nonnegative().optional(),
+        endurance: z.number().positive(),
+        tags: z.array(z.string()).optional(),
+        toxin: z.object({
+          class: z.enum(["weak", "medium", "strong", "extreme"]),
+          doseModifier: z.number().optional(),
+          deliveryModifier: z.number().optional(),
+          specificImmunity: z.number().nonnegative().optional(),
+          protection: z.number().nonnegative().optional(),
+        }).optional(),
+      }),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async (input) => toolJson(resolveInjurySimulation(input)),
   );
 
   server.registerTool(
