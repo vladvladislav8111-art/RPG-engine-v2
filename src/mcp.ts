@@ -42,6 +42,8 @@ const hudSnapshotSchema = z.object({
     hp: z.object({ current: z.number(), max: z.number() }),
     stamina: z.object({ current: z.number(), max: z.number(), baseMax: z.number() }),
     mana: z.object({ current: z.number(), max: z.number() }),
+    satiety: z.object({ current: z.number(), max: z.number() }),
+    hydration: z.object({ current: z.number(), max: z.number() }),
     money: z.number(),
     generalXp: z.object({ current: z.number(), max: z.number() }),
     sup: z.number(),
@@ -123,6 +125,30 @@ const semanticSchema = z.object({
     notes: z.string().optional(),
     updatedAt: z.string().optional(),
   })).optional(),
+  survival: z.object({
+    segments: z.array(z.object({
+      durationMinutes: z.number().nonnegative(),
+      activity: z.enum(["sleep", "rest", "normal", "travel", "work", "heavy"]),
+      satietyMultiplier: z.number().nonnegative().optional(),
+      hydrationMultiplier: z.number().nonnegative().optional(),
+    })).optional(),
+    defaultActivity: z.enum(["sleep", "rest", "normal", "travel", "work", "heavy"]).optional(),
+    foodIntakes: z.array(z.object({
+      foodId: z.enum([
+        "food.bread_loaf",
+        "food.light_snack",
+        "food.ordinary_meal",
+        "food.substantial_meal",
+        "food.field_ration",
+        "food.fruit_portion",
+      ]),
+      count: z.number().nonnegative().optional(),
+      satietyOverride: z.number().nonnegative().optional(),
+      hydrationOverride: z.number().nonnegative().optional(),
+    })).optional(),
+    waterLiters: z.number().nonnegative().optional(),
+    heatMultiplier: z.number().nonnegative().optional(),
+  }).optional(),
   choiceResolutions: z.array(z.object({
     choiceId: z.string().min(1),
     selectedOption: z.string().min(1),
@@ -242,7 +268,7 @@ function buildServer() {
     {
       name: "rpg-v2-runtime",
       title: "RPG V2 Runtime",
-      version: "2.3.1",
+      version: "2.4.0",
     },
     { capabilities: { tools: {}, resources: {} } },
   );
@@ -384,7 +410,7 @@ function buildServer() {
         content: [{
           type: "text" as const,
           text:
-            `HUD: ${snapshot.name}, уровень ${snapshot.level}, день ${snapshot.day}, ${snapshot.time}; HP ${snapshot.resources.hp.current}/${snapshot.resources.hp.max}, выносливость ${snapshot.resources.stamina.current}/${snapshot.resources.stamina.max}, мана ${snapshot.resources.mana.current}/${snapshot.resources.mana.max}; деньги ${snapshot.resources.money}c; XP ${snapshot.resources.generalXp.current}/${snapshot.resources.generalXp.max}.`,
+            `HUD: ${snapshot.name}, уровень ${snapshot.level}, день ${snapshot.day}, ${snapshot.time}; HP ${snapshot.resources.hp.current}/${snapshot.resources.hp.max}, выносливость ${snapshot.resources.stamina.current}/${snapshot.resources.stamina.max}, мана ${snapshot.resources.mana.current}/${snapshot.resources.mana.max}; сытость ${snapshot.resources.satiety.current}/${snapshot.resources.satiety.max}, гидратация ${snapshot.resources.hydration.current}/${snapshot.resources.hydration.max}; деньги ${snapshot.resources.money}c; XP ${snapshot.resources.generalXp.current}/${snapshot.resources.generalXp.max}.`,
         }],
       };
     },
