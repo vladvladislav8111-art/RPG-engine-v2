@@ -112,7 +112,16 @@ export async function getHudSnapshot() {
     },
     statuses,
     water: water
-      ? { value: water.value, unit: water.unit, notes: water.notes }
+      ? {
+          value: water.value,
+          unit: water.unit,
+          notes: water.notes,
+          display: (() => {
+            const stored = water.notes.match(/([0-9]+(?:\.[0-9]+)?)L untreated .*?System Storage/i)?.[1];
+            const carried = `${water.value} L при себе`;
+            return stored ? `${carried} · ${stored} L в Storage (не обработана)` : carried;
+          })(),
+        }
       : null,
   };
 }
@@ -269,7 +278,7 @@ export const HUD_HTML = `<!doctype html>
     });
     if (d.water) {
       $("waterRow").hidden = false;
-      $("water").textContent = [d.water.value, d.water.unit].filter(Boolean).join(" ");
+      $("water").textContent = d.water.display || [d.water.value, d.water.unit].filter(Boolean).join(" ");
     } else {
       $("waterRow").hidden = true;
     }
