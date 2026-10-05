@@ -162,6 +162,36 @@ export type SemanticConditionSet = {
   updatedAt?: string;
 };
 
+export type SemanticSurvivalActivity = "sleep" | "rest" | "normal" | "travel" | "work" | "heavy";
+
+export type SemanticSurvivalSegment = {
+  durationMinutes: number;
+  activity: SemanticSurvivalActivity;
+  satietyMultiplier?: number;
+  hydrationMultiplier?: number;
+};
+
+export type SemanticFoodIntake = {
+  foodId:
+    | "food.bread_loaf"
+    | "food.light_snack"
+    | "food.ordinary_meal"
+    | "food.substantial_meal"
+    | "food.field_ration"
+    | "food.fruit_portion";
+  count?: number;
+  satietyOverride?: number;
+  hydrationOverride?: number;
+};
+
+export type SemanticSurvival = {
+  segments?: SemanticSurvivalSegment[];
+  defaultActivity?: SemanticSurvivalActivity;
+  foodIntakes?: SemanticFoodIntake[];
+  waterLiters?: number;
+  heatMultiplier?: number;
+};
+
 export type StructuredRuntimeTable =
   | "INVENTORY_CURRENT"
   | "OPPORTUNITIES_CURRENT"
@@ -210,6 +240,7 @@ export type SemanticCommitPlan = {
   resourceDeltas?: SemanticResourceDelta[];
   resourceSets?: SemanticResourceSet[];
   conditions?: SemanticConditionSet[];
+  survival?: SemanticSurvival;
   choiceResolutions?: SemanticChoiceResolution[];
   exertionEvents?: SemanticExertionEvent[];
   restEvents?: SemanticRestEvent[];
