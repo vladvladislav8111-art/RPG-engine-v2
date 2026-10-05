@@ -801,7 +801,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     manifest: {
       spreadsheetId: config.files.TEMP_RUNTIME,
       sheetWrites: [...dirty.entries()].map(([range, values]) => ({ range, values })) as SheetWrite[],
-      docAppends: [],
+      docAppends: (input.docAppends ?? []).map((d) => ({ ...d, txMarker: `[TX:${input.txId}]` })),
     },
     outcomes: {
       exertion: exertionOutcomes,
