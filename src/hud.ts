@@ -3,8 +3,8 @@ import { sheetsBatchGet } from "./google.ts";
 import { deriveStaminaBaseMax } from "./physiology.ts";
 import { generalXpThreshold } from "./rules.ts";
 
-export const HUD_RESOURCE_URI = "ui://rpg-v2/hud-v2.2.html";
-export const HUD_UI_VERSION = "hud-v2.2-bridge-compat";
+export const HUD_RESOURCE_URI = "ui://rpg-v2/hud-v2.3.html";
+export const HUD_UI_VERSION = "hud-v2.3-stable-events";
 
 type Scalar = string | number | boolean | null;
 
@@ -266,45 +266,84 @@ export const HUD_HTML = `<!doctype html>
       ? "var(--warn)"
       : "var(--good)";
   }
-  function normalizePayload(d) {
+  let lastGoodPayload = null;
+
+  function unwrapPayload(input, depth) {
+    if (!input || depth > 6) return null;
+    if (Array.isArray(input)) {
+      for (const item of input) {
+        const hit = unwrapPayload(item, depth + 1);
+        if (hit) return hit;
+      }
+      return null;
+    }
+    if (typeof input !== "object") return null;
+
+    if (input.resources || (input.kind === "hud" && input.hp && input.stamina && input.mana)) {
+      return input;
+    }
+
+    const candidates = [
+      input.structuredContent,
+      input.structured_content,
+      input.toolOutput,
+      input.output,
+      input.result,
+      input.data,
+      input.payload,
+    ];
+    for (const candidate of candidates) {
+      const hit = unwrapPayload(candidate, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  function normalizePayload(raw) {
+    const d = unwrapPayload(raw, 0);
     if (!d) return null;
     if (d.resources) return d;
+
     // Compatibility with the ChatGPT RPG Runtime Bridge normalized HUD schema.
     if (d.kind === "hud" && d.hp && d.stamina && d.mana) {
       return {
         uiVersion: d.uiVersion || "bridge-normalized",
         saveId: d.saveId || "",
         name: d.name || "Шура",
-        level: Number(d.generalLevel || 0),
-        day: Number(d.worldDay || 0),
+        level: Number(d.generalLevel ?? 0),
+        day: Number(d.worldDay ?? 0),
         time: d.worldTime || "",
         location: d.locationDisplay || d.locationId || "",
         resources: {
           hp: d.hp,
           stamina: {
-            current: Number(d.stamina.current || 0),
-            max: Number(d.stamina.max || 0),
-            baseMax: Number((d.stamina && (d.stamina.baseMax ?? d.stamina.max)) || 0),
+            current: Number(d.stamina.current ?? 0),
+            max: Number(d.stamina.max ?? 0),
+            baseMax: Number((d.stamina && (d.stamina.baseMax ?? d.stamina.max)) ?? 0),
           },
           mana: d.mana,
           satiety: d.satiety || { current: 0, max: 100 },
           hydration: d.hydration || { current: 0, max: 100 },
-          money: Number(d.money || 0),
+          money: Number(d.money ?? 0),
           generalXp: {
-            current: Number((d.generalXp && d.generalXp.current) || 0),
-            max: Number((d.generalXp && (d.generalXp.max ?? d.generalXp.threshold)) || 0),
+            current: Number((d.generalXp && d.generalXp.current) ?? 0),
+            max: Number((d.generalXp && (d.generalXp.max ?? d.generalXp.threshold)) ?? 0),
           },
-          sup: Number(d.sup || 0),
+          sup: Number(d.sup ?? 0),
         },
         statuses: (d.conditions || []).map(label => ({ label, severity: "neutral" })),
         water: d.water || null,
       };
     }
-    return d;
+    return null;
   }
+
   function render(raw) {
     const d = normalizePayload(raw);
+    // ChatGPT may emit intermediate/empty globals after the successful result.
+    // Never replace a valid HUD with a non-HUD event.
     if (!d || !d.resources) return;
+    lastGoodPayload = d;
     $("title").textContent = d.name + " · Уровень " + d.level;
     $("day").textContent = "День " + d.day;
     setStat("hp", d.resources.hp);
@@ -342,17 +381,21 @@ export const HUD_HTML = `<!doctype html>
   if (openai && openai.toolOutput) render(openai.toolOutput);
 
   window.addEventListener("openai:set_globals", (event) => {
-    const globals = event && event.detail && event.detail.globals;
-    if (globals && globals.toolOutput) render(globals.toolOutput);
+    try {
+      const globals = event && event.detail && event.detail.globals;
+      if (globals) render(globals);
+    } catch (_) {
+      // Keep the last successfully rendered HUD.
+    }
   });
 
   window.addEventListener("message", (event) => {
-    const msg = event.data;
-    if (!msg || msg.jsonrpc !== "2.0") return;
-    if (msg.method === "ui/notifications/tool-result") {
-      const result = msg.params && msg.params.result;
-      const data = result && (result.structuredContent || result.structured_content);
-      if (data) render(data);
+    try {
+      const msg = event && event.data;
+      if (!msg) return;
+      render(msg);
+    } catch (_) {
+      // Keep the last successfully rendered HUD.
     }
   });
 })();
