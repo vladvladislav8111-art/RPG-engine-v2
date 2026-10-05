@@ -1,4 +1,4 @@
-export const RULESET_VERSION = "2.2-fastpath-2026-10-05";
+export const RULESET_VERSION = "2.3-physics-2026-10-05";
 
 export type LearningBand = "tiny" | "useful" | "substantial" | "breakthrough" | "exceptional";
 
