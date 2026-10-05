@@ -3,6 +3,7 @@ import { config } from "./config.ts";
 import { docsGet, fileModifiedTime, sheetsBatchGet } from "./google.ts";
 import { PREGEN_TABLES, TABLES } from "./schema.ts";
 import { RULESET_VERSION } from "./rules.ts";
+import { survivalBand } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
@@ -327,6 +328,11 @@ export async function getTurnContext(input: TurnContextRequest) {
     };
   });
 
+  const resources = resourceMap(base["PLAYER_RESOURCES!A1:E20"] ?? []);
+  const resourceDetails = resourceDetailsMap(base["PLAYER_RESOURCES!A1:E20"] ?? []);
+  const satiety = Number((resourceDetails["Satiety"] as any)?.current ?? 0);
+  const hydration = Number((resourceDetails["Hydration"] as any)?.current ?? 0);
+
   return {
     turnId: input.turnId,
     elapsedMs: Math.round(performance.now() - started),
@@ -339,8 +345,12 @@ export async function getTurnContext(input: TurnContextRequest) {
       locationId,
       locationDisplay,
       sceneId,
-      resources: resourceMap(base["PLAYER_RESOURCES!A1:E20"] ?? []),
-      resourceDetails: resourceDetailsMap(base["PLAYER_RESOURCES!A1:E20"] ?? []),
+      resources,
+      resourceDetails,
+      survival: {
+        satiety: { current: satiety, max: Number((resourceDetails["Satiety"] as any)?.max ?? 100), band: survivalBand(satiety) },
+        hydration: { current: hydration, max: Number((resourceDetails["Hydration"] as any)?.max ?? 100), band: survivalBand(hydration) },
+      },
       conditions: rowsToObjects(base["PLAYER_CONDITIONS!A1:F100"] ?? []),
       competences: needsCompetences ? rowsToObjects(base[TABLES.COMPETENCES.range] ?? []) : [],
       structured,
