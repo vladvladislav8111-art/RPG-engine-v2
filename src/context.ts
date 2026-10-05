@@ -25,6 +25,26 @@ function resourceMap(values: unknown[][]): Record<string, unknown> {
   return out;
 }
 
+// Read maxima and XP thresholds from the same authoritative rows as current values.
+// Missing or non-numeric cells stay unknown; never infer a cap from Current.
+export function resourceDetailsMap(values: unknown[][]): Record<string, { current: number | null; max?: number | null; threshold?: number | null }> {
+  const out: Record<string, { current: number | null; max?: number | null; threshold?: number | null }> = {};
+  const numberOrNull = (value: unknown): number | null => {
+    if (typeof value !== "string" && typeof value !== "number") return null;
+    if (typeof value === "string" && !value.trim()) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  for (const row of rowsToObjects(values)) {
+    const name = String(row["Resource"] ?? "").trim();
+    if (!name) continue;
+    const current = numberOrNull(row["Current"]);
+    const cap = numberOrNull(row["Max/Threshold"]);
+    out[name] = name === "General XP" ? { current, threshold: cap } : { current, max: cap };
+  }
+  return out;
+}
+
 function matchingRows(rows: unknown[][], query?: string): unknown[][] {
   if (!query || !rows.length) return rows;
   const q = query.toLocaleLowerCase();
@@ -155,7 +175,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   const needsCompetences = input.turnClass !== "MICRO" || hasAny(tagSet, ["WORK", "LANGUAGE", "SKILL", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY"]);
   const runtimeRanges = new Set<string>([
     "CONTROL!A1:D12",
-    "PLAYER_RESOURCES!A1:D20",
+    "PLAYER_RESOURCES!A1:E20",
     "PLAYER_CONDITIONS!A1:F100",
     ...(needsCompetences ? [TABLES.COMPETENCES.range] : []),
   ]);
@@ -319,7 +339,8 @@ export async function getTurnContext(input: TurnContextRequest) {
       locationId,
       locationDisplay,
       sceneId,
-      resources: resourceMap(base["PLAYER_RESOURCES!A1:D20"] ?? []),
+      resources: resourceMap(base["PLAYER_RESOURCES!A1:E20"] ?? []),
+      resourceDetails: resourceDetailsMap(base["PLAYER_RESOURCES!A1:E20"] ?? []),
       conditions: rowsToObjects(base["PLAYER_CONDITIONS!A1:F100"] ?? []),
       competences: needsCompetences ? rowsToObjects(base[TABLES.COMPETENCES.range] ?? []) : [],
       structured,
