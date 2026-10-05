@@ -365,7 +365,7 @@ export async function getTurnContext(input: TurnContextRequest) {
         ...structuredNames.map((n) => `TEMP:${n}`),
         ...pregenRequests.map((p) => `GM_PREGEN:${p.key}`),
         ...lookups.map((l) => `${l.source}:${l.sheet}`),
-        ...docQueries.map((d) => `LEGACY_DOC:${d.documentKey}`),
+        ...docQueries.map((d) => `DOC:${d.documentKey}`),
       ],
     },
   };
