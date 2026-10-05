@@ -418,6 +418,41 @@ function buildServer() {
 
 
   server.registerTool(
+    "render_current_hud",
+    {
+      title: "Render current RPG HUD",
+      description:
+        "Display the current authoritative player-visible HUD. Reads authoritative runtime state server-side and does not advance time or modify state.",
+      inputSchema: z.object({}),
+      outputSchema: hudSnapshotSchema,
+      _meta: {
+        ui: { resourceUri: HUD_RESOURCE_URI },
+        "openai/outputTemplate": HUD_RESOURCE_URI,
+        "openai/toolInvocation/invoking": "Обновляю HUD…",
+        "openai/toolInvocation/invoked": "HUD обновлён.",
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async () => {
+      const snapshot = await getHudSnapshot();
+      return {
+        structuredContent: snapshot,
+        content: [{
+          type: "text" as const,
+          text:
+            `HUD: ${snapshot.name}, уровень ${snapshot.level}, день ${snapshot.day}, ${snapshot.time}; HP ${snapshot.resources.hp.current}/${snapshot.resources.hp.max}, выносливость ${snapshot.resources.stamina.current}/${snapshot.resources.stamina.max}, мана ${snapshot.resources.mana.current}/${snapshot.resources.mana.max}; сытость ${snapshot.resources.satiety.current}/${snapshot.resources.satiety.max}, гидратация ${snapshot.resources.hydration.current}/${snapshot.resources.hydration.max}; деньги ${snapshot.resources.money}c; XP ${snapshot.resources.generalXp.current}/${snapshot.resources.generalXp.max}.`,
+        }],
+      };
+    },
+  );
+
+
+  server.registerTool(
     "simulate_exertion",
     {
       title: "Simulate stamina exertion",
