@@ -5,6 +5,7 @@ import { commitTurn, prepareCommit } from "./commit.ts";
 import { config } from "./config.ts";
 import { getTurnContext } from "./context.ts";
 import { sheetsBatchGet } from "./google.ts";
+import { getHudSnapshot, HUD_HTML, HUD_RESOURCE_URI } from "./hud.ts";
 import { intBetween } from "./rng.ts";
 import { RULESET_VERSION } from "./rules.ts";
 
@@ -21,6 +22,32 @@ const docKeySchema = z.enum([
 ]);
 
 const scalarSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+const hudSnapshotSchema = z.object({
+  uiVersion: z.string(),
+  saveId: z.string(),
+  name: z.string(),
+  level: z.number(),
+  day: z.number(),
+  time: z.string(),
+  location: z.string(),
+  resources: z.object({
+    hp: z.object({ current: z.number(), max: z.number() }),
+    stamina: z.object({ current: z.number(), max: z.number() }),
+    mana: z.object({ current: z.number(), max: z.number() }),
+    money: z.number(),
+    generalXp: z.object({ current: z.number(), max: z.number() }),
+    sup: z.number(),
+  }),
+  statuses: z.array(z.object({
+    label: z.string(),
+    severity: z.enum(["good", "warn", "danger", "neutral"]),
+  })),
+  water: z.union([
+    z.object({ value: z.string(), unit: z.string(), notes: z.string() }),
+    z.null(),
+  ]),
+});
 
 const turnContextSchema = z.object({
   turnId: z.string().min(1),
@@ -170,7 +197,7 @@ function buildServer() {
       title: "RPG V2 Runtime",
       version: "2.2.0",
     },
-    { capabilities: { tools: {} } },
+    { capabilities: { tools: {}, resources: {} } },
   );
 
   server.registerTool(
@@ -255,6 +282,64 @@ function buildServer() {
       },
     },
     async (input) => toolJson(await commitTurn({ ...input, dryRun: false })),
+  );
+
+
+  server.registerResource(
+    "rpg-hud-v1",
+    HUD_RESOURCE_URI,
+    {},
+    async () => ({
+      contents: [
+        {
+          uri: HUD_RESOURCE_URI,
+          mimeType: "text/html;profile=mcp-app",
+          text: HUD_HTML,
+          _meta: {
+            ui: {
+              prefersBorder: false,
+            },
+            "openai/ui": {
+              availableDisplayModes: ["inline"],
+            },
+          },
+        },
+      ],
+    }),
+  );
+
+  server.registerTool(
+    "render_hud",
+    {
+      title: "Render RPG HUD",
+      description:
+        "Render the compact player-facing System HUD from the latest committed authoritative state. Use after a committed gameplay turn when a visual status card improves the response; never use it as a source of hidden GM information.",
+      inputSchema: z.object({}),
+      outputSchema: hudSnapshotSchema,
+      _meta: {
+        ui: { resourceUri: HUD_RESOURCE_URI },
+        "openai/outputTemplate": HUD_RESOURCE_URI,
+        "openai/toolInvocation/invoking": "Обновляю HUD…",
+        "openai/toolInvocation/invoked": "HUD обновлён.",
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async () => {
+      const snapshot = await getHudSnapshot();
+      return {
+        structuredContent: snapshot,
+        content: [{
+          type: "text" as const,
+          text:
+            `HUD: ${snapshot.name}, уровень ${snapshot.level}, день ${snapshot.day}, ${snapshot.time}; HP ${snapshot.resources.hp.current}/${snapshot.resources.hp.max}, выносливость ${snapshot.resources.stamina.current}/${snapshot.resources.stamina.max}, мана ${snapshot.resources.mana.current}/${snapshot.resources.mana.max}; деньги ${snapshot.resources.money}c; XP ${snapshot.resources.generalXp.current}/${snapshot.resources.generalXp.max}.`,
+        }],
+      };
+    },
   );
 
   server.registerTool(
