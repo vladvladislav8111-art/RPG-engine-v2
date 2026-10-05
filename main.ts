@@ -147,7 +147,14 @@ Deno.serve({ port: config.port }, async (req) => {
 
     if (url.pathname === "/prepare-commit" && req.method === "POST") {
       const input = await body<CommitRequest>(req);
-      return json(await prepareCommit({ ...input, dryRun: true }));
+      try {
+        return json(await prepareCommit({ ...input, dryRun: true }));
+      } catch (error) {
+        return json({
+          ok: false,
+          prepareError: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
     if (url.pathname === "/commit" && req.method === "POST") {
