@@ -5,7 +5,7 @@ import { commitTurn, prepareCommit } from "./commit.ts";
 import { config } from "./config.ts";
 import { getTurnContext } from "./context.ts";
 import { sheetsBatchGet } from "./google.ts";
-import { getHudSnapshot, HUD_HTML, HUD_RESOURCE_URI } from "./hud.ts";
+import { getHudSnapshot, HUD_HTML, HUD_RESOURCE_URI, HUD_UI_VERSION } from "./hud.ts";
 import { intBetween } from "./rng.ts";
 import { RULESET_VERSION } from "./rules.ts";
 
@@ -195,7 +195,7 @@ function buildServer() {
     {
       name: "rpg-v2-runtime",
       title: "RPG V2 Runtime",
-      version: "2.2.0",
+      version: "2.3.0",
     },
     { capabilities: { tools: {}, resources: {} } },
   );
@@ -224,6 +224,7 @@ function buildServer() {
       return toolJson({
         ok: true,
         engineVersion: RULESET_VERSION,
+        hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
         saveId: state["CONTROL!B2"]?.[0]?.[0] ?? null,
         worldTime: state["CONTROL!B5"]?.[0]?.[0] ?? null,
