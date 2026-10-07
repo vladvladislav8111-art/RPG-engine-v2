@@ -123,6 +123,18 @@ export type SemanticInjuryEvent = {
   reason?: string;
 };
 
+export type SemanticInventoryEvent = {
+  itemId: string;
+  referenceId?: string;
+  quantityDelta?: number;
+  setQuantity?: number;
+  location?: string;
+  custodian?: string;
+  condition?: string;
+  tags?: string;
+  reason?: string;
+};
+
 export type SemanticAdaptationEvent = {
   characteristic: string;
   band: AdaptationBand;
@@ -203,7 +215,6 @@ export type SemanticSurvival = {
 };
 
 export type StructuredRuntimeTable =
-  | "INVENTORY_CURRENT"
   | "OPPORTUNITIES_CURRENT"
   | "PROJECTS_CURRENT"
   | "NPC_CURRENT"
@@ -264,6 +275,7 @@ export type SemanticCommitPlan = {
   generalXpEvents?: SemanticGeneralXpEvent[];
   learningEvents?: SemanticLearningEvent[];
   adaptationEvents?: SemanticAdaptationEvent[];
+  inventoryEvents?: SemanticInventoryEvent[];
   rowUpserts?: SemanticRowUpsert[];
   rowUpdates?: SemanticRowUpdate[];
   rowDeletes?: SemanticRowDelete[];
