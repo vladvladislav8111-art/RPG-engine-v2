@@ -1,4 +1,5 @@
 import {
+  filterByParticipants,
   recentActorChat,
   resolveActorRefs,
   selectNpcCurrentRows,
@@ -55,5 +56,18 @@ Deno.test("recent actor chat is bounded and actor-specific", () => {
   const chat = recentActorChat(rows, ["npc.max.earth"], 2)["npc.max.earth"];
   if (chat.length !== 2 || chat[0]["Message ID"] !== "3" || chat[1]["Message ID"] !== "4") {
     throw new Error("recent chat selection is not bounded to the requested actor");
+  }
+});
+
+
+Deno.test("social memory and threads filter by selected actor", () => {
+  const rows = [
+    { "Memory ID": "m1", "Participants": "player.shura;npc.max.earth" },
+    { "Memory ID": "m2", "Participants": "player.shura;npc.irina.earth" },
+    { "Memory ID": "m3", "Participants": "npc.max.earth|npc.kirill.earth" },
+  ];
+  const selected = filterByParticipants(rows, ["npc.max.earth"]);
+  if (selected.length !== 2 || selected[0]["Memory ID"] !== "m1" || selected[1]["Memory ID"] !== "m3") {
+    throw new Error("participant filtering failed for selected actor");
   }
 });
