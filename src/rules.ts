@@ -1,4 +1,4 @@
-export const RULESET_VERSION = "2.7.4-social-world-context-2026-10-07";
+export const RULESET_VERSION = "2.8.0-portable-bounded-context-2026-10-07";
 
 export type LearningBand = "tiny" | "useful" | "substantial" | "breakthrough" | "exceptional";
 

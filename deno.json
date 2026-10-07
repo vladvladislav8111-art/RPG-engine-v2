@@ -1,4 +1,8 @@
 {
+  "imports": {
+    "@modelcontextprotocol/server": "npm:@modelcontextprotocol/server@2.3.0",
+    "zod/v4": "npm:zod@4.6.5/v4"
+  },
   "tasks": {
     "dev": "deno run --allow-net --allow-env --unstable-kv main.ts",
     "start": "deno run --allow-net --allow-env --unstable-kv main.ts",

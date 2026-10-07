@@ -1,11 +1,20 @@
 import { config } from "./config.ts";
 
-const memory = new Map<string, unknown>();
-let kvPromise: Promise<Deno.Kv> | null = null;
+type CacheKeyPart = string | number | bigint | boolean | Uint8Array;
+type KvLike = {
+  get<T>(key: readonly CacheKeyPart[]): Promise<{ value: T | null }>;
+  set<T>(key: readonly CacheKeyPart[], value: T): Promise<unknown>;
+};
 
-async function getKv(): Promise<Deno.Kv | null> {
+const g = globalThis as unknown as { __rpgRuntimeMemoryCache?: Map<string, unknown> };
+const memory = g.__rpgRuntimeMemoryCache ??= new Map<string, unknown>();
+let kvPromise: Promise<KvLike> | null = null;
+
+async function getKv(): Promise<KvLike | null> {
   if (!config.enableKv) return null;
-  kvPromise ??= Deno.openKv();
+  const deno = (globalThis as unknown as { Deno?: { openKv?: () => Promise<KvLike> } }).Deno;
+  if (!deno?.openKv) return null;
+  kvPromise ??= deno.openKv();
   return await kvPromise;
 }
 
@@ -13,13 +22,13 @@ function keyString(key: readonly unknown[]): string {
   return JSON.stringify(key);
 }
 
-export async function cacheGet<T>(key: readonly Deno.KvKeyPart[]): Promise<T | null> {
+export async function cacheGet<T>(key: readonly CacheKeyPart[]): Promise<T | null> {
   const kv = await getKv();
   if (kv) return (await kv.get<T>(key)).value ?? null;
   return (memory.get(keyString(key)) as T | undefined) ?? null;
 }
 
-export async function cacheSet<T>(key: readonly Deno.KvKeyPart[], value: T): Promise<void> {
+export async function cacheSet<T>(key: readonly CacheKeyPart[], value: T): Promise<void> {
   const kv = await getKv();
   if (kv) {
     await kv.set(key, value);

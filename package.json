@@ -1,0 +1,12 @@
+{
+  "name": "rpg-engine-v2",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.3.0",
+    "zod": "4.6.5"
+  }
+}

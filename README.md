@@ -113,3 +113,24 @@ Mutable live truth still has exactly one owner. Stable identity indexes and soci
 - Rematerialization failures are surfaced explicitly instead of being guessed around.
 
 Current truth remains singular: relationships in `NPC_RELATIONSHIPS_CURRENT`, episodic history in the canonical NPC archive, stable identity in GM PREGEN, and active faction processes in `WORLD_CLOCKS`.
+
+
+## V2.8 migration-prep architecture
+
+V2.8 prepares the gateway for an official Node.js serverless runtime while retaining the same authoritative Google-backed state model.
+
+### Fresh bounded actor reads
+
+Explicit selected-NPC context no longer needs to load full 2,000-row knowledge or 5,000-row chat tables. The fast path performs a fresh narrow-column index scan, resolves exact row numbers, then batch-loads only matching full rows. This index is computed per request and is not persisted, so it cannot become a second truth or silently go stale.
+
+Dormant NPC archive reads use the same pattern: scan only the NPC-ID column, then fetch exact archived rows for the resolved stable actor.
+
+### Portable runtime boundary
+
+- environment access works through either Deno or Node process environments;
+- Deno KV becomes an optional cache adapter rather than a compile-time dependency;
+- the HTTP router is platform-neutral and lives in `src/http.ts`;
+- Deno keeps a tiny `main.ts` adapter;
+- the Vercel adapter uses one gateway Function and preserves the public paths `/health`, `/context`, `/prepare-commit`, `/commit`, `/rng/int`, and `/mcp`.
+
+The cache remains non-authoritative. SESSION_LOG/save preconditions and Google state remain the correctness layer across cold starts or instance replacement.

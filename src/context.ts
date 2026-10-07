@@ -1,4 +1,5 @@
 import { cacheGet, cacheSet } from "./cache.ts";
+import { loadBoundedActorTables, loadBoundedArchiveRows, scanActorContextIndex } from "./bounded_context.ts";
 import { config } from "./config.ts";
 import { docsGet, fileModifiedTime, sheetsBatchGet } from "./google.ts";
 import { PREGEN_TABLES, TABLES } from "./schema.ts";
@@ -223,9 +224,20 @@ export async function getTurnContext(input: TurnContextRequest) {
     ...(needsCompetences ? [TABLES.COMPETENCES.range] : []),
   ]);
 
+  const boundedActorNames = new Set<keyof typeof TABLES>([
+    "NPC_CURRENT",
+    "NPC_KNOWLEDGE",
+    "NPC_RELATIONSHIPS_CURRENT",
+    "SOCIAL_MEMORY_CURRENT",
+    "OPEN_THREADS_CURRENT",
+    "NPC_ACTIVITY_RULES",
+    "SYSTEM_CHAT_LOG",
+  ]);
   const structuredNames: Array<keyof typeof TABLES> = [];
   const addStructured = (name: keyof typeof TABLES) => {
-    runtimeRanges.add(TABLES[name].range);
+    if (!(explicitActorRequest && boundedActorNames.has(name))) {
+      runtimeRanges.add(TABLES[name].range);
+    }
     if (!structuredNames.includes(name)) structuredNames.push(name);
   };
 
@@ -297,11 +309,12 @@ export async function getTurnContext(input: TurnContextRequest) {
 
   const uniqueDocKeys = Array.from(new Set(docQueries.map((q) => q.documentKey)));
 
-  const [base, lookupResults, docs, pregens] = await Promise.all([
+  const [base, lookupResults, docs, pregens, actorIndexScan] = await Promise.all([
     sheetsBatchGet(config.files.TEMP_RUNTIME, [...runtimeRanges]),
     Promise.all(lookups.map(cachedLookup)),
     Promise.all(uniqueDocKeys.map(async (key) => [key, await cachedDoc(key)] as const)),
     Promise.all(pregenRequests.map(async (p) => ({ ...p, ...(await cachedPregen(p.range)) }))),
+    explicitActorRequest ? scanActorContextIndex(config.files.TEMP_RUNTIME) : Promise.resolve(null),
   ]);
 
   const control = base["CONTROL!A1:D12"] ?? [];
@@ -313,7 +326,9 @@ export async function getTurnContext(input: TurnContextRequest) {
   const sceneId = findControl(control, "current_scene_id");
   const turnToken = makeTurnToken({ saveId, worldDay, worldTime, locationId, sceneId });
 
-  const rawNpcCurrent = rowsToObjects(base[TABLES.NPC_CURRENT.range] ?? []);
+  const rawNpcCurrent = explicitActorRequest
+    ? rowsToObjects(actorIndexScan?.npcReferenceRows ?? [])
+    : rowsToObjects(base[TABLES.NPC_CURRENT.range] ?? []);
   const identityPregenRows = rowsToObjects(
     pregens.find((p) => p.key === "npcIdentityIndex")?.rows ?? [],
   );
@@ -325,6 +340,14 @@ export async function getTurnContext(input: TurnContextRequest) {
   const activeNpcIds = new Set(rawNpcCurrent.map((r) => String(r["NPC ID"] ?? "")).filter(Boolean));
   const identityNpcIds = new Set(identityPregenRows.map((r) => String(r["NPC ID"] ?? "")).filter(Boolean));
   const dormantActorIds = resolvedActorIds.filter((id) => !activeNpcIds.has(id) && identityNpcIds.has(id));
+  const boundedActorLoad = explicitActorRequest && actorIndexScan
+    ? await loadBoundedActorTables(
+        config.files.TEMP_RUNTIME,
+        actorIndexScan,
+        resolvedActorIds,
+        recentChatLimit,
+      )
+    : null;
 
   const archiveRegistryRows = rowsToObjects(
     pregens.find((p) => p.key === "archiveRegistry")?.rows ?? [],
@@ -340,15 +363,21 @@ export async function getTurnContext(input: TurnContextRequest) {
     const archiveFileId = String(canonicalNpcArchive["Drive file ID"] ?? "").trim();
     const archiveSheet = String(canonicalNpcArchive["Sheet/resource"] ?? "").trim();
     if (archiveFileId && archiveSheet) {
-      const a1 = `${archiveSheet}!A1:L1000`;
       try {
-        const archiveData = await sheetsBatchGet(archiveFileId, [a1]);
+        const archiveData = await loadBoundedArchiveRows(
+          archiveFileId,
+          archiveSheet,
+          dormantActorIds,
+        );
         const wanted = new Set(dormantActorIds);
-        dormantArchiveRows = rowsToObjects(archiveData[a1] ?? []).filter((r) =>
+        dormantArchiveRows = rowsToObjects(archiveData.rows).filter((r) =>
           wanted.has(String(r["NPC ID"] ?? "")) &&
           String(r["Active"] ?? "TRUE").toUpperCase() !== "FALSE"
         );
-        archiveReadPlan.push(`ARCHIVE:${String(canonicalNpcArchive["Archive ID"] ?? "npc_memory")}`);
+        archiveReadPlan.push(
+          `ARCHIVE:${String(canonicalNpcArchive["Archive ID"] ?? "npc_memory")}:BOUNDED`,
+          ...archiveData.readPlan,
+        );
       } catch (error) {
         dormantArchiveError = error instanceof Error ? error.message : String(error);
       }
@@ -359,7 +388,14 @@ export async function getTurnContext(input: TurnContextRequest) {
 
   const structured: Record<string, unknown> = {};
   for (const name of structuredNames) {
-    let records = rowsToObjects(base[TABLES[name].range] ?? []);
+    const boundedRows = (
+      boundedActorLoad?.tables as Record<string, unknown[][] | undefined> | undefined
+    )?.[name];
+    let records = rowsToObjects(
+      (explicitActorRequest && boundedActorNames.has(name) && boundedRows)
+        ? boundedRows
+        : (base[TABLES[name].range] ?? []),
+    );
     if (name === "NPC_CURRENT") {
       records = selectNpcCurrentRows(records, locationId, resolvedActorIds, explicitActorRequest);
     } else if (["SERVICES_CURRENT", "OPPORTUNITIES_CURRENT", "MAP_KNOWLEDGE_CURRENT"].includes(name)) {
@@ -645,13 +681,27 @@ export async function getTurnContext(input: TurnContextRequest) {
           },
         ])),
         contextGate: npcContextGate,
+        boundedReadStats: explicitActorRequest
+          ? {
+              indexApproxCells: actorIndexScan?.approxCellsRead ?? 0,
+              exactApproxCells: boundedActorLoad?.approxCellsRead ?? 0,
+              exactRangeCount: boundedActorLoad?.exactRangeCount ?? 0,
+              strategy: "fresh narrow-column index scan + exact-row batch reads; no persisted duplicate context index",
+            }
+          : null,
       },
       lookups: lookups.map((lookup, i) => ({ ...lookup, ...lookupResults[i] })),
       docs: queriedDocs,
       readPlan: [
         "TEMP:CORE",
         ...(needsCompetences ? ["TEMP:COMPETENCES"] : []),
-        ...structuredNames.map((n) => `TEMP:${n}`),
+        ...(actorIndexScan?.readPlan ?? []),
+        ...(boundedActorLoad?.readPlan ?? []),
+        ...structuredNames.map((n) =>
+          explicitActorRequest && boundedActorNames.has(n)
+            ? `TEMP:${n}:BOUNDED`
+            : `TEMP:${n}`
+        ),
         ...pregenRequests.map((p) => `GM_PREGEN:${p.key}`),
         ...archiveReadPlan,
         ...lookups.map((l) => `${l.source}:${l.sheet}`),
