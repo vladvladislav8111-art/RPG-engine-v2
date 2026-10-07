@@ -66,6 +66,13 @@ function asNumber(value: unknown, label: string): number {
   return n;
 }
 
+function numberOrNull(value: unknown): number | null {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  if (typeof value === "string" && !value.trim()) return null;
+  const parsed = Number(String(value).replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function rowToScalars(row: unknown[]): Scalar[] {
   return row.map((v) => (v == null ? "" : v) as Scalar);
 }
@@ -93,6 +100,21 @@ const ADAPTATION_UNITS = {
 
 function adaptationThreshold(value: number): number {
   return Math.round(100 * Math.pow(2, value - 5));
+}
+
+function storageCapacityL(rows: unknown[][]): number | null {
+  if (!rows.length) return null;
+  const i = findDataRow(rows, "Module ID", "system.storage.unlock_500l");
+  if (i < 0) return null;
+  const row = cloneRow(rows, i);
+  const status = String(row[headerIndex(rows, "Status")] ?? "").toUpperCase();
+  if (!status.includes("ACTIVE")) return null;
+  const cfg = String(row[headerIndex(rows, "Current configuration")] ?? "");
+  const liters = cfg.match(/capacity\s*([0-9]+(?:[.,][0-9]+)?)\s*L/i);
+  if (liters) return Number(liters[1].replace(",", "."));
+  const cubic = cfg.match(/capacity\s*([0-9]+(?:[.,][0-9]+)?)\s*m(?:³|3)/i);
+  if (cubic) return Number(cubic[1].replace(",", ".")) * 1000;
+  return null;
 }
 
 function assertStructuredFields(rows: unknown[][], table: string, fields: string[]): void {
@@ -152,7 +174,10 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     touched.add("CHARACTERISTICS");
   }
   if ((semantic.adaptationEvents?.length ?? 0) > 0) touched.add("CHARACTERISTIC_ADAPTATION");
-  if ((semantic.inventoryEvents?.length ?? 0) > 0) touched.add("INVENTORY_CURRENT");
+  if ((semantic.inventoryEvents?.length ?? 0) > 0) {
+    touched.add("INVENTORY_CURRENT");
+    touched.add("SYSTEM_MODULES_CURRENT");
+  }
   if ((semantic.injuryEvents ?? []).some((e) => e.simulationOnly !== true)) touched.add("BODY_INJURIES_CURRENT");
   for (const item of semantic.rowUpserts ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowUpdates ?? []) touched.add(item.table as RuntimeTableName);
@@ -795,6 +820,72 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     });
   }
 
+  const systemModuleRows = sheets[TABLES.SYSTEM_MODULES_CURRENT.range] ?? [];
+  let inventorySummary: unknown = null;
+  if ((semantic.inventoryEvents?.length ?? 0) > 0) {
+    const templateById = new Map<string, unknown[]>();
+    for (let i = 1; i < inventoryTemplateRows.length; i++) {
+      const row = inventoryTemplateRows[i] ?? [];
+      const id = String(row[headerIndex(inventoryTemplateRows, "Template ID")] ?? "").trim();
+      if (id) templateById.set(id, row);
+    }
+
+    const trackedItemIds = new Set<string>();
+    for (const row of inventoryRows.slice(1)) {
+      const id = String(row?.[headerIndex(inventoryRows, "Item ID")] ?? "").trim();
+      if (id) trackedItemIds.add(id);
+    }
+
+    let knownMassKg = 0;
+    let knownTopLevelStorageVolumeL = 0;
+    const unknownMassItemIds: string[] = [];
+    const unknownTopLevelStorageVolumeItemIds: string[] = [];
+
+    for (const row of inventoryRows.slice(1)) {
+      const itemId = String(row?.[headerIndex(inventoryRows, "Item ID")] ?? "").trim();
+      if (!itemId) continue;
+      const qty = asNumber(row[headerIndex(inventoryRows, "Qty")], `${itemId} quantity`);
+      const templateId = String(row?.[headerIndex(inventoryRows, "Template ID")] ?? "").trim();
+      const tpl = templateById.get(templateId);
+      const massOverrideRaw = row?.[headerIndex(inventoryRows, "Mass kg override")];
+      const volumeOverrideRaw = row?.[headerIndex(inventoryRows, "Volume L override")];
+      const massOverride = String(massOverrideRaw ?? "").trim() === "" ? null : asNumber(massOverrideRaw, `${itemId} mass override`);
+      const volumeOverride = String(volumeOverrideRaw ?? "").trim() === "" ? null : asNumber(volumeOverrideRaw, `${itemId} volume override`);
+      const unitMassKg = massOverride ?? (tpl ? numberOrNull(tpl[headerIndex(inventoryTemplateRows, "Mass kg")]) : null);
+      const unitVolumeL = volumeOverride ?? (tpl ? numberOrNull(tpl[headerIndex(inventoryTemplateRows, "Occupied volume L")]) : null);
+
+      if (unitMassKg == null) unknownMassItemIds.push(itemId);
+      else knownMassKg += unitMassKg * qty;
+
+      const location = String(row?.[headerIndex(inventoryRows, "Location/container")] ?? "");
+      const containerCandidate = location.split("/")[0]?.trim() ?? "";
+      const nested = trackedItemIds.has(containerCandidate);
+      if (location.includes("System Storage") && !nested) {
+        if (unitVolumeL == null) unknownTopLevelStorageVolumeItemIds.push(itemId);
+        else knownTopLevelStorageVolumeL += unitVolumeL * qty;
+      }
+    }
+
+    const capacityL = storageCapacityL(systemModuleRows);
+    if (capacityL != null && knownTopLevelStorageVolumeL > capacityL + 1e-9) {
+      throw new Error(
+        `System Storage known occupied volume exceeds capacity: ${knownTopLevelStorageVolumeL.toFixed(3)}L > ${capacityL.toFixed(3)}L`,
+      );
+    }
+
+    inventorySummary = {
+      rows: trackedItemIds.size,
+      knownMassKg,
+      unknownMassItemIds,
+      storageCapacityL: capacityL,
+      knownTopLevelStorageVolumeL,
+      knownRemainingStorageVolumeL: capacityL == null ? null : capacityL - knownTopLevelStorageVolumeL,
+      unknownTopLevelStorageVolumeItemIds,
+      capacityCheckComplete: capacityL != null && unknownTopLevelStorageVolumeItemIds.length === 0,
+      knownCapacityExceeded: capacityL != null && knownTopLevelStorageVolumeL > capacityL + 1e-9,
+    };
+  }
+
   const pendingRows = sheets[TABLES.PENDING_CHOICES.range] ?? [];
   const learningOutcomes: unknown[] = [];
   const pendingChoices: unknown[] = [];
@@ -816,12 +907,10 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       throw new Error(`competence pending milestone mismatch: ${pendingId} vs ${resolution.choiceId}`);
     }
 
-    setByHeader(pendingRows, choiceRow, "Status", "RESOLVED");
-    setByHeader(pendingRows, choiceRow, "Resolved at", resolvedInworldEnd);
-    setByHeader(pendingRows, choiceRow, "Selected option", resolution.selectedOption);
-    setByHeader(pendingRows, choiceRow, "TX ID", input.txId);
-    if (resolution.notes != null) setByHeader(pendingRows, choiceRow, "Notes", resolution.notes);
-    writeRow("PENDING_CHOICES", pendingRows, choiceIndex, choiceRow);
+    // PENDING_CHOICES is hot state only. The selected result is persisted
+    // in MILESTONES / PROGRESSION_EVENTS / SESSION_LOG, so free the row
+    // immediately instead of accumulating RESOLVED tombstones.
+    writeRow("PENDING_CHOICES", pendingRows, choiceIndex, Array(headers(pendingRows).length).fill(""));
 
     const oldLevel = asNumber(competenceRow[headerIndex(competenceRows, "Level")], "competence level");
     const oldXp = asNumber(competenceRow[headerIndex(competenceRows, "Carried XP")], "competence XP");
@@ -1117,6 +1206,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       learning: learningOutcomes,
       adaptation: adaptationOutcomes,
       inventory: inventoryOutcomes,
+      inventorySummary,
       resources: resourceOutcomes,
       pendingChoices,
     },

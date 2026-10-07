@@ -33,6 +33,20 @@ function numberOrNull(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function storageCapacityL(records: Array<Record<string, unknown>>): number | null {
+  const active = records.find((r) =>
+    String(r["Module ID"] ?? "") === "system.storage.unlock_500l" &&
+    String(r["Status"] ?? "").toUpperCase().includes("ACTIVE")
+  );
+  if (!active) return null;
+  const cfg = String(active["Current configuration"] ?? "");
+  const liters = cfg.match(/capacity\s*([0-9]+(?:[.,][0-9]+)?)\s*L/i);
+  if (liters) return Number(liters[1].replace(",", "."));
+  const cubic = cfg.match(/capacity\s*([0-9]+(?:[.,][0-9]+)?)\s*m(?:³|3)/i);
+  if (cubic) return Number(cubic[1].replace(",", ".")) * 1000;
+  return null;
+}
+
 // Read maxima and XP thresholds from the same authoritative rows as current values.
 // Missing or non-numeric cells stay unknown; never infer a cap from Current.
 export function resourceDetailsMap(values: unknown[][]): Record<string, { current: number | null; max?: number | null; threshold?: number | null }> {
@@ -215,7 +229,10 @@ export async function getTurnContext(input: TurnContextRequest) {
     addStructured("MILESTONES");
     addStructured("PENDING_CHOICES");
   }
-  if (needsInventory) addStructured("INVENTORY_CURRENT");
+  if (needsInventory) {
+    addStructured("INVENTORY_CURRENT");
+    addStructured("SYSTEM_MODULES_CURRENT");
+  }
   if (hasAny(tagSet, ["SERVICES", "SOCIAL", "ECONOMY", "LANGUAGE", "WORK"])) {
     addStructured("SERVICES_CURRENT");
     addStructured("OPPORTUNITIES_CURRENT");
@@ -378,12 +395,21 @@ export async function getTurnContext(input: TurnContextRequest) {
     r.location.includes("System Storage") && !r.containedInItemId
   );
   const knownTopLevelStorageVolumeL = topLevelStorageRows.reduce((sum, r) => sum + (r.totalVolumeL ?? 0), 0);
+  const storageModules =
+    (structured.SYSTEM_MODULES_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
+  const storageCapacity = storageCapacityL(storageModules);
+  const unknownTopLevelStorageVolumeItemIds =
+    topLevelStorageRows.filter((r) => r.totalVolumeL == null).map((r) => r.itemId);
   const inventorySummary = {
     rows: inventoryResolved.length,
     knownMassKg,
     unknownMassItemIds: inventoryResolved.filter((r) => r.totalMassKg == null).map((r) => r.itemId),
+    storageCapacityL: storageCapacity,
     knownTopLevelStorageVolumeL,
-    unknownTopLevelStorageVolumeItemIds: topLevelStorageRows.filter((r) => r.totalVolumeL == null).map((r) => r.itemId),
+    knownRemainingStorageVolumeL: storageCapacity == null ? null : storageCapacity - knownTopLevelStorageVolumeL,
+    unknownTopLevelStorageVolumeItemIds,
+    capacityCheckComplete: storageCapacity != null && unknownTopLevelStorageVolumeItemIds.length === 0,
+    knownCapacityExceeded: storageCapacity != null && knownTopLevelStorageVolumeL > storageCapacity + 1e-9,
     note: "Nested contents contribute mass but not duplicate top-level occupied volume; unknown template dimensions remain unknown rather than guessed.",
   };
 
