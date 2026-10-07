@@ -95,3 +95,22 @@ export function recentActorChat(
   }
   return out;
 }
+
+
+export function participantIds(value: unknown): string[] {
+  return String(value ?? "")
+    .split(/[;,|]/)
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+export function filterByParticipants(
+  records: RuntimeRecord[],
+  actorIds: string[],
+): RuntimeRecord[] {
+  const wanted = new Set(actorIds);
+  if (!wanted.size) return [];
+  return records.filter((record) =>
+    participantIds(record["Participants"]).some((id) => wanted.has(id))
+  );
+}
