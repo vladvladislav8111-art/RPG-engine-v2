@@ -386,7 +386,7 @@ function buildServer() {
     {
       title: "Get RPG turn context",
       description:
-        "Load one compact authoritative context packet for an RPG turn. Explicit actorIds bypass player-location filtering; actorRefs may resolve exact current NPC display names or stable IDs, and selected actors receive bounded recent System chat plus current knowledge. Structured current-state tables are the live layer; targeted document queries load only the permanent long-form canon needed for this action. Broad history reads are not part of the normal path.",
+        "Load one compact authoritative context packet for an RPG turn. For a substantive NPC reply, pass actorRefs or actorIds: explicit actors bypass player-location filtering and receive current identity/activity, relevant NPC knowledge, active social memory, open conversational threads, and bounded recent System chat. actorRefs resolves exact active NPC display names or stable IDs and reports ambiguity instead of guessing. Broad history reads are not part of the normal path.",
       inputSchema: turnContextSchema,
       annotations: {
         readOnlyHint: true,
