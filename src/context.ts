@@ -144,19 +144,22 @@ function compactPregenRecords(key: string, records: Array<Record<string, unknown
       tags: r["Tags"],
     }));
   }
-  if (key === "itemReferenceArchive") {
+  if (key === "commonObjectTemplates") {
     return records.map((r) => ({
-      referenceId: r["Reference ID"],
-      item: r["Canonical Item"],
+      templateId: r["Template ID"],
       category: r["Category"],
+      item: r["Item"],
+      material: r["Baseline material"],
       unit: r["Unit"],
-      unitMassKg: r["Unit Mass kg"],
-      unitVolumeL: r["Unit Volume L"],
+      massKg: r["Mass kg"],
+      occupiedVolumeL: r["Occupied volume L"],
       capacityL: r["Capacity L"],
-      properties: r["Stable quality / properties"],
-      source: r["Source"],
-      tags: r["Reuse tags"],
-      version: r["Version"],
+      longAwkward: r["Long/Awkward"],
+      consumable: r["Consumable"],
+      durabilityClass: r["Durability class"],
+      typicalUse: r["Typical use"],
+      priceSource: r["Price source"],
+      instantiationRule: r["Instantiation rule"],
     }));
   }
   if (key === "districtPacks") {
@@ -236,7 +239,7 @@ export async function getTurnContext(input: TurnContextRequest) {
     pregenRequests.push({ key: "actionStaminaProfiles", range: PREGEN_TABLES.ACTION_STAMINA_PROFILES });
   }
   if (hasAny(tagSet, ["ITEM", "INVENTORY", "PURCHASE", "SALE", "CRAFT", "SURVIVAL", "STORAGE", "EQUIPMENT", "CONSUME"])) {
-    pregenRequests.push({ key: "itemReferenceArchive", range: PREGEN_TABLES.ITEM_REFERENCE_ARCHIVE });
+    pregenRequests.push({ key: "commonObjectTemplates", range: PREGEN_TABLES.COMMON_OBJECT_TEMPLATES });
   }
   if (hasAny(tagSet, ["LANGUAGE", "READ", "WRITE", "STUDY"]) || input.includeWorldLanguage || (input.languageConcepts?.length ?? 0) > 0) {
     pregenRequests.push({ key: "languageMeta", range: PREGEN_TABLES.TAREN_LANGUAGE_META });
