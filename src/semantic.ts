@@ -262,19 +262,23 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   if (semantic.elapsedSeconds != null || c.worldDay != null) patchControl("world_day", resolvedDay);
   if (semantic.elapsedSeconds != null || c.worldTime != null) patchControl("world_time", resolvedTime);
   if (c.locationId != null) {
+    const locationChanged = String(controlValue("current_location_id") ?? "") !== c.locationId;
     patchControl("current_location_id", c.locationId);
     patchActiveContext("location", c.locationId);
-    // Parent settlement/region are derived routing hints. Blank them on movement
-    // rather than leave a stale pointer from the previous location.
-    patchActiveContext("settlement", "");
-    patchActiveContext("region_pack", "");
-    patchActiveContext("default_turn_tags", "");
+    if (locationChanged) {
+      // Parent settlement/region are derived routing hints. Blank them on actual
+      // movement rather than carry a stale pointer from the previous location.
+      patchActiveContext("settlement", "");
+      patchActiveContext("region_pack", "");
+      patchActiveContext("default_turn_tags", "");
+    }
   }
   if (c.locationDisplay != null) patchControl("current_location_display", c.locationDisplay);
   if (c.sceneId != null) {
+    const sceneChanged = String(controlValue("current_scene_id") ?? "") !== c.sceneId;
     patchControl("current_scene_id", c.sceneId);
     patchActiveContext("scene", c.sceneId);
-    patchActiveContext("default_turn_tags", "");
+    if (sceneChanged) patchActiveContext("default_turn_tags", "");
   }
   if (c.explorationPace != null) patchControl("exploration_pace", c.explorationPace);
   if (c.explorationStance != null) patchControl("exploration_stance", c.explorationStance);
