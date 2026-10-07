@@ -178,6 +178,9 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     touched.add("INVENTORY_CURRENT");
     touched.add("SYSTEM_MODULES_CURRENT");
   }
+  if ((semantic.socialMemoryEvents?.length ?? 0) > 0) touched.add("SOCIAL_MEMORY_CURRENT");
+  if ((semantic.threadEvents?.length ?? 0) > 0) touched.add("OPEN_THREADS_CURRENT");
+  if ((semantic.chatEvents?.length ?? 0) > 0) touched.add("SYSTEM_CHAT_LOG");
   if ((semantic.injuryEvents ?? []).some((e) => e.simulationOnly !== true)) touched.add("BODY_INJURIES_CURRENT");
   for (const item of semantic.rowUpserts ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowUpdates ?? []) touched.add(item.table as RuntimeTableName);
@@ -1106,6 +1109,144 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     });
   }
 
+  const encodeIds = (values?: string[]) => [...new Set((values ?? []).map((v) => v.trim()).filter(Boolean))].join(";");
+
+  const socialMemoryRows = sheets[TABLES.SOCIAL_MEMORY_CURRENT.range] ?? [];
+  const socialMemoryOutcomes: unknown[] = [];
+  for (const event of semantic.socialMemoryEvents ?? []) {
+    const operation = event.operation ?? "UPSERT";
+    const index = findDataRow(socialMemoryRows, "Memory ID", event.memoryId);
+
+    if (operation === "RETIRE") {
+      if (index >= 0) {
+        writeRow("SOCIAL_MEMORY_CURRENT", socialMemoryRows, index, Array(headers(socialMemoryRows).length).fill(""));
+      }
+      socialMemoryOutcomes.push({ memoryId: event.memoryId, operation, removedFromCurrent: index >= 0 });
+      continue;
+    }
+
+    if (operation === "TOUCH" && index < 0) {
+      throw new Error(`social memory TOUCH target missing: ${event.memoryId}`);
+    }
+
+    if (index < 0 && operation === "UPSERT") {
+      if (!(event.participants?.length)) throw new Error(`new social memory requires participants: ${event.memoryId}`);
+      if (!event.originEvent?.trim()) throw new Error(`new social memory requires originEvent: ${event.memoryId}`);
+      if (!event.meaning?.trim()) throw new Error(`new social memory requires meaning: ${event.memoryId}`);
+    }
+
+    const row = index >= 0 ? cloneRow(socialMemoryRows, index) : Array(headers(socialMemoryRows).length).fill("");
+    const recurrenceIndex = headerIndex(socialMemoryRows, "Recurrence");
+    const oldRecurrence = Number(row[recurrenceIndex] ?? 0) || 0;
+    const recurrenceDelta = event.recurrenceDelta ?? 1;
+    if (!Number.isFinite(recurrenceDelta) || recurrenceDelta < 0) {
+      throw new Error(`social memory recurrenceDelta must be non-negative: ${event.memoryId}`);
+    }
+
+    setByHeader(socialMemoryRows, row, "Memory ID", event.memoryId);
+    if (event.participants?.length) setByHeader(socialMemoryRows, row, "Participants", encodeIds(event.participants));
+    if (event.originEvent != null) setByHeader(socialMemoryRows, row, "Origin event", event.originEvent);
+    if (event.meaning != null) setByHeader(socialMemoryRows, row, "Meaning", event.meaning);
+    if (event.whoUnderstands?.length) setByHeader(socialMemoryRows, row, "Who understands", encodeIds(event.whoUnderstands));
+    else if (index < 0 && event.participants?.length) setByHeader(socialMemoryRows, row, "Who understands", encodeIds(event.participants));
+    if (event.emotionalTone != null) setByHeader(socialMemoryRows, row, "Emotional tone", event.emotionalTone);
+    setByHeader(socialMemoryRows, row, "Recurrence", oldRecurrence + recurrenceDelta);
+    setByHeader(socialMemoryRows, row, "Last used", event.lastUsed ?? resolvedInworldEnd);
+    setByHeader(socialMemoryRows, row, "Status", "ACTIVE");
+    if (event.importance != null || index < 0) setByHeader(socialMemoryRows, row, "Importance", event.importance ?? "ROUTINE");
+    if (event.source != null) setByHeader(socialMemoryRows, row, "Source", event.source);
+    if (event.tags != null) setByHeader(socialMemoryRows, row, "Tags", encodeIds(event.tags));
+    if (event.notes != null) setByHeader(socialMemoryRows, row, "Notes", event.notes);
+
+    if (index >= 0) writeRow("SOCIAL_MEMORY_CURRENT", socialMemoryRows, index, row);
+    else appendRow("SOCIAL_MEMORY_CURRENT", socialMemoryRows, row);
+    socialMemoryOutcomes.push({
+      memoryId: event.memoryId,
+      operation,
+      recurrence: oldRecurrence + recurrenceDelta,
+      importance: row[headerIndex(socialMemoryRows, "Importance")],
+    });
+  }
+
+  const threadRows = sheets[TABLES.OPEN_THREADS_CURRENT.range] ?? [];
+  const threadOutcomes: unknown[] = [];
+  for (const event of semantic.threadEvents ?? []) {
+    const index = findDataRow(threadRows, "Thread ID", event.threadId);
+    if (event.operation === "RESOLVE" || event.operation === "EXPIRE") {
+      if (index >= 0) {
+        writeRow("OPEN_THREADS_CURRENT", threadRows, index, Array(headers(threadRows).length).fill(""));
+      }
+      threadOutcomes.push({
+        threadId: event.threadId,
+        operation: event.operation,
+        removedFromCurrent: index >= 0,
+        promoteTarget: event.promoteTarget ?? "NONE",
+      });
+      continue;
+    }
+
+    if (event.operation === "OPEN" && index >= 0) {
+      throw new Error(`thread already open; use UPDATE: ${event.threadId}`);
+    }
+    if (event.operation === "UPDATE" && index < 0) {
+      throw new Error(`thread UPDATE target missing: ${event.threadId}`);
+    }
+    if (event.operation === "OPEN") {
+      if (!(event.participants?.length)) throw new Error(`new thread requires participants: ${event.threadId}`);
+      if (!event.topic?.trim()) throw new Error(`new thread requires topic: ${event.threadId}`);
+      if (!event.summary?.trim()) throw new Error(`new thread requires summary: ${event.threadId}`);
+    }
+
+    const row = index >= 0 ? cloneRow(threadRows, index) : Array(headers(threadRows).length).fill("");
+    setByHeader(threadRows, row, "Thread ID", event.threadId);
+    if (event.participants?.length) setByHeader(threadRows, row, "Participants", encodeIds(event.participants));
+    if (event.topic != null) setByHeader(threadRows, row, "Topic", event.topic);
+    if (event.summary != null) setByHeader(threadRows, row, "Summary", event.summary);
+    if (event.openedAt != null || index < 0) setByHeader(threadRows, row, "Opened at", event.openedAt ?? resolvedInworldEnd);
+    setByHeader(threadRows, row, "Last touched", event.lastTouched ?? resolvedInworldEnd);
+    if (event.waitingOn != null) setByHeader(threadRows, row, "Waiting on", event.waitingOn);
+    if (event.triggerDue != null) setByHeader(threadRows, row, "Trigger/due", event.triggerDue);
+    setByHeader(threadRows, row, "Status", "OPEN");
+    if (event.importance != null || index < 0) setByHeader(threadRows, row, "Importance", event.importance ?? "ROUTINE");
+    if (event.promoteTarget != null || index < 0) setByHeader(threadRows, row, "Promote target", event.promoteTarget ?? "NONE");
+    if (event.source != null) setByHeader(threadRows, row, "Source", event.source);
+    if (event.tags != null) setByHeader(threadRows, row, "Tags", encodeIds(event.tags));
+    if (event.notes != null) setByHeader(threadRows, row, "Notes", event.notes);
+
+    if (index >= 0) writeRow("OPEN_THREADS_CURRENT", threadRows, index, row);
+    else appendRow("OPEN_THREADS_CURRENT", threadRows, row);
+    threadOutcomes.push({ threadId: event.threadId, operation: event.operation, status: "OPEN" });
+  }
+
+  const chatRows = sheets[TABLES.SYSTEM_CHAT_LOG.range] ?? [];
+  const chatOutcomes: unknown[] = [];
+  for (const event of semantic.chatEvents ?? []) {
+    const index = findDataRow(chatRows, "Message ID", event.messageId);
+    if (index >= 0) {
+      const existing = cloneRow(chatRows, index);
+      const same =
+        String(existing[headerIndex(chatRows, "Sender ID")] ?? "") === event.senderId &&
+        String(existing[headerIndex(chatRows, "Receiver ID")] ?? "") === event.receiverId &&
+        String(existing[headerIndex(chatRows, "Text")] ?? "") === event.text;
+      if (!same) throw new Error(`chat message ID collision: ${event.messageId}`);
+      chatOutcomes.push({ messageId: event.messageId, alreadyPresent: true });
+      continue;
+    }
+    const row = Array(headers(chatRows).length).fill("");
+    setByHeader(chatRows, row, "Message ID", event.messageId);
+    setByHeader(chatRows, row, "Channel ID", event.channelId);
+    setByHeader(chatRows, row, "Timestamp", event.timestamp ?? resolvedInworldEnd);
+    setByHeader(chatRows, row, "Sender ID", event.senderId);
+    setByHeader(chatRows, row, "Receiver ID", event.receiverId);
+    setByHeader(chatRows, row, "Direction", event.direction);
+    setByHeader(chatRows, row, "Text", event.text);
+    setByHeader(chatRows, row, "Delivery", event.delivery ?? "DELIVERED");
+    setByHeader(chatRows, row, "Read status", event.readStatus ?? "UNREAD");
+    setByHeader(chatRows, row, "Notes", event.notes ?? "");
+    appendRow("SYSTEM_CHAT_LOG", chatRows, row);
+    chatOutcomes.push({ messageId: event.messageId, alreadyPresent: false });
+  }
+
   const genericRows = new Map<StructuredRuntimeTable, unknown[][]>();
   for (const item of [...(semantic.rowUpserts ?? []), ...(semantic.rowUpdates ?? []), ...(semantic.rowDeletes ?? [])]) {
     ensureGenericTable(item.table);
@@ -1207,6 +1348,9 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       adaptation: adaptationOutcomes,
       inventory: inventoryOutcomes,
       inventorySummary,
+      socialMemory: socialMemoryOutcomes,
+      threads: threadOutcomes,
+      chat: chatOutcomes,
       resources: resourceOutcomes,
       pendingChoices,
     },
