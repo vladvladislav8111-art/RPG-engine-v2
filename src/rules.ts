@@ -1,4 +1,4 @@
-export const RULESET_VERSION = "2.7.2-npc-context-gate-2026-10-07";
+export const RULESET_VERSION = "2.7.3-context-integrity-2026-10-07";
 
 export type LearningBand = "tiny" | "useful" | "substantial" | "breakthrough" | "exceptional";
 

@@ -257,6 +257,7 @@ const semanticSchema = z.object({
     triggerDue: z.string().optional(),
     importance: z.enum(["ROUTINE", "IMPORTANT"]).optional(),
     promoteTarget: z.enum(["NONE", "SOCIAL_MEMORY", "NPC_KNOWLEDGE", "CANON"]).optional(),
+    promoteRef: z.string().min(1).optional(),
     source: z.string().optional(),
     tags: z.array(z.string()).optional(),
     notes: z.string().optional(),
@@ -387,7 +388,7 @@ function buildServer() {
     {
       title: "Get RPG turn context",
       description:
-        "Load one compact authoritative context packet for an RPG turn. For a substantive NPC reply, pass actorRefs or actorIds and requireNpcContextGate=true (the gate also defaults on for explicit actors). Explicit actors bypass player-location filtering and receive current identity/activity, relevant NPC knowledge, active social memory, open conversational threads, and bounded recent System chat. The returned actorContext.contextGate.readyForSubstantiveReply must be true before rendering a substantive NPC reply; if false, reacquire/fix context rather than improvising around missing state. actorRefs resolves exact active NPC display names or stable IDs and reports ambiguity instead of guessing.",
+        "Load one compact authoritative context packet for an RPG turn. For a substantive NPC reply, pass actorRefs or actorIds and requireNpcContextGate=true (the gate also defaults on for explicit actors). Explicit actors bypass player-location filtering and receive live state, durable identity resolution, knowledge, social memory, open threads, bounded recent System chat, KEY-NPC activity rules and actor-linked clocks. The returned actorContext.contextGate.readyForSubstantiveReply must be true before rendering a substantive NPC reply. Stable identities that are not currently materialized are reported as dormant/rematerialization-required instead of being recreated, and stale KEY-NPC snapshots can require off-screen causal advancement before dialogue.",
       inputSchema: turnContextSchema,
       annotations: {
         readOnlyHint: true,
@@ -421,7 +422,7 @@ function buildServer() {
     {
       title: "Commit RPG turn",
       description:
-        "Commit an RPG turn. Prefer one semantic fast-path payload: route meaningful social context through socialMemoryEvents/threadEvents/chatEvents, update only affected live-state rows, append reusable permanent knowledge to the appropriate LIVE document via docAppends, write the valid SESSION_LOG transaction, then verify current state. Fleeting dialogue should not be persisted merely because it occurred.",
+        "Commit an RPG turn. Prefer one semantic fast-path payload: route meaningful social context through socialMemoryEvents/threadEvents/chatEvents, update only affected live-state rows, append reusable permanent knowledge to the appropriate LIVE document via docAppends, write the valid SESSION_LOG transaction, then verify current state. Chat direction/participants are validated. Resolving or expiring a thread with a non-NONE promoteTarget requires same-transaction destination evidence via promoteRef. Fleeting dialogue should not be persisted merely because it occurred.",
       inputSchema: commitSchema,
       annotations: {
         readOnlyHint: false,

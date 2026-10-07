@@ -212,6 +212,7 @@ export type SemanticThreadEvent = {
   triggerDue?: string;
   importance?: "ROUTINE" | "IMPORTANT";
   promoteTarget?: "NONE" | "SOCIAL_MEMORY" | "NPC_KNOWLEDGE" | "CANON";
+  promoteRef?: string;
   source?: string;
   tags?: string[];
   notes?: string;

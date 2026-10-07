@@ -14,6 +14,7 @@ export const TABLES = {
   PROJECTS_CURRENT: { range: "PROJECTS_CURRENT!A1:N500", keyHeader: "Project ID" },
   NPC_CURRENT: { range: "NPC_CURRENT!A1:N500", keyHeader: "NPC ID" },
   NPC_KNOWLEDGE: { range: "NPC_KNOWLEDGE!A1:J2000", keyHeader: "Fact ID" },
+  NPC_ACTIVITY_RULES: { range: "NPC_ACTIVITY_RULES!A1:L200", keyHeader: "NPC ID" },
   SOCIAL_MEMORY_CURRENT: { range: "SOCIAL_MEMORY_CURRENT!A1:M500", keyHeader: "Memory ID" },
   OPEN_THREADS_CURRENT: { range: "OPEN_THREADS_CURRENT!A1:N300", keyHeader: "Thread ID" },
   PLAYER_LANGUAGE: { range: "PLAYER_LANGUAGE!A1:L100", keyHeader: "Language ID" },
@@ -51,6 +52,8 @@ export const PREGEN_TABLES = {
   INJURY_SEVERITY: "INJURY_SEVERITY!A1:P500",
   HIT_LOCATION_PROFILES: "HIT_LOCATION_PROFILES!A1:P500",
   TOXIN_PROFILES: "TOXIN_PROFILES!A1:P500",
+  NPC_IDENTITY_INDEX: "NPC_IDENTITY_INDEX!A1:L500",
+  HUMAN_THREAT_PROFILES: "HUMAN_THREAT_PROFILES!A1:N300",
 } as const;
 
 export function columnLetter(indexZeroBased: number): string {

@@ -5,7 +5,7 @@ import { PREGEN_TABLES, TABLES } from "./schema.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import { survivalBand } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
-import { evaluateNpcContextGate, filterByParticipants, recentActorChat, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
+import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
 
@@ -248,6 +248,8 @@ export async function getTurnContext(input: TurnContextRequest) {
     addStructured("NPC_KNOWLEDGE");
     addStructured("SOCIAL_MEMORY_CURRENT");
     addStructured("OPEN_THREADS_CURRENT");
+    addStructured("NPC_ACTIVITY_RULES");
+    addStructured("WORLD_CLOCKS");
   }
   if (explicitActorRequest && recentChatLimit > 0) addStructured("SYSTEM_CHAT_LOG");
   if (hasAny(tagSet, ["LANGUAGE", "READ", "WRITE", "STUDY"])) {
@@ -263,6 +265,12 @@ export async function getTurnContext(input: TurnContextRequest) {
   if (hasAny(tagSet, ["WEATHER", "TRAVEL", "EXPLORATION", "SURVIVAL"])) addStructured("WEATHER_CURRENT");
 
   const pregenRequests: Array<{ key: string; range: string }> = [];
+  if (explicitActorRequest) {
+    pregenRequests.push({ key: "npcIdentityIndex", range: PREGEN_TABLES.NPC_IDENTITY_INDEX });
+  }
+  if (hasAny(tagSet, ["THREAT", "CRIME", "WORLDGEN", "AREA_PREP"])) {
+    pregenRequests.push({ key: "humanThreatProfiles", range: PREGEN_TABLES.HUMAN_THREAT_PROFILES });
+  }
   if (needsInventory) {
     pregenRequests.push({ key: "commonObjectTemplates", range: PREGEN_TABLES.COMMON_OBJECT_TEMPLATES });
   }
@@ -301,7 +309,10 @@ export async function getTurnContext(input: TurnContextRequest) {
   const turnToken = makeTurnToken({ saveId, worldDay, worldTime, locationId, sceneId });
 
   const rawNpcCurrent = rowsToObjects(base[TABLES.NPC_CURRENT.range] ?? []);
-  const actorResolution = resolveActorRefs(rawNpcCurrent, actorRefs);
+  const identityPregenRows = rowsToObjects(
+    pregens.find((p) => p.key === "npcIdentityIndex")?.rows ?? [],
+  );
+  const actorResolution = resolveActorRefs(rawNpcCurrent, actorRefs, identityPregenRows);
   const resolvedActorIds = [...new Set([
     ...requestedActorIds,
     ...actorResolution.filter((r) => r.status === "RESOLVED").flatMap((r) => r.actorIds),
@@ -330,7 +341,7 @@ export async function getTurnContext(input: TurnContextRequest) {
         return !state.startsWith("COMPLETED") || tags.some((t) => tagSet.has(t));
       });
     }
-    if (name === "NPC_KNOWLEDGE" && explicitActorRequest) {
+    if ((name === "NPC_KNOWLEDGE" || name === "NPC_ACTIVITY_RULES") && explicitActorRequest) {
       const wanted = new Set(resolvedActorIds);
       records = records.filter((r) => wanted.has(String(r["NPC ID"] ?? "")));
     }
@@ -349,6 +360,10 @@ export async function getTurnContext(input: TurnContextRequest) {
   for (const p of pregens) {
     let records = rowsToObjects(p.rows);
     if (p.key === "districtPacks" || p.key === "serviceDirectory") records = filterByLocation(records, locationId);
+    if (p.key === "npcIdentityIndex") {
+      const wanted = new Set(resolvedActorIds);
+      records = records.filter((r) => wanted.has(String(r["NPC ID"] ?? "")));
+    }
     if (p.key === "commonObjectTemplates") {
       const inventory = (structured.INVENTORY_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
       const usedTemplateIds = new Set(inventory.map((r) => String(r["Template ID"] ?? "")).filter(Boolean));
@@ -446,6 +461,8 @@ export async function getTurnContext(input: TurnContextRequest) {
   const actorChatRows = (structured.SYSTEM_CHAT_LOG as Array<Record<string, unknown>> | undefined) ?? [];
   const socialMemoryRows = (structured.SOCIAL_MEMORY_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
   const openThreadRows = (structured.OPEN_THREADS_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
+  const activityRuleRows = (structured.NPC_ACTIVITY_RULES as Array<Record<string, unknown>> | undefined) ?? [];
+  const worldClockRows = (structured.WORLD_CLOCKS as Array<Record<string, unknown>> | undefined) ?? [];
   const actorRecentChat = recentActorChat(actorChatRows, resolvedActorIds, recentChatLimit);
   const actors: Record<string, unknown> = {};
   const actorContextGate: Record<string, unknown> = {};
@@ -453,14 +470,22 @@ export async function getTurnContext(input: TurnContextRequest) {
   const socialMemoryLoaded = structuredNames.includes("SOCIAL_MEMORY_CURRENT");
   const openThreadsLoaded = structuredNames.includes("OPEN_THREADS_CURRENT");
   const recentChatLoaded = structuredNames.includes("SYSTEM_CHAT_LOG");
+  const activityRulesLoaded = structuredNames.includes("NPC_ACTIVITY_RULES");
   for (const id of resolvedActorIds) {
     const current = actorCurrent.find((r) => String(r["NPC ID"] ?? "") === id) ?? null;
+    const activityRule = activityRuleRows.find((r) => String(r["NPC ID"] ?? "") === id) ?? null;
+    const activeWorldClocks = recordsContainingActorId(worldClockRows, id);
+    const freshness = actorSnapshotFreshness({ worldDay, worldTime, current, activityRule });
+    const durableIdentity =
+      identityPregenRows.find((r) => String(r["NPC ID"] ?? "") === id) ?? null;
     actors[id] = {
       current,
+      durableIdentity,
       knowledge: actorKnowledge.filter((r) => String(r["NPC ID"] ?? "") === id),
       socialMemory: filterByParticipants(socialMemoryRows, [id]),
       openThreads: filterByParticipants(openThreadRows, [id]),
       recentChat: actorRecentChat[id] ?? [],
+      autonomy: { activityRule, activeWorldClocks, freshness },
     };
     actorContextGate[id] = evaluateNpcContextGate({
       actorId: id,
@@ -470,6 +495,10 @@ export async function getTurnContext(input: TurnContextRequest) {
       openThreadsLoaded,
       recentChatLoaded,
       recentChatLimit,
+      activityRuleLoaded: activityRulesLoaded,
+      activityRule,
+      eligibleForOffscreenAdvance: freshness.eligibleForOffscreenAdvance,
+      requiresOffscreenAdvance: freshness.requiresOffscreenAdvance,
     });
   }
   const gateGlobalBlockers: string[] = [];
@@ -541,6 +570,10 @@ export async function getTurnContext(input: TurnContextRequest) {
         resolvedActorIds,
         resolution: actorResolution,
         unresolvedRefs: actorResolution.filter((r) => r.status !== "RESOLVED"),
+        dormantRefs: actorResolution.filter((r) => r.status === "RESOLVED" && r.materialization === "DORMANT"),
+        rematerializationRequiredActorIds: actorResolution
+          .filter((r) => r.status === "RESOLVED" && r.materialization === "DORMANT")
+          .flatMap((r) => r.actorIds),
         contextGate: npcContextGate,
       },
       lookups: lookups.map((lookup, i) => ({ ...lookup, ...lookupResults[i] })),

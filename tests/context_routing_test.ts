@@ -1,8 +1,10 @@
 import {
+  actorSnapshotFreshness,
   evaluateNpcContextGate,
   filterByParticipants,
   recentActorChat,
   resolveActorRefs,
+  validateChatEventShape,
   selectNpcCurrentRows,
 } from "../src/social_context.ts";
 
@@ -89,6 +91,10 @@ Deno.test("NPC context gate passes with all selected-actor surfaces loaded", () 
     openThreadsLoaded: true,
     recentChatLoaded: true,
     recentChatLimit: 8,
+    activityRuleLoaded: true,
+    activityRule: { "NPC ID": "npc.max.earth" },
+    eligibleForOffscreenAdvance: false,
+    requiresOffscreenAdvance: false,
   });
   if (!result.ready || result.blockers.length) {
     throw new Error(`complete selected-NPC context should pass gate: ${result.blockers.join(",")}`);
@@ -123,5 +129,71 @@ Deno.test("NPC context gate distinguishes empty loaded chat from disabled chat l
   const disabled = evaluateNpcContextGate({ ...base, recentChatLimit: 0 });
   if (!loaded.ready || disabled.ready || !disabled.blockers.includes("recent_chat_surface_not_loaded")) {
     throw new Error("gate must accept an empty loaded chat slice but reject disabled chat loading");
+  }
+});
+
+
+Deno.test("dormant stable NPC resolves without inventing a new actor", () => {
+  const result = resolveActorRefs(
+    [],
+    ["Ирина"],
+    [{ "NPC ID": "npc.irina.earth", "Display": "Ира", "Aliases": "Ирина" }],
+  );
+  if (result[0]?.status !== "RESOLVED" || result[0]?.actorIds[0] !== "npc.irina.earth" || result[0]?.materialization !== "DORMANT") {
+    throw new Error("dormant identity must resolve to the stable actor and require rematerialization");
+  }
+});
+
+Deno.test("KEY NPC freshness separates eligible from forced off-screen advance", () => {
+  const current = { "NPC ID": "npc.max.earth", "Last updated": "Day39 15:28" };
+  const rule = {
+    "Minimum elapsed": "30 in-world minutes; any jump >=90m forces one off-screen advance",
+    "Last activity tick": "T0360 / Day39 15:00",
+  };
+  const early = actorSnapshotFreshness({ worldDay: 39, worldTime: "16:10:00", current, activityRule: rule });
+  const late = actorSnapshotFreshness({ worldDay: 39, worldTime: "17:05:00", current, activityRule: rule });
+  if (!early.eligibleForOffscreenAdvance || early.requiresOffscreenAdvance) throw new Error("early freshness classification wrong");
+  if (!late.requiresOffscreenAdvance) throw new Error("forced freshness threshold should require off-screen advance");
+});
+
+Deno.test("chat validator rejects directionally impossible rows", () => {
+  let failed = false;
+  try {
+    validateChatEventShape({
+      messageId: "bad",
+      channelId: "contact.shura.max",
+      senderId: "npc.max.earth",
+      receiverId: "player.shura",
+      direction: "OUT",
+      text: "hello",
+    });
+  } catch {
+    failed = true;
+  }
+  if (!failed) throw new Error("OUT message not sent by Shura must be rejected");
+});
+
+Deno.test("KEY NPC gate blocks forced stale snapshot", () => {
+  const result = evaluateNpcContextGate({
+    actorId: "npc.max.earth",
+    current: {
+      "NPC ID": "npc.max.earth",
+      "Importance": "KEY",
+      "Identity anchors": "sarcastic",
+      "Competence anchors": "logistics",
+      "Current goal/activity": "working",
+    },
+    knowledgeLoaded: true,
+    socialMemoryLoaded: true,
+    openThreadsLoaded: true,
+    recentChatLoaded: true,
+    recentChatLimit: 8,
+    activityRuleLoaded: true,
+    activityRule: { "NPC ID": "npc.max.earth" },
+    eligibleForOffscreenAdvance: true,
+    requiresOffscreenAdvance: true,
+  });
+  if (result.ready || !result.blockers.includes("key_offscreen_advance_required")) {
+    throw new Error("forced stale KEY snapshot must block substantive dialogue");
   }
 });

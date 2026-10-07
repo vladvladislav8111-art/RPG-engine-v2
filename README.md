@@ -90,3 +90,15 @@ Explicit selected actors now carry a retrieval-completeness gate. A substantive 
 The gate distinguishes an empty loaded surface from a surface that was never loaded. It requires `NPC_CURRENT`, `NPC_KNOWLEDGE`, `SOCIAL_MEMORY_CURRENT`, `OPEN_THREADS_CURRENT`, and a bounded `SYSTEM_CHAT_LOG` read. KEY NPCs additionally require identity anchors, competence anchors, and a current goal/activity. Missing or ambiguous actor references block the gate instead of being guessed around.
 
 This is a context-integrity mechanism only. It does not decide what the NPC believes, wants, or morally chooses; the GM still resolves those causally from the loaded state and canon.
+
+
+## V2.7.3 context integrity package
+
+- Stable recurring NPC names/aliases resolve through GM PREGEN `NPC_IDENTITY_INDEX` even when the actor is dormant; dormant resolution never silently creates a replacement person.
+- Selected KEY NPC packets load `NPC_ACTIVITY_RULES` and actor-linked active `WORLD_CLOCKS`; snapshot freshness exposes ordinary eligibility and a stricter forced off-screen-advance threshold.
+- Substantive dialogue is blocked when the KEY snapshot has crossed its forced freshness threshold.
+- Semantic System chat validates sender/receiver/direction shape before append.
+- Thread closure with `promoteTarget != NONE` requires same-transaction destination evidence through `promoteRef`.
+- GM PREGEN `HUMAN_THREAT_PROFILES` contains causal environment profiles for human predation without alignment probabilities, socioeconomic moral stereotypes, or atrocity quotas.
+
+Mutable live truth still has exactly one owner. Stable identity indexes and social memory are routing/context material, not duplicate live state.

@@ -32,6 +32,7 @@ import {
 import { hash32 } from "./rng.ts";
 import { computeSurvivalChange, survivalStaminaModifiers, type SurvivalActivity } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
+import { validateChatEventShape } from "./social_context.ts";
 import type {
   CommitRequest,
   Scalar,
@@ -1170,9 +1171,32 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
 
   const threadRows = sheets[TABLES.OPEN_THREADS_CURRENT.range] ?? [];
   const threadOutcomes: unknown[] = [];
+  const hasThreadPromotionEvidence = (event: NonNullable<SemanticCommitPlan["threadEvents"]>[number]): boolean => {
+    const target = event.promoteTarget ?? "NONE";
+    if (target === "NONE") return true;
+    const ref = event.promoteRef?.trim();
+    if (!ref) return false;
+    if (target === "SOCIAL_MEMORY") {
+      return (semantic.socialMemoryEvents ?? []).some((memory) =>
+        memory.memoryId === ref && (memory.operation ?? "UPSERT") !== "RETIRE"
+      );
+    }
+    if (target === "NPC_KNOWLEDGE") {
+      return [...(semantic.rowUpserts ?? []), ...(semantic.rowUpdates ?? [])].some((row) =>
+        row.table === "NPC_KNOWLEDGE" && row.key === ref
+      );
+    }
+    if (target === "CANON") {
+      return (input.docAppends ?? []).some((doc) => doc.documentKey === ref);
+    }
+    return false;
+  };
   for (const event of semantic.threadEvents ?? []) {
     const index = findDataRow(threadRows, "Thread ID", event.threadId);
     if (event.operation === "RESOLVE" || event.operation === "EXPIRE") {
+      if (!hasThreadPromotionEvidence(event)) {
+        throw new Error(`thread promotion missing atomic destination evidence: ${event.threadId} -> ${event.promoteTarget ?? "NONE"} / ${event.promoteRef ?? ""}`);
+      }
       if (index >= 0) {
         writeRow("OPEN_THREADS_CURRENT", threadRows, index, Array(headers(threadRows).length).fill(""));
       }
@@ -1221,6 +1245,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   const chatRows = sheets[TABLES.SYSTEM_CHAT_LOG.range] ?? [];
   const chatOutcomes: unknown[] = [];
   for (const event of semantic.chatEvents ?? []) {
+    validateChatEventShape(event);
     const index = findDataRow(chatRows, "Message ID", event.messageId);
     if (index >= 0) {
       const existing = cloneRow(chatRows, index);
