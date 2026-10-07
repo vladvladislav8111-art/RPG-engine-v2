@@ -32,7 +32,7 @@ import {
 import { hash32 } from "./rng.ts";
 import { computeSurvivalChange, survivalStaminaModifiers, type SurvivalActivity } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
-import { validateChatEventShape } from "./social_context.ts";
+import { validateChatEventShape, validateRelationshipEventShape } from "./social_context.ts";
 import type {
   CommitRequest,
   Scalar,
@@ -179,6 +179,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     touched.add("INVENTORY_CURRENT");
     touched.add("SYSTEM_MODULES_CURRENT");
   }
+  if ((semantic.relationshipEvents?.length ?? 0) > 0) touched.add("NPC_RELATIONSHIPS_CURRENT");
   if ((semantic.socialMemoryEvents?.length ?? 0) > 0) touched.add("SOCIAL_MEMORY_CURRENT");
   if ((semantic.threadEvents?.length ?? 0) > 0) touched.add("OPEN_THREADS_CURRENT");
   if ((semantic.chatEvents?.length ?? 0) > 0) touched.add("SYSTEM_CHAT_LOG");
@@ -1112,6 +1113,59 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
 
   const encodeIds = (values?: string[]) => [...new Set((values ?? []).map((v) => v.trim()).filter(Boolean))].join(";");
 
+  const relationshipRows = sheets[TABLES.NPC_RELATIONSHIPS_CURRENT.range] ?? [];
+  const relationshipOutcomes: unknown[] = [];
+  for (const event of semantic.relationshipEvents ?? []) {
+    validateRelationshipEventShape(event);
+    const operation = event.operation ?? "UPSERT";
+    const index = findDataRow(relationshipRows, "Relationship ID", event.relationshipId);
+
+    if (operation === "RETIRE") {
+      if (index >= 0) {
+        writeRow("NPC_RELATIONSHIPS_CURRENT", relationshipRows, index, Array(headers(relationshipRows).length).fill(""));
+      }
+      relationshipOutcomes.push({ relationshipId: event.relationshipId, operation, removedFromCurrent: index >= 0 });
+      continue;
+    }
+
+    const row = index >= 0 ? cloneRow(relationshipRows, index) : Array(headers(relationshipRows).length).fill("");
+    if (index >= 0) {
+      const existingActor = String(row[headerIndex(relationshipRows, "Actor ID")] ?? "");
+      const existingToward = String(row[headerIndex(relationshipRows, "Toward ID")] ?? "");
+      if ((existingActor && existingActor !== event.actorId) || (existingToward && existingToward !== event.towardId)) {
+        throw new Error(`relationship endpoint mutation forbidden: ${event.relationshipId}`);
+      }
+    }
+
+    setByHeader(relationshipRows, row, "Relationship ID", event.relationshipId);
+    setByHeader(relationshipRows, row, "Actor ID", event.actorId);
+    setByHeader(relationshipRows, row, "Toward ID", event.towardId);
+    if (event.trust != null) setByHeader(relationshipRows, row, "Trust", event.trust);
+    if (event.respect != null) setByHeader(relationshipRows, row, "Respect", event.respect);
+    if (event.warmth != null) setByHeader(relationshipRows, row, "Warmth", event.warmth);
+    if (event.fear != null) setByHeader(relationshipRows, row, "Fear", event.fear);
+    if (event.tension != null) setByHeader(relationshipRows, row, "Tension", event.tension);
+    if (event.obligationDebt != null) setByHeader(relationshipRows, row, "Obligation/debt", event.obligationDebt);
+    if (event.economicInterest != null) setByHeader(relationshipRows, row, "Economic interest", event.economicInterest);
+    if (event.valueCompatibility != null) setByHeader(relationshipRows, row, "Value compatibility", event.valueCompatibility);
+    if (event.currentStance != null) setByHeader(relationshipRows, row, "Current stance", event.currentStance);
+    if (event.evidenceRefs != null) setByHeader(relationshipRows, row, "Evidence refs", encodeIds(event.evidenceRefs));
+    setByHeader(relationshipRows, row, "Last changed", event.lastChanged ?? resolvedInworldEnd);
+    setByHeader(relationshipRows, row, "Last evaluated", event.lastEvaluated ?? resolvedInworldEnd);
+    setByHeader(relationshipRows, row, "Status", event.status ?? "ACTIVE");
+    if (event.notes != null) setByHeader(relationshipRows, row, "Notes", event.notes);
+
+    if (index >= 0) writeRow("NPC_RELATIONSHIPS_CURRENT", relationshipRows, index, row);
+    else appendRow("NPC_RELATIONSHIPS_CURRENT", relationshipRows, row);
+    relationshipOutcomes.push({
+      relationshipId: event.relationshipId,
+      operation,
+      actorId: event.actorId,
+      towardId: event.towardId,
+      status: row[headerIndex(relationshipRows, "Status")],
+    });
+  }
+
   const socialMemoryRows = sheets[TABLES.SOCIAL_MEMORY_CURRENT.range] ?? [];
   const socialMemoryOutcomes: unknown[] = [];
   for (const event of semantic.socialMemoryEvents ?? []) {
@@ -1373,6 +1427,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       adaptation: adaptationOutcomes,
       inventory: inventoryOutcomes,
       inventorySummary,
+      relationships: relationshipOutcomes,
       socialMemory: socialMemoryOutcomes,
       threads: threadOutcomes,
       chat: chatOutcomes,

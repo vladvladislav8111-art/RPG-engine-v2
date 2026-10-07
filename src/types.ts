@@ -184,6 +184,27 @@ export type SemanticInventoryEvent = {
   reason?: string;
 };
 
+export type SemanticRelationshipEvent = {
+  operation?: "UPSERT" | "RETIRE";
+  relationshipId: string;
+  actorId: string;
+  towardId: string;
+  trust?: string;
+  respect?: string;
+  warmth?: string;
+  fear?: string;
+  tension?: string;
+  obligationDebt?: string;
+  economicInterest?: string;
+  valueCompatibility?: string;
+  currentStance?: string;
+  evidenceRefs?: string[];
+  lastChanged?: string;
+  lastEvaluated?: string;
+  status?: "ACTIVE" | "DORMANT";
+  notes?: string;
+};
+
 export type SemanticSocialMemoryEvent = {
   operation?: "UPSERT" | "TOUCH" | "RETIRE";
   memoryId: string;
@@ -331,6 +352,7 @@ export type SemanticCommitPlan = {
   generalXpEvents?: SemanticGeneralXpEvent[];
   learningEvents?: SemanticLearningEvent[];
   adaptationEvents?: SemanticAdaptationEvent[];
+  relationshipEvents?: SemanticRelationshipEvent[];
   socialMemoryEvents?: SemanticSocialMemoryEvent[];
   threadEvents?: SemanticThreadEvent[];
   chatEvents?: SemanticChatEvent[];

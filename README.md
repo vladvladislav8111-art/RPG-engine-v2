@@ -102,3 +102,14 @@ This is a context-integrity mechanism only. It does not decide what the NPC beli
 - GM PREGEN `HUMAN_THREAT_PROFILES` contains causal environment profiles for human predation without alignment probabilities, socioeconomic moral stereotypes, or atrocity quotas.
 
 Mutable live truth still has exactly one owner. Stable identity indexes and social memory are routing/context material, not duplicate live state.
+
+
+## V2.7.4 social/world context completion
+
+- `NPC_RELATIONSHIPS_CURRENT` is part of the selected-NPC context gate; relationship state is directed and multidimensional.
+- `relationshipEvents` is the semantic write path and rejects `player.shura` as relationship Actor, preserving player agency.
+- Dormant selected NPCs resolve through `NPC_IDENTITY_INDEX`; `ARCHIVE_REGISTRY` then loads only their canonical archived episodic knowledge into an explicit rematerialization packet. Archive evidence never becomes present activity/location by itself.
+- `FACTION_PROCESS_SEEDS` is available to relevant WORLD/FACTION/POLITICS/AREA_PREP context while remaining dormant until causal activation creates or links a live `WORLD_CLOCK`.
+- Rematerialization failures are surfaced explicitly instead of being guessed around.
+
+Current truth remains singular: relationships in `NPC_RELATIONSHIPS_CURRENT`, episodic history in the canonical NPC archive, stable identity in GM PREGEN, and active faction processes in `WORLD_CLOCKS`.
