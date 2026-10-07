@@ -146,6 +146,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     "SESSION_LOG",
   ]);
   if ((semantic.choiceResolutions?.length ?? 0) > 0) touched.add("MILESTONES");
+  if ((semantic.generalXpEvents?.length ?? 0) > 0) touched.add("CHARACTERISTICS");
   if ((semantic.exertionEvents?.length ?? 0) > 0 || (semantic.restEvents?.length ?? 0) > 0 || (semantic.injuryEvents?.length ?? 0) > 0 || (semantic.adaptationEvents?.length ?? 0) > 0) {
     touched.add("CHARACTERISTICS");
   }
