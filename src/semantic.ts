@@ -1,6 +1,7 @@
 import { config } from "./config.ts";
 import { sheetsBatchGet } from "./google.ts";
 import {
+  PREGEN_TABLES,
   TABLES,
   type RuntimeTableName,
   cloneRow,
@@ -104,7 +105,6 @@ function assertStructuredFields(rows: unknown[][], table: string, fields: string
 }
 
 const GENERIC_TABLES = new Set<StructuredRuntimeTable>([
-  "INVENTORY_CURRENT",
   "OPPORTUNITIES_CURRENT",
   "PROJECTS_CURRENT",
   "NPC_CURRENT",
@@ -152,13 +152,20 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     touched.add("CHARACTERISTICS");
   }
   if ((semantic.adaptationEvents?.length ?? 0) > 0) touched.add("CHARACTERISTIC_ADAPTATION");
+  if ((semantic.inventoryEvents?.length ?? 0) > 0) touched.add("INVENTORY_CURRENT");
   if ((semantic.injuryEvents ?? []).some((e) => e.simulationOnly !== true)) touched.add("BODY_INJURIES_CURRENT");
   for (const item of semantic.rowUpserts ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowUpdates ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowDeletes ?? []) touched.add(item.table as RuntimeTableName);
 
   const ranges = [...touched].map((t) => TABLES[t].range);
-  const sheets = await sheetsBatchGet(config.files.TEMP_RUNTIME, ranges);
+  const [sheets, itemReferenceSheets] = await Promise.all([
+    sheetsBatchGet(config.files.TEMP_RUNTIME, ranges),
+    (semantic.inventoryEvents?.length ?? 0) > 0
+      ? sheetsBatchGet(config.files.GM_PREGEN, [PREGEN_TABLES.ITEM_REFERENCE_ARCHIVE])
+      : Promise.resolve({} as Record<string, unknown[][]>),
+  ]);
+  const itemReferenceRows = itemReferenceSheets[PREGEN_TABLES.ITEM_REFERENCE_ARCHIVE] ?? [];
 
   const controlRows = sheets[TABLES.CONTROL.range] ?? [];
   const saveIndex = findDataRow(controlRows, "Key", "save_id");
@@ -221,7 +228,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
         sheetWrites: [],
         docAppends: (input.docAppends ?? []).map((d) => ({ ...d, txMarker: `[TX:${input.txId}]` })),
       },
-      outcomes: { learning: [], adaptation: [], resources: [], pendingChoices: [] },
+      outcomes: { learning: [], adaptation: [], inventory: [], resources: [], pendingChoices: [] },
     };
   }
 
@@ -315,6 +322,156 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     const old = asNumber(row[headerIndex(resourceRows, "Current")], item.resource);
     applyResource(item.resource, old + item.delta);
   }
+
+
+  const inventoryRows = sheets[TABLES.INVENTORY_CURRENT.range] ?? [];
+  const inventoryOutcomes: unknown[] = [];
+  const optionalNumber = (value: unknown, label: string): number | null => {
+    if (value == null || String(value).trim() === "") return null;
+    return asNumber(value, label);
+  };
+  const itemReference = (referenceId: string): unknown[] => {
+    if (!itemReferenceRows.length) throw new Error("ITEM_REFERENCE_ARCHIVE not loaded");
+    const i = findDataRow(itemReferenceRows, "Reference ID", referenceId);
+    if (i < 0) throw new Error(`unknown item reference: ${referenceId}`);
+    return cloneRow(itemReferenceRows, i);
+  };
+  const referenceField = (row: unknown[], field: string): unknown =>
+    row[headerIndex(itemReferenceRows, field)] ?? "";
+
+  const physicalFor = (row: unknown[], refRow: unknown[], qty: number) => {
+    const massOverride = optionalNumber(row[headerIndex(inventoryRows, "Mass override kg")], "inventory mass override");
+    const volumeOverride = optionalNumber(row[headerIndex(inventoryRows, "Volume override L")], "inventory volume override");
+    const refMass = optionalNumber(referenceField(refRow, "Unit Mass kg"), "item reference unit mass");
+    const refVolume = optionalNumber(referenceField(refRow, "Unit Volume L"), "item reference unit volume");
+    const unitMassKg = massOverride ?? refMass;
+    const unitVolumeL = volumeOverride ?? refVolume;
+    return {
+      unitMassKg,
+      unitVolumeL,
+      totalMassKg: unitMassKg == null ? null : unitMassKg * qty,
+      totalVolumeL: unitVolumeL == null ? null : unitVolumeL * qty,
+    };
+  };
+
+  for (const event of semantic.inventoryEvents ?? []) {
+    const i = findDataRow(inventoryRows, "Item ID", event.itemId);
+    if (i < 0 && event.quantityDelta == null && event.setQuantity == null) {
+      throw new Error(`inventory item missing and no quantity supplied: ${event.itemId}`);
+    }
+
+    const oldRow = i >= 0 ? cloneRow(inventoryRows, i) : Array(headers(inventoryRows).length).fill("");
+    const oldQty = i >= 0 ? asNumber(oldRow[headerIndex(inventoryRows, "Qty")], `${event.itemId} qty`) : 0;
+    const existingRef = i >= 0 ? String(oldRow[headerIndex(inventoryRows, "Reference ID")] ?? "").trim() : "";
+    const referenceId = String(event.referenceId ?? existingRef).trim();
+    if (!referenceId) throw new Error(`inventory reference required: ${event.itemId}`);
+    if (existingRef && event.referenceId && existingRef !== event.referenceId) {
+      throw new Error(`inventory reference change is not allowed: ${event.itemId} ${existingRef} -> ${event.referenceId}`);
+    }
+    const refRow = itemReference(referenceId);
+
+    let newQty = oldQty;
+    if (event.setQuantity != null) newQty = event.setQuantity;
+    else if (event.quantityDelta != null) newQty = oldQty + event.quantityDelta;
+    if (!Number.isFinite(newQty) || newQty < -1e-9) {
+      throw new Error(`inventory quantity would become invalid: ${event.itemId}=${newQty}`);
+    }
+    if (Math.abs(newQty) < 1e-9) newQty = 0;
+
+    const oldPhysical = physicalFor(oldRow, refRow, oldQty);
+
+    if (newQty === 0) {
+      if (i >= 0) writeRow("INVENTORY_CURRENT", inventoryRows, i, Array(headers(inventoryRows).length).fill(""));
+      inventoryOutcomes.push({
+        itemId: event.itemId,
+        referenceId,
+        oldQty,
+        newQty: 0,
+        deleted: i >= 0,
+        oldPhysical,
+        newPhysical: { ...oldPhysical, totalMassKg: oldPhysical.unitMassKg == null ? null : 0, totalVolumeL: oldPhysical.unitVolumeL == null ? null : 0 },
+        reason: event.reason ?? null,
+      });
+      continue;
+    }
+
+    const row = i >= 0 ? oldRow : Array(headers(inventoryRows).length).fill("");
+    setByHeader(inventoryRows, row, "Item ID", event.itemId);
+    setByHeader(inventoryRows, row, "Reference ID", referenceId);
+    setByHeader(inventoryRows, row, "Item", String(referenceField(refRow, "Canonical Item") ?? ""));
+    setByHeader(inventoryRows, row, "Qty", newQty);
+    setByHeader(inventoryRows, row, "Unit", String(referenceField(refRow, "Unit") ?? ""));
+    if (i < 0) {
+      setByHeader(inventoryRows, row, "Mass override kg", "");
+      setByHeader(inventoryRows, row, "Volume override L", "");
+      if (!event.location) throw new Error(`new inventory item requires location: ${event.itemId}`);
+      if (!event.custodian) throw new Error(`new inventory item requires custodian: ${event.itemId}`);
+    }
+    if (event.location != null) setByHeader(inventoryRows, row, "Location/container", event.location);
+    if (event.custodian != null) setByHeader(inventoryRows, row, "Custodian", event.custodian);
+    if (event.condition != null) setByHeader(inventoryRows, row, "Condition/known notes", event.condition);
+    if (event.tags != null) setByHeader(inventoryRows, row, "Tags", event.tags);
+    const priorVersion = Number(row[headerIndex(inventoryRows, "Version")] ?? 0) || 0;
+    setByHeader(inventoryRows, row, "Version", priorVersion + 1);
+    setByHeader(inventoryRows, row, "Last updated", resolvedInworldEnd);
+
+    if (i >= 0) writeRow("INVENTORY_CURRENT", inventoryRows, i, row);
+    else appendRow("INVENTORY_CURRENT", inventoryRows, row);
+
+    const newPhysical = physicalFor(row, refRow, newQty);
+    inventoryOutcomes.push({
+      itemId: event.itemId,
+      referenceId,
+      oldQty,
+      newQty,
+      deleted: false,
+      oldPhysical,
+      newPhysical,
+      location: row[headerIndex(inventoryRows, "Location/container")] ?? "",
+      custodian: row[headerIndex(inventoryRows, "Custodian")] ?? "",
+      reason: event.reason ?? null,
+    });
+  }
+
+  const inventoryTotals = (() => {
+    let knownMassKg = 0;
+    let knownVolumeL = 0;
+    let storageKnownMassKg = 0;
+    let storageKnownVolumeL = 0;
+    const unknownMass: string[] = [];
+    const unknownVolume: string[] = [];
+    for (const row of inventoryRows.slice(1)) {
+      const itemId = String(row[headerIndex(inventoryRows, "Item ID")] ?? "").trim();
+      if (!itemId) continue;
+      const qty = asNumber(row[headerIndex(inventoryRows, "Qty")], `${itemId} qty`);
+      const referenceId = String(row[headerIndex(inventoryRows, "Reference ID")] ?? "").trim();
+      if (!referenceId) {
+        unknownMass.push(itemId);
+        unknownVolume.push(itemId);
+        continue;
+      }
+      const refRow = itemReference(referenceId);
+      const p = physicalFor(row, refRow, qty);
+      if (p.totalMassKg == null) unknownMass.push(itemId);
+      else knownMassKg += p.totalMassKg;
+      if (p.totalVolumeL == null) unknownVolume.push(itemId);
+      else knownVolumeL += p.totalVolumeL;
+      if (String(row[headerIndex(inventoryRows, "Location/container")] ?? "").includes("System Storage")) {
+        if (p.totalMassKg != null) storageKnownMassKg += p.totalMassKg;
+        if (p.totalVolumeL != null) storageKnownVolumeL += p.totalVolumeL;
+      }
+    }
+    return {
+      knownMassKg,
+      knownVolumeL,
+      storageKnownMassKg,
+      storageKnownVolumeL,
+      unknownMassItemIds: unknownMass,
+      unknownVolumeItemIds: unknownVolume,
+      completeMass: unknownMass.length === 0,
+      completeVolume: unknownVolume.length === 0,
+    };
+  })();
 
   const progressionRows = sheets[TABLES.PROGRESSION_EVENTS.range] ?? [];
   const generalXpOutcomes: unknown[] = [];
@@ -1010,6 +1167,8 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       choiceResolutions: choiceResolutionOutcomes,
       learning: learningOutcomes,
       adaptation: adaptationOutcomes,
+      inventory: inventoryOutcomes,
+      inventoryTotals,
       resources: resourceOutcomes,
       pendingChoices,
     },
