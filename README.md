@@ -40,3 +40,15 @@ V2.5 keeps the same authoritative storage model but tightens the hot path:
 - `*_CURRENT` tables are intended to remain hot/current only; closed lifecycle history belongs in SESSION_LOG/archive.
 
 Raw `sheetWrites` remain a migration/repair escape hatch. Structural grid changes (for example, adding columns) must be performed before value writes; semantic gameplay should not depend on raw grid addressing.
+
+
+## V2.6 inventory/storage normalization
+
+V2.6 separates current item instances from reusable physical templates:
+
+- `INVENTORY_CURRENT` stores live instance state only: item ID, quantity, unit, custody/location, condition, tags, timestamps and `Template ID`. Mass/volume columns are per-unit instance overrides only.
+- `GM PREGEN / COMMON_OBJECT_TEMPLATES` is the reusable physical archive/catalog for stable unit mass, occupied volume, capacity, durability and other physical baselines.
+- `inventoryEvents` is the normal semantic write path. The engine applies quantity deltas/sets, updates custody/state, validates the template, reuses the first blank inventory row for new instances, and clears the entire CURRENT row automatically when quantity reaches zero.
+- Generic semantic row upsert/update/delete is not allowed for `INVENTORY_CURRENT`; raw sheet writes remain migration/repair only.
+- Inventory context resolves per-unit and row-total mass/volume from template + optional instance override. Unknown physical values stay unknown rather than being guessed.
+- Nested tracked contents contribute mass but do not double-count top-level System Storage occupied volume.
