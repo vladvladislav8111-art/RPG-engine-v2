@@ -5,7 +5,7 @@ import { PREGEN_TABLES, TABLES } from "./schema.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import { survivalBand } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
-import { filterByParticipants, recentActorChat, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
+import { evaluateNpcContextGate, filterByParticipants, recentActorChat, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
 
@@ -209,6 +209,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   const requestedActorIds = input.actorIds ?? [];
   const actorRefs = input.actorRefs ?? [];
   const explicitActorRequest = requestedActorIds.length > 0 || actorRefs.length > 0;
+  const requireNpcContextGate = input.requireNpcContextGate ?? explicitActorRequest;
   const recentChatLimit = Math.max(0, Math.min(20, Math.floor(input.recentChatLimit ?? 8)));
   const lookups = input.lookups ?? [];
   const docQueries = input.docQueries ?? [];
@@ -447,15 +448,48 @@ export async function getTurnContext(input: TurnContextRequest) {
   const openThreadRows = (structured.OPEN_THREADS_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
   const actorRecentChat = recentActorChat(actorChatRows, resolvedActorIds, recentChatLimit);
   const actors: Record<string, unknown> = {};
+  const actorContextGate: Record<string, unknown> = {};
+  const knowledgeLoaded = structuredNames.includes("NPC_KNOWLEDGE");
+  const socialMemoryLoaded = structuredNames.includes("SOCIAL_MEMORY_CURRENT");
+  const openThreadsLoaded = structuredNames.includes("OPEN_THREADS_CURRENT");
+  const recentChatLoaded = structuredNames.includes("SYSTEM_CHAT_LOG");
   for (const id of resolvedActorIds) {
+    const current = actorCurrent.find((r) => String(r["NPC ID"] ?? "") === id) ?? null;
     actors[id] = {
-      current: actorCurrent.find((r) => String(r["NPC ID"] ?? "") === id) ?? null,
+      current,
       knowledge: actorKnowledge.filter((r) => String(r["NPC ID"] ?? "") === id),
       socialMemory: filterByParticipants(socialMemoryRows, [id]),
       openThreads: filterByParticipants(openThreadRows, [id]),
       recentChat: actorRecentChat[id] ?? [],
     };
+    actorContextGate[id] = evaluateNpcContextGate({
+      actorId: id,
+      current,
+      knowledgeLoaded,
+      socialMemoryLoaded,
+      openThreadsLoaded,
+      recentChatLoaded,
+      recentChatLimit,
+    });
   }
+  const gateGlobalBlockers: string[] = [];
+  if (requireNpcContextGate) {
+    if (!explicitActorRequest) gateGlobalBlockers.push("explicit_actor_required");
+    if (!resolvedActorIds.length) gateGlobalBlockers.push("no_actor_resolved");
+    for (const unresolved of actorResolution.filter((r) => r.status !== "RESOLVED")) {
+      gateGlobalBlockers.push(`actor_ref_${unresolved.status.toLocaleLowerCase()}:${unresolved.ref}`);
+    }
+  }
+  const gateActorsReady = Object.values(actorContextGate).every((value) =>
+    Boolean((value as { ready?: boolean }).ready)
+  );
+  const npcContextGate = {
+    required: requireNpcContextGate,
+    readyForSubstantiveReply:
+      !requireNpcContextGate || (gateGlobalBlockers.length === 0 && gateActorsReady),
+    blockers: gateGlobalBlockers,
+    actors: actorContextGate,
+  };
 
   const docMap = new Map(docs);
   const queriedDocs = docQueries.map((q) => {
@@ -507,6 +541,7 @@ export async function getTurnContext(input: TurnContextRequest) {
         resolvedActorIds,
         resolution: actorResolution,
         unresolvedRefs: actorResolution.filter((r) => r.status !== "RESOLVED"),
+        contextGate: npcContextGate,
       },
       lookups: lookups.map((lookup, i) => ({ ...lookup, ...lookupResults[i] })),
       docs: queriedDocs,

@@ -114,3 +114,62 @@ export function filterByParticipants(
     participantIds(record["Participants"]).some((id) => wanted.has(id))
   );
 }
+
+
+export type NpcContextGateActorResult = {
+  actorId: string;
+  ready: boolean;
+  currentLoaded: boolean;
+  knowledgeLoaded: boolean;
+  socialMemoryLoaded: boolean;
+  openThreadsLoaded: boolean;
+  recentChatLoaded: boolean;
+  identityAnchorsPresent: boolean;
+  competenceAnchorsPresent: boolean;
+  currentGoalPresent: boolean;
+  blockers: string[];
+};
+
+export function evaluateNpcContextGate(input: {
+  actorId: string;
+  current: RuntimeRecord | null;
+  knowledgeLoaded: boolean;
+  socialMemoryLoaded: boolean;
+  openThreadsLoaded: boolean;
+  recentChatLoaded: boolean;
+  recentChatLimit: number;
+}): NpcContextGateActorResult {
+  const blockers: string[] = [];
+  const currentLoaded = input.current != null;
+  const importance = String(input.current?.["Importance"] ?? "").trim().toUpperCase();
+  const isKey = importance === "KEY";
+  const identityAnchorsPresent = String(input.current?.["Identity anchors"] ?? "").trim() !== "";
+  const competenceAnchorsPresent = String(input.current?.["Competence anchors"] ?? "").trim() !== "";
+  const currentGoalPresent = String(input.current?.["Current goal/activity"] ?? "").trim() !== "";
+
+  if (!currentLoaded) blockers.push("npc_current_missing");
+  if (!input.knowledgeLoaded) blockers.push("npc_knowledge_surface_not_loaded");
+  if (!input.socialMemoryLoaded) blockers.push("social_memory_surface_not_loaded");
+  if (!input.openThreadsLoaded) blockers.push("open_threads_surface_not_loaded");
+  if (input.recentChatLimit <= 0 || !input.recentChatLoaded) blockers.push("recent_chat_surface_not_loaded");
+
+  if (isKey) {
+    if (!identityAnchorsPresent) blockers.push("key_identity_anchors_missing");
+    if (!competenceAnchorsPresent) blockers.push("key_competence_anchors_missing");
+    if (!currentGoalPresent) blockers.push("key_current_goal_missing");
+  }
+
+  return {
+    actorId: input.actorId,
+    ready: blockers.length === 0,
+    currentLoaded,
+    knowledgeLoaded: input.knowledgeLoaded,
+    socialMemoryLoaded: input.socialMemoryLoaded,
+    openThreadsLoaded: input.openThreadsLoaded,
+    recentChatLoaded: input.recentChatLoaded && input.recentChatLimit > 0,
+    identityAnchorsPresent,
+    competenceAnchorsPresent,
+    currentGoalPresent,
+    blockers,
+  };
+}

@@ -65,6 +65,7 @@ const turnContextSchema = z.object({
   actorIds: z.array(z.string()).max(20).optional(),
   actorRefs: z.array(z.string().min(1)).max(20).optional(),
   recentChatLimit: z.number().int().min(0).max(20).optional(),
+  requireNpcContextGate: z.boolean().optional(),
   lookups: z.array(z.object({
     source: z.enum(["TEMP_RUNTIME", "GM_PREGEN"]),
     sheet: z.string().min(1),
@@ -386,7 +387,7 @@ function buildServer() {
     {
       title: "Get RPG turn context",
       description:
-        "Load one compact authoritative context packet for an RPG turn. For a substantive NPC reply, pass actorRefs or actorIds: explicit actors bypass player-location filtering and receive current identity/activity, relevant NPC knowledge, active social memory, open conversational threads, and bounded recent System chat. actorRefs resolves exact active NPC display names or stable IDs and reports ambiguity instead of guessing. Broad history reads are not part of the normal path.",
+        "Load one compact authoritative context packet for an RPG turn. For a substantive NPC reply, pass actorRefs or actorIds and requireNpcContextGate=true (the gate also defaults on for explicit actors). Explicit actors bypass player-location filtering and receive current identity/activity, relevant NPC knowledge, active social memory, open conversational threads, and bounded recent System chat. The returned actorContext.contextGate.readyForSubstantiveReply must be true before rendering a substantive NPC reply; if false, reacquire/fix context rather than improvising around missing state. actorRefs resolves exact active NPC display names or stable IDs and reports ambiguity instead of guessing.",
       inputSchema: turnContextSchema,
       annotations: {
         readOnlyHint: true,

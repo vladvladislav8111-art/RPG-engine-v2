@@ -81,3 +81,12 @@ The social context pipeline now separates retention by future causal value rathe
 - **CANON** — durable reusable world truth. Store in permanent canon/pregen, not as a duplicate live value.
 
 `socialMemoryEvents`, `threadEvents`, and `chatEvents` are semantic write paths. `SYSTEM_CHAT_LOG` remains append-only history but selected actors receive only a bounded recent slice. A substantive selected-NPC context packet should therefore contain current identity/activity, knowledge, social memory, open threads, and recent chat before the GM writes the reply.
+
+
+## V2.7.2 selected-NPC context gate
+
+Explicit selected actors now carry a retrieval-completeness gate. A substantive NPC reply must not be rendered unless `actorContext.contextGate.readyForSubstantiveReply` is true.
+
+The gate distinguishes an empty loaded surface from a surface that was never loaded. It requires `NPC_CURRENT`, `NPC_KNOWLEDGE`, `SOCIAL_MEMORY_CURRENT`, `OPEN_THREADS_CURRENT`, and a bounded `SYSTEM_CHAT_LOG` read. KEY NPCs additionally require identity anchors, competence anchors, and a current goal/activity. Missing or ambiguous actor references block the gate instead of being guessed around.
+
+This is a context-integrity mechanism only. It does not decide what the NPC believes, wants, or morally chooses; the GM still resolves those causally from the loaded state and canon.

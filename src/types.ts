@@ -31,6 +31,7 @@ export type TurnContextRequest = {
   actorIds?: string[];
   actorRefs?: string[];
   recentChatLimit?: number;
+  requireNpcContextGate?: boolean;
   lookups?: SheetLookup[];
   docQueries?: DocQuery[];
   languageConcepts?: string[];

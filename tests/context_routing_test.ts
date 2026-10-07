@@ -1,4 +1,5 @@
 import {
+  evaluateNpcContextGate,
   filterByParticipants,
   recentActorChat,
   resolveActorRefs,
@@ -69,5 +70,58 @@ Deno.test("social memory and threads filter by selected actor", () => {
   const selected = filterByParticipants(rows, ["npc.max.earth"]);
   if (selected.length !== 2 || selected[0]["Memory ID"] !== "m1" || selected[1]["Memory ID"] !== "m3") {
     throw new Error("participant filtering failed for selected actor");
+  }
+});
+
+
+Deno.test("NPC context gate passes with all selected-actor surfaces loaded", () => {
+  const result = evaluateNpcContextGate({
+    actorId: "npc.max.earth",
+    current: {
+      "NPC ID": "npc.max.earth",
+      "Importance": "KEY",
+      "Identity anchors": "sarcastic; competitive",
+      "Competence anchors": "physical work/logistics",
+      "Current goal/activity": "working a warehouse shift",
+    },
+    knowledgeLoaded: true,
+    socialMemoryLoaded: true,
+    openThreadsLoaded: true,
+    recentChatLoaded: true,
+    recentChatLimit: 8,
+  });
+  if (!result.ready || result.blockers.length) {
+    throw new Error(`complete selected-NPC context should pass gate: ${result.blockers.join(",")}`);
+  }
+});
+
+Deno.test("NPC context gate blocks missing current state instead of improvising", () => {
+  const result = evaluateNpcContextGate({
+    actorId: "npc.max.earth",
+    current: null,
+    knowledgeLoaded: true,
+    socialMemoryLoaded: true,
+    openThreadsLoaded: true,
+    recentChatLoaded: true,
+    recentChatLimit: 8,
+  });
+  if (result.ready || !result.blockers.includes("npc_current_missing")) {
+    throw new Error("missing NPC_CURRENT must block substantive reply");
+  }
+});
+
+Deno.test("NPC context gate distinguishes empty loaded chat from disabled chat loading", () => {
+  const base = {
+    actorId: "npc.local",
+    current: { "NPC ID": "npc.local", "Importance": "MINOR" },
+    knowledgeLoaded: true,
+    socialMemoryLoaded: true,
+    openThreadsLoaded: true,
+    recentChatLoaded: true,
+  };
+  const loaded = evaluateNpcContextGate({ ...base, recentChatLimit: 8 });
+  const disabled = evaluateNpcContextGate({ ...base, recentChatLimit: 0 });
+  if (!loaded.ready || disabled.ready || !disabled.blockers.includes("recent_chat_surface_not_loaded")) {
+    throw new Error("gate must accept an empty loaded chat slice but reject disabled chat loading");
   }
 });
