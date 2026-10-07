@@ -25,3 +25,18 @@ GM PREGEN contains compiled rules plus materialized region/district/service pack
 World Taren is separate from Shura learned state in `PLAYER_LANGUAGE`, `PLAYER_LEXICON` and `PLAYER_GRAMMAR`.
 
 All private and diagnostic endpoints require the runtime API key. `ALLOW_WRITES=true` enables authoritative commits.
+
+
+## V2.5 architecture hardening
+
+V2.5 keeps the same authoritative storage model but tightens the hot path:
+
+- `CHARACTERISTIC_ADAPTATION` is a first-class semantic runtime domain. Adaptation events apply canonical bands, secondary scaling, daily caps, geometric thresholds, overflow, natural characteristic increases, and derived HP/Stamina/Mana maxima without raw-cell gameplay writes.
+- Structured semantic row updates/upserts validate field names against actual table headers. Unknown convenience fields fail with a table-specific error before manifest generation.
+- Semantic row deletion is supported for hot-state lifecycle cleanup.
+- `ACTIVE_CONTEXT` scene/location pointers are synchronized automatically on committed scene/location changes; stale derived settlement/region/tag hints are cleared rather than carried across locations.
+- Physical/training turn context includes canonical `ACTION_STAMINA_PROFILES` so callers use registered action IDs instead of guessed aliases.
+- General-level increases refresh derived HP/Stamina maxima while preserving current values unless another rule changes them.
+- `*_CURRENT` tables are intended to remain hot/current only; closed lifecycle history belongs in SESSION_LOG/archive.
+
+Raw `sheetWrites` remain a migration/repair escape hatch. Structural grid changes (for example, adding columns) must be performed before value writes; semantic gameplay should not depend on raw grid addressing.

@@ -53,6 +53,7 @@ export type DocAppend = {
 };
 
 export type LearningBand = "tiny" | "useful" | "substantial" | "breakthrough" | "exceptional";
+export type AdaptationBand = "trace" | "useful" | "substantial" | "major" | "exceptional";
 export type SpecializationQuality = "trace" | "useful" | "substantial" | "expert" | "breakthrough";
 
 export type LearningModifiers = {
@@ -120,6 +121,15 @@ export type SemanticInjuryEvent = {
   };
   simulationOnly?: boolean;
   reason?: string;
+};
+
+export type SemanticAdaptationEvent = {
+  characteristic: string;
+  band: AdaptationBand;
+  secondary?: boolean;
+  exactUnitsOverride?: number;
+  reason: string;
+  evidence?: string;
 };
 
 export type SemanticLearningEvent = {
@@ -207,7 +217,9 @@ export type StructuredRuntimeTable =
   | "MILESTONES"
   | "WORLD_CLOCKS"
   | "WEATHER_CURRENT"
-  | "BODY_INJURIES_CURRENT";
+  | "BODY_INJURIES_CURRENT"
+  | "CHARACTERISTIC_ADAPTATION"
+  | "ACTIVE_CONTEXT";
 
 export type SemanticRowUpsert = {
   table: StructuredRuntimeTable;
@@ -219,6 +231,11 @@ export type SemanticRowUpdate = {
   table: StructuredRuntimeTable;
   key: string;
   patch: Record<string, Scalar>;
+};
+
+export type SemanticRowDelete = {
+  table: StructuredRuntimeTable;
+  key: string;
 };
 
 export type SemanticSessionRecord = {
@@ -247,8 +264,10 @@ export type SemanticCommitPlan = {
   injuryEvents?: SemanticInjuryEvent[];
   generalXpEvents?: SemanticGeneralXpEvent[];
   learningEvents?: SemanticLearningEvent[];
+  adaptationEvents?: SemanticAdaptationEvent[];
   rowUpserts?: SemanticRowUpsert[];
   rowUpdates?: SemanticRowUpdate[];
+  rowDeletes?: SemanticRowDelete[];
   session: SemanticSessionRecord;
 };
 

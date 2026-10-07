@@ -1,4 +1,4 @@
-export const RULESET_VERSION = "2.4-survival-2026-10-05";
+export const RULESET_VERSION = "2.5-architecture-2026-10-07";
 
 export type LearningBand = "tiny" | "useful" | "substantial" | "breakthrough" | "exceptional";
 
