@@ -433,7 +433,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     });
   }
 
-  const inventoryTotals = (() => {
+  const inventoryTotals = (semantic.inventoryEvents?.length ?? 0) > 0 ? (() => {
     let knownMassKg = 0;
     let knownVolumeL = 0;
     let storageKnownMassKg = 0;
@@ -471,7 +471,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       completeMass: unknownMass.length === 0,
       completeVolume: unknownVolume.length === 0,
     };
-  })();
+  })() : null;
 
   const progressionRows = sheets[TABLES.PROGRESSION_EVENTS.range] ?? [];
   const generalXpOutcomes: unknown[] = [];
