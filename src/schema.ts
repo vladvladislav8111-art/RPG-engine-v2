@@ -8,7 +8,7 @@ export const TABLES = {
   SPECIALIZATIONS: { range: "SPECIALIZATIONS!A1:I200", keyHeader: "Specialization" },
   MILESTONES: { range: "MILESTONES!A1:K100", keyHeader: "Milestone ID" },
   PENDING_CHOICES: { range: "PENDING_CHOICES!A1:L300", keyHeader: "Choice ID" },
-  INVENTORY_CURRENT: { range: "INVENTORY_CURRENT!A1:L500", keyHeader: "Item ID" },
+  INVENTORY_CURRENT: { range: "INVENTORY_CURRENT!A1:M500", keyHeader: "Item ID" },
   OPPORTUNITIES_CURRENT: { range: "OPPORTUNITIES_CURRENT!A1:N500", keyHeader: "Offer ID" },
   PROJECTS_CURRENT: { range: "PROJECTS_CURRENT!A1:N500", keyHeader: "Project ID" },
   NPC_CURRENT: { range: "NPC_CURRENT!A1:N500", keyHeader: "NPC ID" },
@@ -46,6 +46,7 @@ export const PREGEN_TABLES = {
   INJURY_SEVERITY: "INJURY_SEVERITY!A1:P500",
   HIT_LOCATION_PROFILES: "HIT_LOCATION_PROFILES!A1:P500",
   TOXIN_PROFILES: "TOXIN_PROFILES!A1:P500",
+  ITEM_REFERENCE_ARCHIVE: "ITEM_REFERENCE_ARCHIVE!A1:N600",
 } as const;
 
 export function columnLetter(indexZeroBased: number): string {
