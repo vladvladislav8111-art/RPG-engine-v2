@@ -29,6 +29,8 @@ export type TurnContextRequest = {
   turnClass: TurnClass;
   tags?: string[];
   actorIds?: string[];
+  actorRefs?: string[];
+  recentChatLimit?: number;
   lookups?: SheetLookup[];
   docQueries?: DocQuery[];
   languageConcepts?: string[];
