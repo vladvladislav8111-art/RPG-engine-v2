@@ -79,7 +79,6 @@ const turnContextSchema = z.object({
 });
 
 const structuredTableSchema = z.enum([
-  "INVENTORY_CURRENT",
   "OPPORTUNITIES_CURRENT",
   "PROJECTS_CURRENT",
   "NPC_CURRENT",
@@ -204,6 +203,19 @@ const semanticSchema = z.object({
     complexityBonus: z.number().min(0).max(0.5).optional(),
     thresholdFraction: z.number().min(0).max(0.25).optional(),
   })).optional(),
+  inventoryEvents: z.array(z.object({
+    itemId: z.string().min(1),
+    referenceId: z.string().min(1).optional(),
+    quantityDelta: z.number().optional(),
+    setQuantity: z.number().nonnegative().optional(),
+    location: z.string().min(1).optional(),
+    custodian: z.string().min(1).optional(),
+    condition: z.string().optional(),
+    tags: z.string().optional(),
+    reason: z.string().optional(),
+  }).refine((v) => !(v.quantityDelta != null && v.setQuantity != null), {
+    message: "inventory event may use quantityDelta or setQuantity, not both",
+  })).optional(),
   adaptationEvents: z.array(z.object({
     characteristic: z.string().min(1),
     band: z.enum(["trace", "useful", "substantial", "major", "exceptional"]),
@@ -281,7 +293,7 @@ function buildServer() {
     {
       name: "rpg-v2-runtime",
       title: "RPG V2 Runtime",
-      version: "2.5.0",
+      version: "2.6.0",
     },
     { capabilities: { tools: {}, resources: {} } },
   );
