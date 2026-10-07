@@ -52,3 +52,6 @@ V2.6 separates current item instances from reusable physical templates:
 - Generic semantic row upsert/update/delete is not allowed for `INVENTORY_CURRENT`; raw sheet writes remain migration/repair only.
 - Inventory context resolves per-unit and row-total mass/volume from template + optional instance override. Unknown physical values stay unknown rather than being guessed.
 - Nested tracked contents contribute mass but do not double-count top-level System Storage occupied volume.
+
+
+<!-- production-deploy-trigger: v2.6-inventory-storage-2026-10-07 -->
