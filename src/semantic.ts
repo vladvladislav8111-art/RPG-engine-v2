@@ -159,13 +159,13 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   for (const item of semantic.rowDeletes ?? []) touched.add(item.table as RuntimeTableName);
 
   const ranges = [...touched].map((t) => TABLES[t].range);
-  const [sheets, itemReferenceSheets] = await Promise.all([
+  const [sheets, objectTemplateSheets] = await Promise.all([
     sheetsBatchGet(config.files.TEMP_RUNTIME, ranges),
     (semantic.inventoryEvents?.length ?? 0) > 0
-      ? sheetsBatchGet(config.files.GM_PREGEN, [PREGEN_TABLES.ITEM_REFERENCE_ARCHIVE])
+      ? sheetsBatchGet(config.files.GM_PREGEN, [PREGEN_TABLES.COMMON_OBJECT_TEMPLATES])
       : Promise.resolve({} as Record<string, unknown[][]>),
   ]);
-  const itemReferenceRows = itemReferenceSheets[PREGEN_TABLES.ITEM_REFERENCE_ARCHIVE] ?? [];
+  const objectTemplateRows = objectTemplateSheets[PREGEN_TABLES.COMMON_OBJECT_TEMPLATES] ?? [];
 
   const controlRows = sheets[TABLES.CONTROL.range] ?? [];
   const saveIndex = findDataRow(controlRows, "Key", "save_id");
@@ -330,20 +330,20 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     if (value == null || String(value).trim() === "") return null;
     return asNumber(value, label);
   };
-  const itemReference = (referenceId: string): unknown[] => {
-    if (!itemReferenceRows.length) throw new Error("ITEM_REFERENCE_ARCHIVE not loaded");
-    const i = findDataRow(itemReferenceRows, "Reference ID", referenceId);
-    if (i < 0) throw new Error(`unknown item reference: ${referenceId}`);
-    return cloneRow(itemReferenceRows, i);
+  const itemTemplate = (templateId: string): unknown[] => {
+    if (!objectTemplateRows.length) throw new Error("COMMON_OBJECT_TEMPLATES not loaded");
+    const i = findDataRow(objectTemplateRows, "Template ID", templateId);
+    if (i < 0) throw new Error(`unknown item template: ${templateId}`);
+    return cloneRow(objectTemplateRows, i);
   };
-  const referenceField = (row: unknown[], field: string): unknown =>
-    row[headerIndex(itemReferenceRows, field)] ?? "";
+  const templateField = (row: unknown[], field: string): unknown =>
+    row[headerIndex(objectTemplateRows, field)] ?? "";
 
   const physicalFor = (row: unknown[], refRow: unknown[], qty: number) => {
-    const massOverride = optionalNumber(row[headerIndex(inventoryRows, "Mass override kg")], "inventory mass override");
-    const volumeOverride = optionalNumber(row[headerIndex(inventoryRows, "Volume override L")], "inventory volume override");
-    const refMass = optionalNumber(referenceField(refRow, "Unit Mass kg"), "item reference unit mass");
-    const refVolume = optionalNumber(referenceField(refRow, "Unit Volume L"), "item reference unit volume");
+    const massOverride = optionalNumber(row[headerIndex(inventoryRows, "Mass kg override")], "inventory mass override");
+    const volumeOverride = optionalNumber(row[headerIndex(inventoryRows, "Volume L override")], "inventory volume override");
+    const refMass = optionalNumber(templateField(refRow, "Mass kg"), "item template unit mass");
+    const refVolume = optionalNumber(templateField(refRow, "Occupied volume L"), "item template unit volume");
     const unitMassKg = massOverride ?? refMass;
     const unitVolumeL = volumeOverride ?? refVolume;
     return {
@@ -362,13 +362,13 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
 
     const oldRow = i >= 0 ? cloneRow(inventoryRows, i) : Array(headers(inventoryRows).length).fill("");
     const oldQty = i >= 0 ? asNumber(oldRow[headerIndex(inventoryRows, "Qty")], `${event.itemId} qty`) : 0;
-    const existingRef = i >= 0 ? String(oldRow[headerIndex(inventoryRows, "Reference ID")] ?? "").trim() : "";
-    const referenceId = String(event.referenceId ?? existingRef).trim();
-    if (!referenceId) throw new Error(`inventory reference required: ${event.itemId}`);
-    if (existingRef && event.referenceId && existingRef !== event.referenceId) {
-      throw new Error(`inventory reference change is not allowed: ${event.itemId} ${existingRef} -> ${event.referenceId}`);
+    const existingRef = i >= 0 ? String(oldRow[headerIndex(inventoryRows, "Template ID")] ?? "").trim() : "";
+    const templateId = String(event.templateId ?? existingRef).trim();
+    if (!templateId) throw new Error(`inventory template required: ${event.itemId}`);
+    if (existingRef && event.templateId && existingRef !== event.templateId) {
+      throw new Error(`inventory template change is not allowed: ${event.itemId} ${existingRef} -> ${event.templateId}`);
     }
-    const refRow = itemReference(referenceId);
+    const refRow = itemTemplate(templateId);
 
     let newQty = oldQty;
     if (event.setQuantity != null) newQty = event.setQuantity;
@@ -384,7 +384,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       if (i >= 0) writeRow("INVENTORY_CURRENT", inventoryRows, i, Array(headers(inventoryRows).length).fill(""));
       inventoryOutcomes.push({
         itemId: event.itemId,
-        referenceId,
+        templateId,
         oldQty,
         newQty: 0,
         deleted: i >= 0,
@@ -397,13 +397,13 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
 
     const row = i >= 0 ? oldRow : Array(headers(inventoryRows).length).fill("");
     setByHeader(inventoryRows, row, "Item ID", event.itemId);
-    setByHeader(inventoryRows, row, "Reference ID", referenceId);
-    setByHeader(inventoryRows, row, "Item", String(referenceField(refRow, "Canonical Item") ?? ""));
+    setByHeader(inventoryRows, row, "Template ID", templateId);
+    setByHeader(inventoryRows, row, "Item", String(templateField(refRow, "Item") ?? ""));
     setByHeader(inventoryRows, row, "Qty", newQty);
-    setByHeader(inventoryRows, row, "Unit", String(referenceField(refRow, "Unit") ?? ""));
+    setByHeader(inventoryRows, row, "Unit", String(templateField(refRow, "Unit") ?? ""));
     if (i < 0) {
-      setByHeader(inventoryRows, row, "Mass override kg", "");
-      setByHeader(inventoryRows, row, "Volume override L", "");
+      setByHeader(inventoryRows, row, "Mass kg override", "");
+      setByHeader(inventoryRows, row, "Volume L override", "");
       if (!event.location) throw new Error(`new inventory item requires location: ${event.itemId}`);
       if (!event.custodian) throw new Error(`new inventory item requires custodian: ${event.itemId}`);
     }
@@ -421,7 +421,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     const newPhysical = physicalFor(row, refRow, newQty);
     inventoryOutcomes.push({
       itemId: event.itemId,
-      referenceId,
+      templateId,
       oldQty,
       newQty,
       deleted: false,
@@ -444,13 +444,13 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       const itemId = String(row[headerIndex(inventoryRows, "Item ID")] ?? "").trim();
       if (!itemId) continue;
       const qty = asNumber(row[headerIndex(inventoryRows, "Qty")], `${itemId} qty`);
-      const referenceId = String(row[headerIndex(inventoryRows, "Reference ID")] ?? "").trim();
-      if (!referenceId) {
+      const templateId = String(row[headerIndex(inventoryRows, "Template ID")] ?? "").trim();
+      if (!templateId) {
         unknownMass.push(itemId);
         unknownVolume.push(itemId);
         continue;
       }
-      const refRow = itemReference(referenceId);
+      const refRow = itemTemplate(templateId);
       const p = physicalFor(row, refRow, qty);
       if (p.totalMassKg == null) unknownMass.push(itemId);
       else knownMassKg += p.totalMassKg;
