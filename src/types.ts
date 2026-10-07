@@ -220,7 +220,6 @@ export type SemanticSurvival = {
 };
 
 export type StructuredRuntimeTable =
-  | "INVENTORY_CURRENT"
   | "OPPORTUNITIES_CURRENT"
   | "PROJECTS_CURRENT"
   | "NPC_CURRENT"
