@@ -1,0 +1,97 @@
+export type RuntimeRecord = Record<string, unknown>;
+
+export type ActorResolutionStatus = "RESOLVED" | "AMBIGUOUS" | "NOT_FOUND";
+
+export type ActorResolution = {
+  ref: string;
+  status: ActorResolutionStatus;
+  actorIds: string[];
+};
+
+function normalizeRef(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .trim()
+    .toLocaleLowerCase("ru-RU")
+    .replaceAll("ё", "е");
+}
+
+function aliasesFor(record: RuntimeRecord): string[] {
+  const raw = [
+    record["Aliases"],
+    record["Alias"],
+    record["Known as"],
+    record["Alternate names"],
+  ]
+    .filter((v) => v != null && String(v).trim() !== "")
+    .flatMap((v) => String(v).split(/[;,|]/))
+    .map((v) => normalizeRef(v))
+    .filter(Boolean);
+  return [...new Set(raw)];
+}
+
+export function resolveActorRefs(records: RuntimeRecord[], refs: string[]): ActorResolution[] {
+  return refs.map((ref) => {
+    const needle = normalizeRef(ref);
+    const matches = records.filter((record) => {
+      const id = normalizeRef(record["NPC ID"]);
+      const display = normalizeRef(record["Display"]);
+      return needle !== "" && (needle === id || needle === display || aliasesFor(record).includes(needle));
+    });
+    const actorIds = [...new Set(matches.map((r) => String(r["NPC ID"] ?? "").trim()).filter(Boolean))];
+    return {
+      ref,
+      status: actorIds.length === 1 ? "RESOLVED" : actorIds.length > 1 ? "AMBIGUOUS" : "NOT_FOUND",
+      actorIds,
+    };
+  });
+}
+
+const LOCATION_HEADERS = [
+  "Location",
+  "Location/start",
+  "District/location",
+  "Current/last-known location",
+  "Location / anchor",
+];
+
+export function filterRecordsByLocation(records: RuntimeRecord[], locationId: string): RuntimeRecord[] {
+  if (!locationId) return records;
+  return records.filter((record) =>
+    LOCATION_HEADERS.some((header) => String(record[header] ?? "").includes(locationId)) ||
+    !LOCATION_HEADERS.some((header) => header in record)
+  );
+}
+
+export function selectNpcCurrentRows(
+  records: RuntimeRecord[],
+  locationId: string,
+  actorIds: string[],
+  explicitActorRequest: boolean,
+): RuntimeRecord[] {
+  if (explicitActorRequest) {
+    const wanted = new Set(actorIds);
+    return records.filter((record) => wanted.has(String(record["NPC ID"] ?? "")));
+  }
+  return filterRecordsByLocation(records, locationId);
+}
+
+export function recentActorChat(
+  records: RuntimeRecord[],
+  actorIds: string[],
+  limit = 8,
+): Record<string, RuntimeRecord[]> {
+  const safeLimit = Math.max(0, Math.min(20, Math.floor(limit)));
+  const out: Record<string, RuntimeRecord[]> = {};
+  for (const actorId of actorIds) {
+    if (safeLimit === 0) {
+      out[actorId] = [];
+      continue;
+    }
+    out[actorId] = records.filter((record) =>
+      String(record["Sender ID"] ?? "") === actorId ||
+      String(record["Receiver ID"] ?? "") === actorId
+    ).slice(-safeLimit);
+  }
+  return out;
+}

@@ -5,6 +5,7 @@ import { PREGEN_TABLES, TABLES } from "./schema.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import { survivalBand } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
+import { recentActorChat, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
 
@@ -205,7 +206,10 @@ function filterByLocation(records: Array<Record<string, unknown>>, locationId: s
 export async function getTurnContext(input: TurnContextRequest) {
   const started = performance.now();
   const tagSet = new Set((input.tags ?? []).map((t) => t.toUpperCase()));
-  const actorIds = input.actorIds ?? [];
+  const requestedActorIds = input.actorIds ?? [];
+  const actorRefs = input.actorRefs ?? [];
+  const explicitActorRequest = requestedActorIds.length > 0 || actorRefs.length > 0;
+  const recentChatLimit = Math.max(0, Math.min(20, Math.floor(input.recentChatLimit ?? 8)));
   const lookups = input.lookups ?? [];
   const docQueries = input.docQueries ?? [];
   const needsInventory = hasAny(tagSet, ["ITEM", "INVENTORY", "PURCHASE", "SALE", "CONSUME", "COMBAT", "CRAFT", "SURVIVAL", "STORAGE", "EQUIPMENT"]);
@@ -238,8 +242,9 @@ export async function getTurnContext(input: TurnContextRequest) {
     addStructured("OPPORTUNITIES_CURRENT");
   }
   if (hasAny(tagSet, ["PROJECT", "CRAFT", "STUDY", "LANGUAGE"])) addStructured("PROJECTS_CURRENT");
-  if (actorIds.length || hasAny(tagSet, ["NPC", "SOCIAL", "SERVICES"])) addStructured("NPC_CURRENT");
-  if (actorIds.length) addStructured("NPC_KNOWLEDGE");
+  if (explicitActorRequest || hasAny(tagSet, ["NPC", "SOCIAL", "SERVICES"])) addStructured("NPC_CURRENT");
+  if (explicitActorRequest) addStructured("NPC_KNOWLEDGE");
+  if (explicitActorRequest && recentChatLimit > 0) addStructured("SYSTEM_CHAT_LOG");
   if (hasAny(tagSet, ["LANGUAGE", "READ", "WRITE", "STUDY"])) {
     addStructured("PLAYER_LANGUAGE");
     addStructured("PLAYER_LEXICON");
@@ -290,10 +295,19 @@ export async function getTurnContext(input: TurnContextRequest) {
   const sceneId = findControl(control, "current_scene_id");
   const turnToken = makeTurnToken({ saveId, worldDay, worldTime, locationId, sceneId });
 
+  const rawNpcCurrent = rowsToObjects(base[TABLES.NPC_CURRENT.range] ?? []);
+  const actorResolution = resolveActorRefs(rawNpcCurrent, actorRefs);
+  const resolvedActorIds = [...new Set([
+    ...requestedActorIds,
+    ...actorResolution.filter((r) => r.status === "RESOLVED").flatMap((r) => r.actorIds),
+  ])];
+
   const structured: Record<string, unknown> = {};
   for (const name of structuredNames) {
     let records = rowsToObjects(base[TABLES[name].range] ?? []);
-    if (["SERVICES_CURRENT", "OPPORTUNITIES_CURRENT", "NPC_CURRENT", "MAP_KNOWLEDGE_CURRENT"].includes(name)) {
+    if (name === "NPC_CURRENT") {
+      records = selectNpcCurrentRows(records, locationId, resolvedActorIds, explicitActorRequest);
+    } else if (["SERVICES_CURRENT", "OPPORTUNITIES_CURRENT", "MAP_KNOWLEDGE_CURRENT"].includes(name)) {
       records = filterByLocation(records, locationId);
     }
     if (name === "WORLD_CLOCKS") records = records.filter((r) => String(r["State"] ?? "").toUpperCase().includes("ACTIVE"));
@@ -311,8 +325,14 @@ export async function getTurnContext(input: TurnContextRequest) {
         return !state.startsWith("COMPLETED") || tags.some((t) => tagSet.has(t));
       });
     }
-    if (name === "NPC_CURRENT" && actorIds.length) records = records.filter((r) => actorIds.includes(String(r["NPC ID"] ?? "")));
-    if (name === "NPC_KNOWLEDGE" && actorIds.length) records = records.filter((r) => actorIds.includes(String(r["NPC ID"] ?? "")));
+    if (name === "NPC_KNOWLEDGE" && explicitActorRequest) {
+      const wanted = new Set(resolvedActorIds);
+      records = records.filter((r) => wanted.has(String(r["NPC ID"] ?? "")));
+    }
+    if (name === "SYSTEM_CHAT_LOG") {
+      const grouped = recentActorChat(records, resolvedActorIds, recentChatLimit);
+      records = Object.values(grouped).flat().filter((row, i, all) => all.indexOf(row) === i);
+    }
     structured[name] = records;
   }
 
@@ -415,11 +435,14 @@ export async function getTurnContext(input: TurnContextRequest) {
 
   const actorCurrent = (structured.NPC_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
   const actorKnowledge = (structured.NPC_KNOWLEDGE as Array<Record<string, unknown>> | undefined) ?? [];
+  const actorChatRows = (structured.SYSTEM_CHAT_LOG as Array<Record<string, unknown>> | undefined) ?? [];
+  const actorRecentChat = recentActorChat(actorChatRows, resolvedActorIds, recentChatLimit);
   const actors: Record<string, unknown> = {};
-  for (const id of actorIds) {
+  for (const id of resolvedActorIds) {
     actors[id] = {
       current: actorCurrent.find((r) => String(r["NPC ID"] ?? "") === id) ?? null,
       knowledge: actorKnowledge.filter((r) => String(r["NPC ID"] ?? "") === id),
+      recentChat: actorRecentChat[id] ?? [],
     };
   }
 
@@ -467,6 +490,13 @@ export async function getTurnContext(input: TurnContextRequest) {
       inventorySummary,
       languageLookup,
       actors,
+      actorContext: {
+        requestedActorIds,
+        requestedActorRefs: actorRefs,
+        resolvedActorIds,
+        resolution: actorResolution,
+        unresolvedRefs: actorResolution.filter((r) => r.status !== "RESOLVED"),
+      },
       lookups: lookups.map((lookup, i) => ({ ...lookup, ...lookupResults[i] })),
       docs: queriedDocs,
       readPlan: [

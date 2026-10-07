@@ -55,3 +55,16 @@ V2.6 separates current item instances from reusable physical templates:
 
 
 <!-- production-deploy-trigger: v2.6-inventory-storage-2026-10-07 -->
+
+
+## V2.7 context routing
+
+V2.7 hardens recurring-NPC context without turning history into a second live state:
+
+- explicit `actorIds` bypass Shura-location filtering for `NPC_CURRENT`, so remote contacts retain current identity/activity instead of becoming `current: null`;
+- `actorRefs` resolves exact active NPC display names or stable IDs to canonical NPC IDs and reports unresolved/ambiguous references rather than guessing;
+- targeted actor loads include bounded recent `SYSTEM_CHAT_LOG` messages together with current NPC knowledge;
+- local NPC discovery still uses current-location filtering when no explicit actor is requested;
+- recent chat remains append-only history and is loaded only for explicitly selected actors, not as ordinary broad turn context.
+
+This is the first V2.7 slice. Durable social-memory and open-thread materialization remain separate from ephemeral dialogue and will be added as dedicated current-state surfaces rather than overloading NPC knowledge.

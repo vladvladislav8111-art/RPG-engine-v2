@@ -19,6 +19,7 @@ export const TABLES = {
   PLAYER_GRAMMAR: { range: "PLAYER_GRAMMAR!A1:K300", keyHeader: "Grammar ID" },
   PROGRESSION_EVENTS: { range: "PROGRESSION_EVENTS!A1:N2000", keyHeader: "TX ID" },
   SESSION_LOG: { range: "SESSION_LOG!A1:P5000", keyHeader: "Turn ID" },
+  SYSTEM_CHAT_LOG: { range: "SYSTEM_CHAT_LOG!A1:J5000", keyHeader: "Message ID" },
   SERVICES_CURRENT: { range: "SERVICES_CURRENT!A1:L500", keyHeader: "Service ID" },
   MAP_KNOWLEDGE_CURRENT: { range: "MAP_KNOWLEDGE_CURRENT!A1:J1500", keyHeader: "Marker ID" },
   ENTITY_INDEX: { range: "ENTITY_INDEX!A1:L1000", keyHeader: "Entity ID" },

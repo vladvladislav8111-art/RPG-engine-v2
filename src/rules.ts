@@ -1,4 +1,4 @@
-export const RULESET_VERSION = "2.6.1-storage-accounting-2026-10-07";
+export const RULESET_VERSION = "2.7.0-context-routing-2026-10-07";
 
 export type LearningBand = "tiny" | "useful" | "substantial" | "breakthrough" | "exceptional";
 
