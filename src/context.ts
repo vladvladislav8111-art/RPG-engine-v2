@@ -208,6 +208,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   if (hasAny(tagSet, ["TRAVEL", "MAP", "EXPLORATION"])) addStructured("MAP_KNOWLEDGE_CURRENT");
   if (hasAny(tagSet, ["COMBAT", "INJURY", "POISON", "MEDICINE"])) addStructured("BODY_INJURIES_CURRENT");
   if (hasAny(tagSet, ["PHYSICAL", "BODY", "COMBAT", "INJURY", "POISON", "REST", "TRAVEL", "WORK", "SURVIVAL"])) addStructured("CHARACTERISTICS");
+  if (hasAny(tagSet, ["CHARACTERISTIC", "PROGRESSION", "TRAINING", "PHYSICAL", "BODY"])) addStructured("CHARACTERISTIC_ADAPTATION");
   if (hasAny(tagSet, ["WORLD", "CLOCK", "WAIT", "REST", "TRAVEL", "WORK", "STUDY", "CRAFT"])) addStructured("WORLD_CLOCKS");
   if (hasAny(tagSet, ["WEATHER", "TRAVEL", "EXPLORATION", "SURVIVAL"])) addStructured("WEATHER_CURRENT");
 
@@ -215,6 +216,9 @@ export async function getTurnContext(input: TurnContextRequest) {
   if (hasAny(tagSet, ["SERVICES", "SOCIAL", "ECONOMY", "LANGUAGE", "WORK"])) {
     pregenRequests.push({ key: "districtPacks", range: PREGEN_TABLES.DISTRICT_PACKS });
     pregenRequests.push({ key: "serviceDirectory", range: PREGEN_TABLES.SERVICE_DIRECTORY });
+  }
+  if (hasAny(tagSet, ["PHYSICAL", "BODY", "COMBAT", "TRAVEL", "WORK", "TRAINING", "SURVIVAL"])) {
+    pregenRequests.push({ key: "actionStaminaProfiles", range: PREGEN_TABLES.ACTION_STAMINA_PROFILES });
   }
   if (hasAny(tagSet, ["LANGUAGE", "READ", "WRITE", "STUDY"]) || input.includeWorldLanguage || (input.languageConcepts?.length ?? 0) > 0) {
     pregenRequests.push({ key: "languageMeta", range: PREGEN_TABLES.TAREN_LANGUAGE_META });
