@@ -79,7 +79,6 @@ const turnContextSchema = z.object({
 });
 
 const structuredTableSchema = z.enum([
-  "INVENTORY_CURRENT",
   "OPPORTUNITIES_CURRENT",
   "PROJECTS_CURRENT",
   "NPC_CURRENT",
@@ -297,7 +296,7 @@ function buildServer() {
     {
       name: "rpg-v2-runtime",
       title: "RPG V2 Runtime",
-      version: "2.5.0",
+      version: "2.6.0",
     },
     { capabilities: { tools: {}, resources: {} } },
   );
