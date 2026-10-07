@@ -82,6 +82,27 @@ function visibleBand(stars: number): string {
   return "mastery";
 }
 
+const ADAPTATION_UNITS = {
+  trace: 1,
+  useful: 4,
+  substantial: 10,
+  major: 25,
+  exceptional: 50,
+} as const;
+
+function adaptationThreshold(value: number): number {
+  return Math.round(100 * Math.pow(2, value - 5));
+}
+
+function assertStructuredFields(rows: unknown[][], table: string, fields: string[]): void {
+  const allowed = new Set(headers(rows));
+  for (const field of fields) {
+    if (!allowed.has(field)) {
+      throw new Error(`unknown field '${field}' for ${table}; allowed headers: ${[...allowed].join(", ")}`);
+    }
+  }
+}
+
 const GENERIC_TABLES = new Set<StructuredRuntimeTable>([
   "INVENTORY_CURRENT",
   "OPPORTUNITIES_CURRENT",
@@ -98,6 +119,7 @@ const GENERIC_TABLES = new Set<StructuredRuntimeTable>([
   "WORLD_CLOCKS",
   "WEATHER_CURRENT",
   "BODY_INJURIES_CURRENT",
+  "CHARACTERISTIC_ADAPTATION",
 ]);
 
 function ensureGenericTable(name: string): asserts name is StructuredRuntimeTable {
@@ -124,12 +146,14 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     "SESSION_LOG",
   ]);
   if ((semantic.choiceResolutions?.length ?? 0) > 0) touched.add("MILESTONES");
-  if ((semantic.exertionEvents?.length ?? 0) > 0 || (semantic.restEvents?.length ?? 0) > 0 || (semantic.injuryEvents?.length ?? 0) > 0) {
+  if ((semantic.exertionEvents?.length ?? 0) > 0 || (semantic.restEvents?.length ?? 0) > 0 || (semantic.injuryEvents?.length ?? 0) > 0 || (semantic.adaptationEvents?.length ?? 0) > 0) {
     touched.add("CHARACTERISTICS");
   }
+  if ((semantic.adaptationEvents?.length ?? 0) > 0) touched.add("CHARACTERISTIC_ADAPTATION");
   if ((semantic.injuryEvents ?? []).some((e) => e.simulationOnly !== true)) touched.add("BODY_INJURIES_CURRENT");
   for (const item of semantic.rowUpserts ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowUpdates ?? []) touched.add(item.table as RuntimeTableName);
+  for (const item of semantic.rowDeletes ?? []) touched.add(item.table as RuntimeTableName);
 
   const ranges = [...touched].map((t) => TABLES[t].range);
   const sheets = await sheetsBatchGet(config.files.TEMP_RUNTIME, ranges);
@@ -195,7 +219,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
         sheetWrites: [],
         docAppends: (input.docAppends ?? []).map((d) => ({ ...d, txMarker: `[TX:${input.txId}]` })),
       },
-      outcomes: { learning: [], resources: [], pendingChoices: [] },
+      outcomes: { learning: [], adaptation: [], resources: [], pendingChoices: [] },
     };
   }
 
@@ -242,6 +266,19 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     writeRow("PLAYER_RESOURCES", resourceRows, i, row);
     resourceOutcomes.push({ resource, old, next, delta: next - old });
   };
+  const applyResourceMax = (resource: string, nextMax: number) => {
+    if (nextMax < 0) throw new Error(`resource max would become negative: ${resource}=${nextMax}`);
+    const i = findDataRow(resourceRows, "Resource", resource);
+    if (i < 0) throw new Error(`unknown resource: ${resource}`);
+    const row = cloneRow(resourceRows, i);
+    const maxIx = headerIndex(resourceRows, "Max/Threshold");
+    const oldMaxRaw = row[maxIx];
+    const oldMax = String(oldMaxRaw ?? "").trim() === "" ? null : asNumber(oldMaxRaw, `${resource} max`);
+    setByHeader(resourceRows, row, "Max/Threshold", nextMax);
+    writeRow("PLAYER_RESOURCES", resourceRows, i, row);
+    resourceOutcomes.push({ resource, oldMax, nextMax, maxDelta: oldMax == null ? null : nextMax - oldMax });
+  };
+
   for (const item of semantic.resourceSets ?? []) applyResource(item.resource, item.value);
   for (const item of semantic.resourceDeltas ?? []) {
     const i = findDataRow(resourceRows, "Resource", item.resource);
@@ -260,6 +297,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   const competenceRows = sheets[TABLES.COMPETENCES.range] ?? [];
   const specRows = sheets[TABLES.SPECIALIZATIONS.range] ?? [];
   const characteristicRows = sheets[TABLES.CHARACTERISTICS.range] ?? [];
+  const adaptationRows = sheets[TABLES.CHARACTERISTIC_ADAPTATION.range] ?? [];
   const bodyRows = sheets[TABLES.BODY_INJURIES_CURRENT.range] ?? [];
 
   const readResource = (resource: string): number => {
@@ -457,6 +495,12 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
 
     applyResource("General Level", advanced.newLevel);
     applyResource("General XP", advanced.newXp);
+    if (advanced.newLevel !== oldLevel) {
+      const endurance = readCharacteristic("Endurance");
+      const derivedMax = deriveStaminaBaseMax(advanced.newLevel, endurance);
+      applyResourceMax("HP", derivedMax);
+      applyResourceMax("Stamina", derivedMax);
+    }
     if (advanced.characteristicPointsGranted) {
       applyResource("Free Characteristic Points", readResource("Free Characteristic Points") + advanced.characteristicPointsGranted);
     }
@@ -486,6 +530,104 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     setByHeader(progressionRows, erow, "Notes", event.reason);
     appendRow("PROGRESSION_EVENTS", progressionRows, erow);
     generalXpOutcomes.push({ sourceType: event.sourceType, sourceRef: event.sourceRef ?? null, ...advanced });
+  }
+
+  const adaptationOutcomes: unknown[] = [];
+  for (let eventIndex = 0; eventIndex < (semantic.adaptationEvents ?? []).length; eventIndex++) {
+    const event = semantic.adaptationEvents![eventIndex];
+    const ai = findDataRow(adaptationRows, "Characteristic", event.characteristic);
+    if (ai < 0) throw new Error(`unknown adaptation characteristic: ${event.characteristic}`);
+    const ci = findDataRow(characteristicRows, "Characteristic", event.characteristic);
+    if (ci < 0) throw new Error(`unknown characteristic: ${event.characteristic}`);
+
+    const arow = cloneRow(adaptationRows, ai);
+    const crow = cloneRow(characteristicRows, ci);
+    const currentValue = asNumber(crow[headerIndex(characteristicRows, "Value")], `${event.characteristic} value`);
+    const ledgerValue = asNumber(arow[headerIndex(adaptationRows, "Current Value")], `${event.characteristic} ledger value`);
+    if (currentValue !== ledgerValue) {
+      throw new Error(`characteristic/adaptation ledger mismatch for ${event.characteristic}: ${currentValue} vs ${ledgerValue}`);
+    }
+
+    const oldProgress = asNumber(arow[headerIndex(adaptationRows, "Hidden Progress")], `${event.characteristic} hidden progress`);
+    const storedThreshold = asNumber(arow[headerIndex(adaptationRows, "Next Threshold")], `${event.characteristic} threshold`);
+    const expectedThreshold = adaptationThreshold(currentValue);
+    if (storedThreshold !== expectedThreshold) {
+      throw new Error(`adaptation threshold mismatch for ${event.characteristic}: stored=${storedThreshold}, expected=${expectedThreshold}`);
+    }
+
+    const rawUnits = event.exactUnitsOverride ?? ADAPTATION_UNITS[event.band];
+    let eventUnits = Math.max(0, Math.round(event.secondary ? rawUnits * 0.4 : rawUnits));
+    const dailyDayIx = headerIndex(adaptationRows, "Daily Day");
+    const dailyUnitsIx = headerIndex(adaptationRows, "Daily Units");
+    const priorDailyDay = Number(arow[dailyDayIx] ?? 0) || 0;
+    let priorDailyUnits = Number(arow[dailyUnitsIx] ?? 0) || 0;
+    if (priorDailyDay !== resolvedDay) priorDailyUnits = 0;
+
+    if (event.band !== "exceptional") {
+      eventUnits = Math.min(eventUnits, Math.max(0, 25 - priorDailyUnits));
+    }
+    const newDailyUnits = priorDailyUnits + eventUnits;
+    let newProgress = oldProgress + eventUnits;
+    let newValue = currentValue;
+    let naturalGain = 0;
+    if (eventUnits > 0 && newProgress >= expectedThreshold) {
+      newProgress -= expectedThreshold;
+      newValue += 1;
+      naturalGain = 1;
+    }
+    const newThreshold = adaptationThreshold(newValue);
+
+    setByHeader(adaptationRows, arow, "Current Value", newValue);
+    setByHeader(adaptationRows, arow, "Hidden Progress", newProgress);
+    setByHeader(adaptationRows, arow, "Next Threshold", newThreshold);
+    setByHeader(
+      adaptationRows,
+      arow,
+      "Cumulative Units Through Current",
+      asNumber(arow[headerIndex(adaptationRows, "Cumulative Units Through Current")], "cumulative adaptation") + eventUnits,
+    );
+    setByHeader(
+      adaptationRows,
+      arow,
+      "Natural Gains This Audit",
+      (Number(arow[headerIndex(adaptationRows, "Natural Gains This Audit")] ?? 0) || 0) + naturalGain,
+    );
+    setByHeader(adaptationRows, arow, "Last Updated World Time", resolvedInworldEnd);
+    const priorEvidence = String(arow[headerIndex(adaptationRows, "Evidence Summary")] ?? "").trim();
+    const evidence = event.evidence ?? event.reason;
+    const suffix = `${resolvedInworldEnd}: ${evidence}; +${eventUnits} ${event.band.toUpperCase()}${event.secondary ? " secondary" : ""} adaptation.`;
+    setByHeader(adaptationRows, arow, "Evidence Summary", priorEvidence ? `${priorEvidence} ${suffix}` : suffix);
+    setByHeader(adaptationRows, arow, "Daily Day", resolvedDay);
+    setByHeader(adaptationRows, arow, "Daily Units", newDailyUnits);
+    writeRow("CHARACTERISTIC_ADAPTATION", adaptationRows, ai, arow);
+
+    if (newValue !== currentValue) {
+      setByHeader(characteristicRows, crow, "Value", newValue);
+      writeRow("CHARACTERISTICS", characteristicRows, ci, crow);
+      if (event.characteristic === "Endurance") {
+        const derivedMax = deriveStaminaBaseMax(readResource("General Level"), newValue);
+        applyResourceMax("HP", derivedMax);
+        applyResourceMax("Stamina", derivedMax);
+      } else if (event.characteristic === "Intelligence") {
+        applyResourceMax("Mana", 10 * newValue);
+      }
+    }
+
+    adaptationOutcomes.push({
+      characteristic: event.characteristic,
+      band: event.band,
+      secondary: event.secondary === true,
+      requestedUnits: rawUnits,
+      appliedUnits: eventUnits,
+      oldProgress,
+      newProgress,
+      oldValue: currentValue,
+      newValue,
+      nextThreshold: newThreshold,
+      dailyUnits: newDailyUnits,
+      cappedByDailyLimit: event.band !== "exceptional" && eventUnits < Math.max(0, Math.round(event.secondary ? rawUnits * 0.4 : rawUnits)),
+      reason: event.reason,
+    });
   }
 
   const conditionRows = sheets[TABLES.PLAYER_CONDITIONS.range] ?? [];
@@ -723,15 +865,23 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   }
 
   const genericRows = new Map<StructuredRuntimeTable, unknown[][]>();
-  for (const item of [...(semantic.rowUpserts ?? []), ...(semantic.rowUpdates ?? [])]) {
+  for (const item of [...(semantic.rowUpserts ?? []), ...(semantic.rowUpdates ?? []), ...(semantic.rowDeletes ?? [])]) {
     ensureGenericTable(item.table);
     if (!genericRows.has(item.table)) genericRows.set(item.table, sheets[TABLES[item.table].range] ?? []);
+  }
+
+  for (const item of semantic.rowDeletes ?? []) {
+    const rows = genericRows.get(item.table)!;
+    const i = findDataRow(rows, keyHeaderFor(item.table), item.key);
+    if (i < 0) continue;
+    writeRow(item.table as RuntimeTableName, rows, i, Array(headers(rows).length).fill(""));
   }
 
   for (const item of semantic.rowUpdates ?? []) {
     const rows = genericRows.get(item.table)!;
     const i = findDataRow(rows, keyHeaderFor(item.table), item.key);
     if (i < 0) throw new Error(`row update target missing: ${item.table}/${item.key}`);
+    assertStructuredFields(rows, item.table, Object.keys(item.patch));
     const row = cloneRow(rows, i);
     for (const [field, value] of Object.entries(item.patch)) setByHeader(rows, row, field, value);
     writeRow(item.table as RuntimeTableName, rows, i, row);
@@ -741,6 +891,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     const rows = genericRows.get(item.table)!;
     const keyHeader = keyHeaderFor(item.table);
     let i = findDataRow(rows, keyHeader, item.key);
+    assertStructuredFields(rows, item.table, Object.keys(item.values));
     if (i >= 0) {
       const row = cloneRow(rows, i);
       setByHeader(rows, row, keyHeader, item.key);
@@ -811,6 +962,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       generalXp: generalXpOutcomes,
       choiceResolutions: choiceResolutionOutcomes,
       learning: learningOutcomes,
+      adaptation: adaptationOutcomes,
       resources: resourceOutcomes,
       pendingChoices,
     },
