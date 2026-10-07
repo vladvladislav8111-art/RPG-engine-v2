@@ -1,6 +1,7 @@
 import { config } from "./config.ts";
 import { sheetsBatchGet } from "./google.ts";
 import {
+  PREGEN_TABLES,
   TABLES,
   type RuntimeTableName,
   cloneRow,
@@ -104,7 +105,6 @@ function assertStructuredFields(rows: unknown[][], table: string, fields: string
 }
 
 const GENERIC_TABLES = new Set<StructuredRuntimeTable>([
-  "INVENTORY_CURRENT",
   "OPPORTUNITIES_CURRENT",
   "PROJECTS_CURRENT",
   "NPC_CURRENT",
@@ -152,6 +152,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     touched.add("CHARACTERISTICS");
   }
   if ((semantic.adaptationEvents?.length ?? 0) > 0) touched.add("CHARACTERISTIC_ADAPTATION");
+  if ((semantic.inventoryEvents?.length ?? 0) > 0) touched.add("INVENTORY_CURRENT");
   if ((semantic.injuryEvents ?? []).some((e) => e.simulationOnly !== true)) touched.add("BODY_INJURIES_CURRENT");
   for (const item of semantic.rowUpserts ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowUpdates ?? []) touched.add(item.table as RuntimeTableName);
@@ -159,6 +160,9 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
 
   const ranges = [...touched].map((t) => TABLES[t].range);
   const sheets = await sheetsBatchGet(config.files.TEMP_RUNTIME, ranges);
+  const inventoryTemplateRows = (semantic.inventoryEvents?.length ?? 0) > 0
+    ? (await sheetsBatchGet(config.files.GM_PREGEN, [PREGEN_TABLES.COMMON_OBJECT_TEMPLATES]))[PREGEN_TABLES.COMMON_OBJECT_TEMPLATES] ?? []
+    : [];
 
   const controlRows = sheets[TABLES.CONTROL.range] ?? [];
   const saveIndex = findDataRow(controlRows, "Key", "save_id");
@@ -689,6 +693,108 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     writeRow("PLAYER_CONDITIONS", conditionRows, i, row);
   }
 
+  const inventoryRows = sheets[TABLES.INVENTORY_CURRENT.range] ?? [];
+  const inventoryOutcomes: unknown[] = [];
+  for (const event of semantic.inventoryEvents ?? []) {
+    if (event.qtyDelta != null && event.qtySet != null) {
+      throw new Error(`inventory event cannot set both qtyDelta and qtySet: ${event.itemId}`);
+    }
+
+    const existingIndex = findDataRow(inventoryRows, "Item ID", event.itemId);
+    const existingRow = existingIndex >= 0 ? cloneRow(inventoryRows, existingIndex) : null;
+    const currentQty = existingRow
+      ? asNumber(existingRow[headerIndex(inventoryRows, "Qty")], `${event.itemId} quantity`)
+      : 0;
+    const nextQty = event.qtySet != null
+      ? event.qtySet
+      : event.qtyDelta != null
+      ? currentQty + event.qtyDelta
+      : currentQty;
+
+    if (!Number.isFinite(nextQty) || nextQty < 0) {
+      throw new Error(`inventory quantity would become invalid: ${event.itemId}=${nextQty}`);
+    }
+
+    const currentTemplateId = existingRow ? String(existingRow[headerIndex(inventoryRows, "Template ID")] ?? "").trim() : "";
+    const templateId = event.templateId ?? currentTemplateId;
+    if (!templateId) throw new Error(`inventory templateId required: ${event.itemId}`);
+    const templateIndex = findDataRow(inventoryTemplateRows, "Template ID", templateId);
+    if (templateIndex < 0) throw new Error(`unknown inventory template: ${templateId}`);
+    const templateRow = cloneRow(inventoryTemplateRows, templateIndex);
+    const templateItem = String(templateRow[headerIndex(inventoryTemplateRows, "Item")] ?? "");
+    const templateUnit = String(templateRow[headerIndex(inventoryTemplateRows, "Unit")] ?? "");
+
+    if (event.unit != null && templateUnit && event.unit !== templateUnit) {
+      throw new Error(`inventory unit/template mismatch for ${event.itemId}: ${event.unit} vs ${templateUnit}`);
+    }
+
+    if (existingIndex < 0 && nextQty <= 0) {
+      throw new Error(`new inventory row requires positive quantity: ${event.itemId}`);
+    }
+
+    if (existingIndex >= 0 && nextQty === 0) {
+      writeRow("INVENTORY_CURRENT", inventoryRows, existingIndex, Array(headers(inventoryRows).length).fill(""));
+      inventoryOutcomes.push({
+        itemId: event.itemId,
+        templateId,
+        oldQty: currentQty,
+        newQty: 0,
+        removedFromCurrent: true,
+        reason: event.reason ?? null,
+      });
+      continue;
+    }
+
+    const row = existingRow ?? Array(headers(inventoryRows).length).fill("");
+    if (!existingRow) {
+      if (!event.location || !event.custodian) {
+        throw new Error(`new inventory row requires location and custodian: ${event.itemId}`);
+      }
+      setByHeader(inventoryRows, row, "Item ID", event.itemId);
+      setByHeader(inventoryRows, row, "Item", event.item ?? templateItem);
+      setByHeader(inventoryRows, row, "Unit", event.unit ?? templateUnit);
+      setByHeader(inventoryRows, row, "Location/container", event.location);
+      setByHeader(inventoryRows, row, "Custodian", event.custodian);
+      setByHeader(inventoryRows, row, "Condition/known notes", event.conditionNotes ?? "");
+      setByHeader(inventoryRows, row, "Tags", event.tags ?? "inventory");
+      setByHeader(inventoryRows, row, "Version", 1);
+    } else {
+      if (event.item != null) setByHeader(inventoryRows, row, "Item", event.item);
+      if (event.unit != null) setByHeader(inventoryRows, row, "Unit", event.unit);
+      if (event.location != null) setByHeader(inventoryRows, row, "Location/container", event.location);
+      if (event.custodian != null) setByHeader(inventoryRows, row, "Custodian", event.custodian);
+      if (event.conditionNotes != null) setByHeader(inventoryRows, row, "Condition/known notes", event.conditionNotes);
+      if (event.tags != null) setByHeader(inventoryRows, row, "Tags", event.tags);
+      const oldVersion = Number(row[headerIndex(inventoryRows, "Version")] ?? 0) || 0;
+      setByHeader(inventoryRows, row, "Version", oldVersion + 1);
+    }
+
+    setByHeader(inventoryRows, row, "Qty", nextQty);
+    setByHeader(inventoryRows, row, "Template ID", templateId);
+    if (event.massKgOverride !== undefined) {
+      setByHeader(inventoryRows, row, "Mass kg override", event.massKgOverride ?? "");
+    }
+    if (event.volumeLOverride !== undefined) {
+      setByHeader(inventoryRows, row, "Volume L override", event.volumeLOverride ?? "");
+    }
+    setByHeader(inventoryRows, row, "Last updated", event.lastUpdated ?? resolvedInworldEnd);
+
+    if (existingIndex >= 0) writeRow("INVENTORY_CURRENT", inventoryRows, existingIndex, row);
+    else appendRow("INVENTORY_CURRENT", inventoryRows, row);
+
+    inventoryOutcomes.push({
+      itemId: event.itemId,
+      templateId,
+      oldQty: currentQty,
+      newQty: nextQty,
+      delta: nextQty - currentQty,
+      removedFromCurrent: false,
+      location: row[headerIndex(inventoryRows, "Location/container")],
+      custodian: row[headerIndex(inventoryRows, "Custodian")],
+      reason: event.reason ?? null,
+    });
+  }
+
   const pendingRows = sheets[TABLES.PENDING_CHOICES.range] ?? [];
   const learningOutcomes: unknown[] = [];
   const pendingChoices: unknown[] = [];
@@ -1010,6 +1116,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       choiceResolutions: choiceResolutionOutcomes,
       learning: learningOutcomes,
       adaptation: adaptationOutcomes,
+      inventory: inventoryOutcomes,
       resources: resourceOutcomes,
       pendingChoices,
     },
