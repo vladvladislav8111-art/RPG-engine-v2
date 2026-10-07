@@ -130,10 +130,17 @@ export async function handleHttpRequest(
     }
 
     if (pathname === "/mcp") {
-      if (!authorized(req)) return json({ error: "unauthorized" }, 401);
-      return await handleMcp(req);
+      if (authorized(req)) return await handleMcp(req);
+
+      const suppliedToken = url.searchParams.get("token");
+      if (config.mcpRouteToken && suppliedToken && suppliedToken === config.mcpRouteToken) {
+        return await handleMcpReadOnly(req);
+      }
+
+      return json({ error: "unauthorized" }, 401);
     }
 
+    // Compatibility fallback for hosts that preserve custom wildcard paths.
     if (pathname.startsWith("/mcp/")) {
       const suppliedToken = decodeURIComponent(pathname.slice("/mcp/".length));
       if (!config.mcpRouteToken || !suppliedToken || suppliedToken !== config.mcpRouteToken) {
