@@ -20,6 +20,7 @@ export const config = {
   runtime,
   port: Number(rawEnv("PORT") ?? "8000"),
   apiKey: env("RUNTIME_API_KEY"),
+  mcpRouteToken: env("MCP_ROUTE_TOKEN", false),
   allowWrites: (rawEnv("ALLOW_WRITES") ?? "false").toLowerCase() === "true",
   enableKv: (rawEnv("ENABLE_KV") ?? (runtime === "deno" ? "true" : "false")).toLowerCase() === "true",
   google: {

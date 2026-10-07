@@ -358,7 +358,8 @@ function toolJson(data: unknown) {
   };
 }
 
-function buildServer() {
+function buildServer(options: { allowWriteTools?: boolean } = {}) {
+  const allowWriteTools = options.allowWriteTools ?? true;
   const server = new McpServer(
     {
       name: "rpg-v2-runtime",
@@ -437,22 +438,25 @@ function buildServer() {
     async (input) => toolJson(await prepareCommit({ ...input, dryRun: true })),
   );
 
-  server.registerTool(
-    "commit_turn",
-    {
-      title: "Commit RPG turn",
-      description:
-        "Commit an RPG turn. Prefer one semantic fast-path payload: route meaningful social context through socialMemoryEvents/threadEvents/chatEvents, update only affected live-state rows, append reusable permanent knowledge to the appropriate LIVE document via docAppends, write the valid SESSION_LOG transaction, then verify current state. Chat direction/participants are validated. Resolving or expiring a thread with a non-NONE promoteTarget requires same-transaction destination evidence via promoteRef. Fleeting dialogue should not be persisted merely because it occurred.",
-      inputSchema: commitSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: true,
-        openWorldHint: false,
+  if (allowWriteTools) {
+    server.registerTool(
+      "commit_turn",
+      {
+        title: "Commit RPG turn",
+        description:
+          "Commit an RPG turn. Prefer one semantic fast-path payload: route meaningful social context through socialMemoryEvents/threadEvents/chatEvents, update only affected live-state rows, append reusable permanent knowledge to the appropriate LIVE document via docAppends, write the valid SESSION_LOG transaction, then verify current state. Chat direction/participants are validated. Resolving or expiring a thread with a non-NONE promoteTarget requires same-transaction destination evidence via promoteRef. Fleeting dialogue should not be persisted merely because it occurred.",
+        inputSchema: commitSchema,
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
       },
-    },
-    async (input) => toolJson(await commitTurn({ ...input, dryRun: false })),
-  );
+      async (input) => toolJson(await commitTurn({ ...input, dryRun: false })),
+    );
+  
+  }
 
 
   server.registerResource(
@@ -648,10 +652,15 @@ function buildServer() {
   return server;
 }
 
-const mcpHandler = createMcpHandler(buildServer);
+const mcpHandler = createMcpHandler(() => buildServer({ allowWriteTools: true }));
+const mcpReadOnlyHandler = createMcpHandler(() => buildServer({ allowWriteTools: false }));
 
 export async function handleMcp(request: Request): Promise<Response> {
   return await mcpHandler.fetch(request);
+}
+
+export async function handleMcpReadOnly(request: Request): Promise<Response> {
+  return await mcpReadOnlyHandler.fetch(request);
 }
 
 export async function diagnoseMcp(): Promise<{

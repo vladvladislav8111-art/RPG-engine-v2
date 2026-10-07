@@ -3,7 +3,7 @@ import { config } from "./config.ts";
 import { getTurnContext } from "./context.ts";
 import { sheetsBatchGet } from "./google.ts";
 import { HUD_UI_VERSION } from "./hud.ts";
-import { diagnoseMcp, handleMcp } from "./mcp.ts";
+import { diagnoseMcp, handleMcp, handleMcpReadOnly } from "./mcp.ts";
 import { intBetween } from "./rng.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import type { CommitRequest, TurnContextRequest } from "./types.ts";
@@ -132,6 +132,14 @@ export async function handleHttpRequest(
     if (pathname === "/mcp") {
       if (!authorized(req)) return json({ error: "unauthorized" }, 401);
       return await handleMcp(req);
+    }
+
+    if (pathname.startsWith("/mcp/")) {
+      const suppliedToken = decodeURIComponent(pathname.slice("/mcp/".length));
+      if (!config.mcpRouteToken || !suppliedToken || suppliedToken !== config.mcpRouteToken) {
+        return json({ error: "not_found" }, 404);
+      }
+      return await handleMcpReadOnly(req);
     }
 
     if (!authorized(req)) return json({ error: "unauthorized" }, 401);

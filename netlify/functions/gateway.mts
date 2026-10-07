@@ -13,6 +13,7 @@ export const config = {
     "/commit",
     "/rng/int",
     "/mcp",
+    "/mcp/*",
     "/diag/context",
     "/diag/prepare",
     "/diag/docs",

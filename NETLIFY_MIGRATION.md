@@ -55,3 +55,18 @@ Required RPG variables:
 Netlify Functions currently have a 60-second synchronous execution limit and default 1024 MB memory. The RPG fast path should remain far below that after bounded context reads.
 
 The public gateway preserves the same paths expected by the ChatGPT RPG Runtime Bridge.
+
+
+## Private read-only ChatGPT MCP route
+
+Netlify can expose a no-header MCP connection for a private ChatGPT plugin without exposing write tools:
+
+- add a secret environment variable `MCP_ROUTE_TOKEN` with a long random value;
+- connect ChatGPT to `https://<site>.netlify.app/mcp/<MCP_ROUTE_TOKEN>`;
+- choose **No authentication** in ChatGPT/Plugin Creator.
+
+This route is intentionally read-only: `commit_turn` is not registered on it at all. The normal `/mcp` endpoint remains protected by `RUNTIME_API_KEY` and retains the full server tool set for trusted server-to-server use.
+
+The route token is a private capability URL, not OAuth. Treat the entire URL as a secret. Do not paste it into public issues, logs, screenshots or documentation. Keep `ALLOW_WRITES=false` during migration validation.
+
+Before write-capable ChatGPT MCP access is enabled, replace the capability-URL bridge with OAuth 2.1 (or another officially supported authenticated connection) rather than exposing write tools anonymously.
