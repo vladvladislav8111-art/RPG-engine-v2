@@ -119,7 +119,6 @@ const GENERIC_TABLES = new Set<StructuredRuntimeTable>([
   "WORLD_CLOCKS",
   "WEATHER_CURRENT",
   "BODY_INJURIES_CURRENT",
-  "CHARACTERISTIC_ADAPTATION",
   "ACTIVE_CONTEXT",
 ]);
 
@@ -585,7 +584,8 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     }
 
     const rawUnits = event.exactUnitsOverride ?? ADAPTATION_UNITS[event.band];
-    let eventUnits = Math.max(0, Math.round(event.secondary ? rawUnits * 0.4 : rawUnits));
+    const requestedUnits = Math.max(0, Math.round(event.secondary ? rawUnits * 0.4 : rawUnits));
+    let eventUnits = requestedUnits;
     const dailyDayIx = headerIndex(adaptationRows, "Daily Day");
     const dailyUnitsIx = headerIndex(adaptationRows, "Daily Units");
     const priorDailyDay = Number(arow[dailyDayIx] ?? 0) || 0;
@@ -594,6 +594,24 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
 
     if (event.band !== "exceptional") {
       eventUnits = Math.min(eventUnits, Math.max(0, 25 - priorDailyUnits));
+    }
+    if (eventUnits === 0) {
+      adaptationOutcomes.push({
+        characteristic: event.characteristic,
+        band: event.band,
+        secondary: event.secondary === true,
+        requestedUnits: rawUnits,
+        appliedUnits: 0,
+        oldProgress,
+        newProgress: oldProgress,
+        oldValue: currentValue,
+        newValue: currentValue,
+        nextThreshold: expectedThreshold,
+        dailyUnits: priorDailyUnits,
+        cappedByDailyLimit: requestedUnits > 0 && event.band !== "exceptional",
+        reason: event.reason,
+      });
+      continue;
     }
     const newDailyUnits = priorDailyUnits + eventUnits;
     let newProgress = oldProgress + eventUnits;
@@ -654,7 +672,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       newValue,
       nextThreshold: newThreshold,
       dailyUnits: newDailyUnits,
-      cappedByDailyLimit: event.band !== "exceptional" && eventUnits < Math.max(0, Math.round(event.secondary ? rawUnits * 0.4 : rawUnits)),
+      cappedByDailyLimit: event.band !== "exceptional" && eventUnits < requestedUnits,
       reason: event.reason,
     });
   }
