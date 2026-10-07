@@ -205,7 +205,7 @@ const semanticSchema = z.object({
   })).optional(),
   inventoryEvents: z.array(z.object({
     itemId: z.string().min(1),
-    referenceId: z.string().min(1).optional(),
+    templateId: z.string().min(1).optional(),
     quantityDelta: z.number().optional(),
     setQuantity: z.number().nonnegative().optional(),
     location: z.string().min(1).optional(),
