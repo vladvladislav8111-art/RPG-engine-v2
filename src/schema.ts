@@ -14,6 +14,8 @@ export const TABLES = {
   PROJECTS_CURRENT: { range: "PROJECTS_CURRENT!A1:N500", keyHeader: "Project ID" },
   NPC_CURRENT: { range: "NPC_CURRENT!A1:N500", keyHeader: "NPC ID" },
   NPC_KNOWLEDGE: { range: "NPC_KNOWLEDGE!A1:J2000", keyHeader: "Fact ID" },
+  SOCIAL_MEMORY_CURRENT: { range: "SOCIAL_MEMORY_CURRENT!A1:M500", keyHeader: "Memory ID" },
+  OPEN_THREADS_CURRENT: { range: "OPEN_THREADS_CURRENT!A1:N300", keyHeader: "Thread ID" },
   PLAYER_LANGUAGE: { range: "PLAYER_LANGUAGE!A1:L100", keyHeader: "Language ID" },
   PLAYER_LEXICON: { range: "PLAYER_LEXICON!A1:L1000", keyHeader: "Entry ID" },
   PLAYER_GRAMMAR: { range: "PLAYER_GRAMMAR!A1:K300", keyHeader: "Grammar ID" },
