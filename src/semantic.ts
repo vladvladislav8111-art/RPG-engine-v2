@@ -120,6 +120,7 @@ const GENERIC_TABLES = new Set<StructuredRuntimeTable>([
   "WEATHER_CURRENT",
   "BODY_INJURIES_CURRENT",
   "CHARACTERISTIC_ADAPTATION",
+  "ACTIVE_CONTEXT",
 ]);
 
 function ensureGenericTable(name: string): asserts name is StructuredRuntimeTable {
@@ -147,6 +148,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   ]);
   if ((semantic.choiceResolutions?.length ?? 0) > 0) touched.add("MILESTONES");
   if ((semantic.generalXpEvents?.length ?? 0) > 0) touched.add("CHARACTERISTICS");
+  if (semantic.control?.sceneId != null || semantic.control?.locationId != null) touched.add("ACTIVE_CONTEXT");
   if ((semantic.exertionEvents?.length ?? 0) > 0 || (semantic.restEvents?.length ?? 0) > 0 || (semantic.injuryEvents?.length ?? 0) > 0 || (semantic.adaptationEvents?.length ?? 0) > 0) {
     touched.add("CHARACTERISTICS");
   }
@@ -247,11 +249,33 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   };
 
   const c = semantic.control ?? {};
+  const activeContextRows = sheets[TABLES.ACTIVE_CONTEXT.range] ?? [];
+  const patchActiveContext = (slot: string, pointer: Scalar) => {
+    if (!activeContextRows.length) return;
+    const i = findDataRow(activeContextRows, "Slot", slot);
+    if (i < 0) return;
+    const row = cloneRow(activeContextRows, i);
+    setByHeader(activeContextRows, row, "Pointer", pointer);
+    writeRow("ACTIVE_CONTEXT", activeContextRows, i, row);
+  };
+
   if (semantic.elapsedSeconds != null || c.worldDay != null) patchControl("world_day", resolvedDay);
   if (semantic.elapsedSeconds != null || c.worldTime != null) patchControl("world_time", resolvedTime);
-  if (c.locationId != null) patchControl("current_location_id", c.locationId);
+  if (c.locationId != null) {
+    patchControl("current_location_id", c.locationId);
+    patchActiveContext("location", c.locationId);
+    // Parent settlement/region are derived routing hints. Blank them on movement
+    // rather than leave a stale pointer from the previous location.
+    patchActiveContext("settlement", "");
+    patchActiveContext("region_pack", "");
+    patchActiveContext("default_turn_tags", "");
+  }
   if (c.locationDisplay != null) patchControl("current_location_display", c.locationDisplay);
-  if (c.sceneId != null) patchControl("current_scene_id", c.sceneId);
+  if (c.sceneId != null) {
+    patchControl("current_scene_id", c.sceneId);
+    patchActiveContext("scene", c.sceneId);
+    patchActiveContext("default_turn_tags", "");
+  }
   if (c.explorationPace != null) patchControl("exploration_pace", c.explorationPace);
   if (c.explorationStance != null) patchControl("exploration_stance", c.explorationStance);
 
