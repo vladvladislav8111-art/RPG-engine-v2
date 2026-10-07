@@ -144,6 +144,21 @@ function compactPregenRecords(key: string, records: Array<Record<string, unknown
       tags: r["Tags"],
     }));
   }
+  if (key === "itemReferenceArchive") {
+    return records.map((r) => ({
+      referenceId: r["Reference ID"],
+      item: r["Canonical Item"],
+      category: r["Category"],
+      unit: r["Unit"],
+      unitMassKg: r["Unit Mass kg"],
+      unitVolumeL: r["Unit Volume L"],
+      capacityL: r["Capacity L"],
+      properties: r["Stable quality / properties"],
+      source: r["Source"],
+      tags: r["Reuse tags"],
+      version: r["Version"],
+    }));
+  }
   if (key === "districtPacks") {
     return records.map((r) => ({
       packId: r["Pack ID"],
@@ -219,6 +234,9 @@ export async function getTurnContext(input: TurnContextRequest) {
   }
   if (hasAny(tagSet, ["PHYSICAL", "BODY", "COMBAT", "TRAVEL", "WORK", "TRAINING", "SURVIVAL"])) {
     pregenRequests.push({ key: "actionStaminaProfiles", range: PREGEN_TABLES.ACTION_STAMINA_PROFILES });
+  }
+  if (hasAny(tagSet, ["ITEM", "INVENTORY", "PURCHASE", "SALE", "CRAFT", "SURVIVAL", "STORAGE", "EQUIPMENT", "CONSUME"])) {
+    pregenRequests.push({ key: "itemReferenceArchive", range: PREGEN_TABLES.ITEM_REFERENCE_ARCHIVE });
   }
   if (hasAny(tagSet, ["LANGUAGE", "READ", "WRITE", "STUDY"]) || input.includeWorldLanguage || (input.languageConcepts?.length ?? 0) > 0) {
     pregenRequests.push({ key: "languageMeta", range: PREGEN_TABLES.TAREN_LANGUAGE_META });
