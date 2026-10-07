@@ -66,6 +66,13 @@ function asNumber(value: unknown, label: string): number {
   return n;
 }
 
+function numberOrNull(value: unknown): number | null {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  if (typeof value === "string" && !value.trim()) return null;
+  const parsed = Number(String(value).replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function rowToScalars(row: unknown[]): Scalar[] {
   return row.map((v) => (v == null ? "" : v) as Scalar);
 }
