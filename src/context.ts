@@ -5,7 +5,7 @@ import { PREGEN_TABLES, TABLES } from "./schema.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import { survivalBand } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
-import { recentActorChat, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
+import { filterByParticipants, recentActorChat, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
 
@@ -243,7 +243,11 @@ export async function getTurnContext(input: TurnContextRequest) {
   }
   if (hasAny(tagSet, ["PROJECT", "CRAFT", "STUDY", "LANGUAGE"])) addStructured("PROJECTS_CURRENT");
   if (explicitActorRequest || hasAny(tagSet, ["NPC", "SOCIAL", "SERVICES"])) addStructured("NPC_CURRENT");
-  if (explicitActorRequest) addStructured("NPC_KNOWLEDGE");
+  if (explicitActorRequest) {
+    addStructured("NPC_KNOWLEDGE");
+    addStructured("SOCIAL_MEMORY_CURRENT");
+    addStructured("OPEN_THREADS_CURRENT");
+  }
   if (explicitActorRequest && recentChatLimit > 0) addStructured("SYSTEM_CHAT_LOG");
   if (hasAny(tagSet, ["LANGUAGE", "READ", "WRITE", "STUDY"])) {
     addStructured("PLAYER_LANGUAGE");
@@ -328,6 +332,9 @@ export async function getTurnContext(input: TurnContextRequest) {
     if (name === "NPC_KNOWLEDGE" && explicitActorRequest) {
       const wanted = new Set(resolvedActorIds);
       records = records.filter((r) => wanted.has(String(r["NPC ID"] ?? "")));
+    }
+    if (name === "SOCIAL_MEMORY_CURRENT" || name === "OPEN_THREADS_CURRENT") {
+      records = filterByParticipants(records, resolvedActorIds);
     }
     if (name === "SYSTEM_CHAT_LOG") {
       const grouped = recentActorChat(records, resolvedActorIds, recentChatLimit);
@@ -436,12 +443,16 @@ export async function getTurnContext(input: TurnContextRequest) {
   const actorCurrent = (structured.NPC_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
   const actorKnowledge = (structured.NPC_KNOWLEDGE as Array<Record<string, unknown>> | undefined) ?? [];
   const actorChatRows = (structured.SYSTEM_CHAT_LOG as Array<Record<string, unknown>> | undefined) ?? [];
+  const socialMemoryRows = (structured.SOCIAL_MEMORY_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
+  const openThreadRows = (structured.OPEN_THREADS_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
   const actorRecentChat = recentActorChat(actorChatRows, resolvedActorIds, recentChatLimit);
   const actors: Record<string, unknown> = {};
   for (const id of resolvedActorIds) {
     actors[id] = {
       current: actorCurrent.find((r) => String(r["NPC ID"] ?? "") === id) ?? null,
       knowledge: actorKnowledge.filter((r) => String(r["NPC ID"] ?? "") === id),
+      socialMemory: filterByParticipants(socialMemoryRows, [id]),
+      openThreads: filterByParticipants(openThreadRows, [id]),
       recentChat: actorRecentChat[id] ?? [],
     };
   }
