@@ -194,7 +194,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   const actorIds = input.actorIds ?? [];
   const lookups = input.lookups ?? [];
   const docQueries = input.docQueries ?? [];
-  const needsInventory = hasAny(tagSet, ["ITEM", "PURCHASE", "COMBAT", "CRAFT", "SURVIVAL", "STORAGE", "EQUIPMENT"]);
+  const needsInventory = hasAny(tagSet, ["ITEM", "INVENTORY", "PURCHASE", "SALE", "CONSUME", "COMBAT", "CRAFT", "SURVIVAL", "STORAGE", "EQUIPMENT"]);
 
   const needsCompetences = input.turnClass !== "MICRO" || hasAny(tagSet, ["WORK", "LANGUAGE", "SKILL", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY"]);
   const runtimeRanges = new Set<string>([
