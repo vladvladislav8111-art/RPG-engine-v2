@@ -68,3 +68,16 @@ V2.7 hardens recurring-NPC context without turning history into a second live st
 - recent chat remains append-only history and is loaded only for explicitly selected actors, not as ordinary broad turn context.
 
 This is the first V2.7 slice. Durable social-memory and open-thread materialization remain separate from ephemeral dialogue and will be added as dedicated current-state surfaces rather than overloading NPC knowledge.
+
+
+## V2.7.1 social memory and conversational threads
+
+The social context pipeline now separates retention by future causal value rather than by how dramatic a line sounded:
+
+- **EPHEMERAL** — greeting, throwaway comment, one-off joke or flavor that has no expected future effect. Keep only in scene context; do not persist merely because it happened.
+- **THREAD** — unfinished question, promised answer, temporary coordination point or short-lived topic that must survive a few turns. Store in `OPEN_THREADS_CURRENT`; remove when resolved or expired.
+- **SOCIAL_MEMORY** — recurring inside joke/nickname, meaningful gift, promise, conflict, rescue/betrayal, embarrassing shared event, recurring phrase or other relationship reference likely to affect later reactions. Store in `SOCIAL_MEMORY_CURRENT`.
+- **STATE** — mutable objective current truth such as location, job/activity, relationship state, knowledge, custody, money or an active commitment. Store only in its owning CURRENT table.
+- **CANON** — durable reusable world truth. Store in permanent canon/pregen, not as a duplicate live value.
+
+`socialMemoryEvents`, `threadEvents`, and `chatEvents` are semantic write paths. `SYSTEM_CHAT_LOG` remains append-only history but selected actors receive only a bounded recent slice. A substantive selected-NPC context packet should therefore contain current identity/activity, knowledge, social memory, open threads, and recent chat before the GM writes the reply.
