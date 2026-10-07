@@ -125,7 +125,7 @@ export type SemanticInjuryEvent = {
 
 export type SemanticInventoryEvent = {
   itemId: string;
-  referenceId?: string;
+  templateId?: string;
   quantityDelta?: number;
   setQuantity?: number;
   location?: string;
