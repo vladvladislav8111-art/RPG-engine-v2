@@ -62,7 +62,9 @@ const turnContextSchema = z.object({
   turnId: z.string().min(1),
   turnClass: z.enum(["MICRO", "NORMAL", "COMPLEX", "HIGH_STAKES"]),
   tags: z.array(z.string()).optional(),
-  actorIds: z.array(z.string()).optional(),
+  actorIds: z.array(z.string()).max(20).optional(),
+  actorRefs: z.array(z.string().min(1)).max(20).optional(),
+  recentChatLimit: z.number().int().min(0).max(20).optional(),
   lookups: z.array(z.object({
     source: z.enum(["TEMP_RUNTIME", "GM_PREGEN"]),
     sheet: z.string().min(1),
@@ -341,7 +343,7 @@ function buildServer() {
     {
       title: "Get RPG turn context",
       description:
-        "Load one compact authoritative context packet for an RPG turn. Structured current-state tables are the live layer; targeted document queries load only the permanent long-form canon needed for this action. Broad history reads are not part of the normal path.",
+        "Load one compact authoritative context packet for an RPG turn. Explicit actorIds bypass player-location filtering; actorRefs may resolve exact current NPC display names or stable IDs, and selected actors receive bounded recent System chat plus current knowledge. Structured current-state tables are the live layer; targeted document queries load only the permanent long-form canon needed for this action. Broad history reads are not part of the normal path.",
       inputSchema: turnContextSchema,
       annotations: {
         readOnlyHint: true,
