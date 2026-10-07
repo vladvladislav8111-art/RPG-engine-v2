@@ -210,7 +210,7 @@ export async function getTurnContext(input: TurnContextRequest) {
     addStructured("MILESTONES");
     addStructured("PENDING_CHOICES");
   }
-  if (hasAny(tagSet, ["ITEM", "PURCHASE", "COMBAT", "CRAFT", "SURVIVAL", "STORAGE", "EQUIPMENT"])) addStructured("INVENTORY_CURRENT");
+  if (hasAny(tagSet, ["ITEM", "INVENTORY", "PURCHASE", "SALE", "CONSUME", "COMBAT", "CRAFT", "SURVIVAL", "STORAGE", "EQUIPMENT"])) addStructured("INVENTORY_CURRENT");
   if (hasAny(tagSet, ["SERVICES", "SOCIAL", "ECONOMY", "LANGUAGE", "WORK"])) {
     addStructured("SERVICES_CURRENT");
     addStructured("OPPORTUNITIES_CURRENT");
@@ -238,7 +238,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   if (hasAny(tagSet, ["PHYSICAL", "BODY", "COMBAT", "TRAVEL", "WORK", "TRAINING", "SURVIVAL"])) {
     pregenRequests.push({ key: "actionStaminaProfiles", range: PREGEN_TABLES.ACTION_STAMINA_PROFILES });
   }
-  if (hasAny(tagSet, ["ITEM", "INVENTORY", "PURCHASE", "SALE", "CRAFT", "SURVIVAL", "STORAGE", "EQUIPMENT", "CONSUME"])) {
+  if (hasAny(tagSet, ["ITEM", "INVENTORY", "PURCHASE", "SALE", "CONSUME", "COMBAT", "CRAFT", "SURVIVAL", "STORAGE", "EQUIPMENT"])) {
     pregenRequests.push({ key: "commonObjectTemplates", range: PREGEN_TABLES.COMMON_OBJECT_TEMPLATES });
   }
   if (hasAny(tagSet, ["LANGUAGE", "READ", "WRITE", "STUDY"]) || input.includeWorldLanguage || (input.languageConcepts?.length ?? 0) > 0) {
