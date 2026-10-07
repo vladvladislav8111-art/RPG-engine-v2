@@ -164,6 +164,23 @@ export type SemanticResourceSet = {
   value: number;
 };
 
+export type SemanticInventoryEvent = {
+  itemId: string;
+  qtyDelta?: number;
+  qtySet?: number;
+  templateId?: string;
+  item?: string;
+  unit?: string;
+  location?: string;
+  custodian?: string;
+  conditionNotes?: string;
+  tags?: string;
+  lastUpdated?: string;
+  massKgOverride?: number | null;
+  volumeLOverride?: number | null;
+  reason?: string;
+};
+
 export type SemanticConditionSet = {
   conditionId: string;
   value: string;
@@ -256,6 +273,7 @@ export type SemanticCommitPlan = {
   resourceDeltas?: SemanticResourceDelta[];
   resourceSets?: SemanticResourceSet[];
   conditions?: SemanticConditionSet[];
+  inventoryEvents?: SemanticInventoryEvent[];
   survival?: SemanticSurvival;
   choiceResolutions?: SemanticChoiceResolution[];
   exertionEvents?: SemanticExertionEvent[];
