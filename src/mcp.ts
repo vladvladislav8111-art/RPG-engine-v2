@@ -94,6 +94,7 @@ const structuredTableSchema = z.enum([
   "WORLD_CLOCKS",
   "WEATHER_CURRENT",
   "BODY_INJURIES_CURRENT",
+  "CHARACTERISTIC_ADAPTATION",
 ]);
 
 const learningModifiersSchema = z.object({
@@ -203,6 +204,14 @@ const semanticSchema = z.object({
     complexityBonus: z.number().min(0).max(0.5).optional(),
     thresholdFraction: z.number().min(0).max(0.25).optional(),
   })).optional(),
+  adaptationEvents: z.array(z.object({
+    characteristic: z.string().min(1),
+    band: z.enum(["trace", "useful", "substantial", "major", "exceptional"]),
+    secondary: z.boolean().optional(),
+    exactUnitsOverride: z.number().int().nonnegative().optional(),
+    reason: z.string().min(1),
+    evidence: z.string().optional(),
+  })).optional(),
   learningEvents: z.array(z.object({
     competenceId: z.string(),
     specialization: z.string().optional(),
@@ -223,6 +232,10 @@ const semanticSchema = z.object({
     table: structuredTableSchema,
     key: z.string(),
     patch: z.record(z.string(), scalarSchema),
+  })).optional(),
+  rowDeletes: z.array(z.object({
+    table: structuredTableSchema,
+    key: z.string(),
   })).optional(),
   session: z.object({
     inworldStart: z.string(),
