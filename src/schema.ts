@@ -2,6 +2,7 @@ export const TABLES = {
   CONTROL: { range: "CONTROL!A1:D100", keyHeader: "Key" },
   PLAYER_RESOURCES: { range: "PLAYER_RESOURCES!A1:D100", keyHeader: "Resource" },
   CHARACTERISTICS: { range: "CHARACTERISTICS!A1:H100", keyHeader: "Characteristic" },
+  CHARACTERISTIC_ADAPTATION: { range: "CHARACTERISTIC_ADAPTATION!A1:L100", keyHeader: "Characteristic" },
   PLAYER_CONDITIONS: { range: "PLAYER_CONDITIONS!A1:F100", keyHeader: "Condition ID" },
   COMPETENCES: { range: "COMPETENCES!A1:L100", keyHeader: "Competence ID" },
   SPECIALIZATIONS: { range: "SPECIALIZATIONS!A1:I200", keyHeader: "Specialization" },
