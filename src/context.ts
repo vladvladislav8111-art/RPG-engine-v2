@@ -26,6 +26,13 @@ function resourceMap(values: unknown[][]): Record<string, unknown> {
   return out;
 }
 
+function numberOrNull(value: unknown): number | null {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  if (typeof value === "string" && !value.trim()) return null;
+  const parsed = Number(String(value).replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 // Read maxima and XP thresholds from the same authoritative rows as current values.
 // Missing or non-numeric cells stay unknown; never infer a cap from Current.
 export function resourceDetailsMap(values: unknown[][]): Record<string, { current: number | null; max?: number | null; threshold?: number | null }> {
@@ -154,6 +161,21 @@ function compactPregenRecords(key: string, records: Array<Record<string, unknown
       notes: r["Notes"],
     }));
   }
+  if (key === "commonObjectTemplates") {
+    return records.map((r) => ({
+      templateId: r["Template ID"],
+      category: r["Category"],
+      item: r["Item"],
+      unit: r["Unit"],
+      massKg: numberOrNull(r["Mass kg"]),
+      occupiedVolumeL: numberOrNull(r["Occupied volume L"]),
+      capacityL: numberOrNull(r["Capacity L"]),
+      longAwkward: r["Long/Awkward"],
+      consumable: r["Consumable"],
+      durability: r["Durability class"],
+      instantiationRule: r["Instantiation rule"],
+    }));
+  }
   return records;
 }
 
@@ -172,6 +194,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   const actorIds = input.actorIds ?? [];
   const lookups = input.lookups ?? [];
   const docQueries = input.docQueries ?? [];
+  const needsInventory = hasAny(tagSet, ["ITEM", "PURCHASE", "COMBAT", "CRAFT", "SURVIVAL", "STORAGE", "EQUIPMENT"]);
 
   const needsCompetences = input.turnClass !== "MICRO" || hasAny(tagSet, ["WORK", "LANGUAGE", "SKILL", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY"]);
   const runtimeRanges = new Set<string>([
@@ -192,7 +215,7 @@ export async function getTurnContext(input: TurnContextRequest) {
     addStructured("MILESTONES");
     addStructured("PENDING_CHOICES");
   }
-  if (hasAny(tagSet, ["ITEM", "PURCHASE", "COMBAT", "CRAFT", "SURVIVAL", "STORAGE", "EQUIPMENT"])) addStructured("INVENTORY_CURRENT");
+  if (needsInventory) addStructured("INVENTORY_CURRENT");
   if (hasAny(tagSet, ["SERVICES", "SOCIAL", "ECONOMY", "LANGUAGE", "WORK"])) {
     addStructured("SERVICES_CURRENT");
     addStructured("OPPORTUNITIES_CURRENT");
@@ -213,6 +236,9 @@ export async function getTurnContext(input: TurnContextRequest) {
   if (hasAny(tagSet, ["WEATHER", "TRAVEL", "EXPLORATION", "SURVIVAL"])) addStructured("WEATHER_CURRENT");
 
   const pregenRequests: Array<{ key: string; range: string }> = [];
+  if (needsInventory) {
+    pregenRequests.push({ key: "commonObjectTemplates", range: PREGEN_TABLES.COMMON_OBJECT_TEMPLATES });
+  }
   if (hasAny(tagSet, ["SERVICES", "SOCIAL", "ECONOMY", "LANGUAGE", "WORK"])) {
     pregenRequests.push({ key: "districtPacks", range: PREGEN_TABLES.DISTRICT_PACKS });
     pregenRequests.push({ key: "serviceDirectory", range: PREGEN_TABLES.SERVICE_DIRECTORY });
@@ -278,6 +304,11 @@ export async function getTurnContext(input: TurnContextRequest) {
   for (const p of pregens) {
     let records = rowsToObjects(p.rows);
     if (p.key === "districtPacks" || p.key === "serviceDirectory") records = filterByLocation(records, locationId);
+    if (p.key === "commonObjectTemplates") {
+      const inventory = (structured.INVENTORY_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
+      const usedTemplateIds = new Set(inventory.map((r) => String(r["Template ID"] ?? "")).filter(Boolean));
+      records = records.filter((r) => usedTemplateIds.has(String(r["Template ID"] ?? "")));
+    }
     if (p.key === "languageLexicon") languageLexiconRows = p.rows;
     if (p.key !== "languageLexicon" || input.includeWorldLanguage) {
       pregen[p.key] = { data: compactPregenRecords(p.key, records), revision: p.revision, cache: p.cache };
@@ -308,6 +339,53 @@ export async function getTurnContext(input: TurnContextRequest) {
       };
     });
   }
+
+  const inventoryRows = (structured.INVENTORY_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
+  const templateData =
+    ((pregen.commonObjectTemplates as { data?: Array<Record<string, unknown>> } | undefined)?.data) ?? [];
+  const templateById = new Map(templateData.map((r) => [String(r["templateId"] ?? ""), r]));
+  const trackedItemIds = new Set(inventoryRows.map((r) => String(r["Item ID"] ?? "")).filter(Boolean));
+  const inventoryResolved = inventoryRows.map((r) => {
+    const qty = numberOrNull(r["Qty"]) ?? 0;
+    const templateId = String(r["Template ID"] ?? "");
+    const tpl = templateById.get(templateId);
+    const massOverride = numberOrNull(r["Mass kg override"]);
+    const volumeOverride = numberOrNull(r["Volume L override"]);
+    const unitMassKg = massOverride ?? numberOrNull(tpl?.["massKg"]);
+    const unitVolumeL = volumeOverride ?? numberOrNull(tpl?.["occupiedVolumeL"]);
+    const location = String(r["Location/container"] ?? "");
+    const containerCandidate = location.split("/")[0]?.trim() ?? "";
+    const containedInItemId = trackedItemIds.has(containerCandidate) ? containerCandidate : null;
+    return {
+      itemId: r["Item ID"],
+      item: r["Item"],
+      qty,
+      unit: r["Unit"],
+      templateId,
+      unitMassKg,
+      unitVolumeL,
+      totalMassKg: unitMassKg == null ? null : unitMassKg * qty,
+      totalVolumeL: unitVolumeL == null ? null : unitVolumeL * qty,
+      massSource: massOverride != null ? "override" : unitMassKg != null ? "template" : "unknown",
+      volumeSource: volumeOverride != null ? "override" : unitVolumeL != null ? "template" : "unknown",
+      location,
+      custodian: r["Custodian"],
+      containedInItemId,
+    };
+  });
+  const knownMassKg = inventoryResolved.reduce((sum, r) => sum + (r.totalMassKg ?? 0), 0);
+  const topLevelStorageRows = inventoryResolved.filter((r) =>
+    r.location.includes("System Storage") && !r.containedInItemId
+  );
+  const knownTopLevelStorageVolumeL = topLevelStorageRows.reduce((sum, r) => sum + (r.totalVolumeL ?? 0), 0);
+  const inventorySummary = {
+    rows: inventoryResolved.length,
+    knownMassKg,
+    unknownMassItemIds: inventoryResolved.filter((r) => r.totalMassKg == null).map((r) => r.itemId),
+    knownTopLevelStorageVolumeL,
+    unknownTopLevelStorageVolumeItemIds: topLevelStorageRows.filter((r) => r.totalVolumeL == null).map((r) => r.itemId),
+    note: "Nested contents contribute mass but not duplicate top-level occupied volume; unknown template dimensions remain unknown rather than guessed.",
+  };
 
   const actorCurrent = (structured.NPC_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
   const actorKnowledge = (structured.NPC_KNOWLEDGE as Array<Record<string, unknown>> | undefined) ?? [];
@@ -359,6 +437,8 @@ export async function getTurnContext(input: TurnContextRequest) {
       competences: needsCompetences ? rowsToObjects(base[TABLES.COMPETENCES.range] ?? []) : [],
       structured,
       pregen,
+      inventoryResolved,
+      inventorySummary,
       languageLookup,
       actors,
       lookups: lookups.map((lookup, i) => ({ ...lookup, ...lookupResults[i] })),

@@ -1,4 +1,4 @@
-export const RULESET_VERSION = "2.5-architecture-2026-10-07";
+export const RULESET_VERSION = "2.6-inventory-storage-2026-10-07";
 
 export type LearningBand = "tiny" | "useful" | "substantial" | "breakthrough" | "exceptional";
 
