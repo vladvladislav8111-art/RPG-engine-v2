@@ -68,3 +68,37 @@ V2.7 hardens recurring-NPC context without turning history into a second live st
 - recent chat remains append-only history and is loaded only for explicitly selected actors, not as ordinary broad turn context.
 
 This is the first V2.7 slice. Durable social-memory and open-thread materialization remain separate from ephemeral dialogue and will be added as dedicated current-state surfaces rather than overloading NPC knowledge.
+
+
+## V2.7.1 social memory and conversational threads
+
+The social context pipeline now separates retention by future causal value rather than by how dramatic a line sounded:
+
+- **EPHEMERAL** — greeting, throwaway comment, one-off joke or flavor that has no expected future effect. Keep only in scene context; do not persist merely because it happened.
+- **THREAD** — unfinished question, promised answer, temporary coordination point or short-lived topic that must survive a few turns. Store in `OPEN_THREADS_CURRENT`; remove when resolved or expired.
+- **SOCIAL_MEMORY** — recurring inside joke/nickname, meaningful gift, promise, conflict, rescue/betrayal, embarrassing shared event, recurring phrase or other relationship reference likely to affect later reactions. Store in `SOCIAL_MEMORY_CURRENT`.
+- **STATE** — mutable objective current truth such as location, job/activity, relationship state, knowledge, custody, money or an active commitment. Store only in its owning CURRENT table.
+- **CANON** — durable reusable world truth. Store in permanent canon/pregen, not as a duplicate live value.
+
+`socialMemoryEvents`, `threadEvents`, and `chatEvents` are semantic write paths. `SYSTEM_CHAT_LOG` remains append-only history but selected actors receive only a bounded recent slice. A substantive selected-NPC context packet should therefore contain current identity/activity, knowledge, social memory, open threads, and recent chat before the GM writes the reply.
+
+
+## V2.7.2 selected-NPC context gate
+
+Explicit selected actors now carry a retrieval-completeness gate. A substantive NPC reply must not be rendered unless `actorContext.contextGate.readyForSubstantiveReply` is true.
+
+The gate distinguishes an empty loaded surface from a surface that was never loaded. It requires `NPC_CURRENT`, `NPC_KNOWLEDGE`, `SOCIAL_MEMORY_CURRENT`, `OPEN_THREADS_CURRENT`, and a bounded `SYSTEM_CHAT_LOG` read. KEY NPCs additionally require identity anchors, competence anchors, and a current goal/activity. Missing or ambiguous actor references block the gate instead of being guessed around.
+
+This is a context-integrity mechanism only. It does not decide what the NPC believes, wants, or morally chooses; the GM still resolves those causally from the loaded state and canon.
+
+
+## V2.7.3 context integrity package
+
+- Stable recurring NPC names/aliases resolve through GM PREGEN `NPC_IDENTITY_INDEX` even when the actor is dormant; dormant resolution never silently creates a replacement person.
+- Selected KEY NPC packets load `NPC_ACTIVITY_RULES` and actor-linked active `WORLD_CLOCKS`; snapshot freshness exposes ordinary eligibility and a stricter forced off-screen-advance threshold.
+- Substantive dialogue is blocked when the KEY snapshot has crossed its forced freshness threshold.
+- Semantic System chat validates sender/receiver/direction shape before append.
+- Thread closure with `promoteTarget != NONE` requires same-transaction destination evidence through `promoteRef`.
+- GM PREGEN `HUMAN_THREAT_PROFILES` contains causal environment profiles for human predation without alignment probabilities, socioeconomic moral stereotypes, or atrocity quotas.
+
+Mutable live truth still has exactly one owner. Stable identity indexes and social memory are routing/context material, not duplicate live state.

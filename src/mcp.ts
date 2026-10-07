@@ -65,6 +65,7 @@ const turnContextSchema = z.object({
   actorIds: z.array(z.string()).max(20).optional(),
   actorRefs: z.array(z.string().min(1)).max(20).optional(),
   recentChatLimit: z.number().int().min(0).max(20).optional(),
+  requireNpcContextGate: z.boolean().optional(),
   lookups: z.array(z.object({
     source: z.enum(["TEMP_RUNTIME", "GM_PREGEN"]),
     sheet: z.string().min(1),
@@ -229,6 +230,50 @@ const semanticSchema = z.object({
     reason: z.string().min(1),
     evidence: z.string().optional(),
   })).optional(),
+  socialMemoryEvents: z.array(z.object({
+    operation: z.enum(["UPSERT", "TOUCH", "RETIRE"]).optional(),
+    memoryId: z.string().min(1),
+    participants: z.array(z.string().min(1)).min(1).max(20).optional(),
+    originEvent: z.string().optional(),
+    meaning: z.string().optional(),
+    whoUnderstands: z.array(z.string().min(1)).max(20).optional(),
+    emotionalTone: z.string().optional(),
+    recurrenceDelta: z.number().int().min(0).max(1000).optional(),
+    lastUsed: z.string().optional(),
+    importance: z.enum(["ROUTINE", "IMPORTANT", "ANCHOR"]).optional(),
+    source: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    notes: z.string().optional(),
+  })).optional(),
+  threadEvents: z.array(z.object({
+    operation: z.enum(["OPEN", "UPDATE", "RESOLVE", "EXPIRE"]),
+    threadId: z.string().min(1),
+    participants: z.array(z.string().min(1)).min(1).max(20).optional(),
+    topic: z.string().optional(),
+    summary: z.string().optional(),
+    openedAt: z.string().optional(),
+    lastTouched: z.string().optional(),
+    waitingOn: z.string().optional(),
+    triggerDue: z.string().optional(),
+    importance: z.enum(["ROUTINE", "IMPORTANT"]).optional(),
+    promoteTarget: z.enum(["NONE", "SOCIAL_MEMORY", "NPC_KNOWLEDGE", "CANON"]).optional(),
+    promoteRef: z.string().min(1).optional(),
+    source: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    notes: z.string().optional(),
+  })).optional(),
+  chatEvents: z.array(z.object({
+    messageId: z.string().min(1),
+    channelId: z.string().min(1),
+    timestamp: z.string().optional(),
+    senderId: z.string().min(1),
+    receiverId: z.string().min(1),
+    direction: z.enum(["IN", "OUT"]),
+    text: z.string(),
+    delivery: z.enum(["QUEUED", "SENT", "DELIVERED", "FAILED"]).optional(),
+    readStatus: z.enum(["UNREAD", "READ"]).optional(),
+    notes: z.string().optional(),
+  })).optional(),
   learningEvents: z.array(z.object({
     competenceId: z.string(),
     specialization: z.string().optional(),
@@ -343,7 +388,7 @@ function buildServer() {
     {
       title: "Get RPG turn context",
       description:
-        "Load one compact authoritative context packet for an RPG turn. Explicit actorIds bypass player-location filtering; actorRefs may resolve exact current NPC display names or stable IDs, and selected actors receive bounded recent System chat plus current knowledge. Structured current-state tables are the live layer; targeted document queries load only the permanent long-form canon needed for this action. Broad history reads are not part of the normal path.",
+        "Load one compact authoritative context packet for an RPG turn. For a substantive NPC reply, pass actorRefs or actorIds and requireNpcContextGate=true (the gate also defaults on for explicit actors). Explicit actors bypass player-location filtering and receive live state, durable identity resolution, knowledge, social memory, open threads, bounded recent System chat, KEY-NPC activity rules and actor-linked clocks. The returned actorContext.contextGate.readyForSubstantiveReply must be true before rendering a substantive NPC reply. Stable identities that are not currently materialized are reported as dormant/rematerialization-required instead of being recreated, and stale KEY-NPC snapshots can require off-screen causal advancement before dialogue.",
       inputSchema: turnContextSchema,
       annotations: {
         readOnlyHint: true,
@@ -377,7 +422,7 @@ function buildServer() {
     {
       title: "Commit RPG turn",
       description:
-        "Commit an RPG turn. Prefer one semantic fast-path payload: update only affected live-state rows, append reusable permanent knowledge to the appropriate LIVE document via docAppends, write the valid SESSION_LOG transaction, then verify current state.",
+        "Commit an RPG turn. Prefer one semantic fast-path payload: route meaningful social context through socialMemoryEvents/threadEvents/chatEvents, update only affected live-state rows, append reusable permanent knowledge to the appropriate LIVE document via docAppends, write the valid SESSION_LOG transaction, then verify current state. Chat direction/participants are validated. Resolving or expiring a thread with a non-NONE promoteTarget requires same-transaction destination evidence via promoteRef. Fleeting dialogue should not be persisted merely because it occurred.",
       inputSchema: commitSchema,
       annotations: {
         readOnlyHint: false,

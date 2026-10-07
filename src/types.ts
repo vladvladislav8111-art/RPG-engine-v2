@@ -31,6 +31,7 @@ export type TurnContextRequest = {
   actorIds?: string[];
   actorRefs?: string[];
   recentChatLimit?: number;
+  requireNpcContextGate?: boolean;
   lookups?: SheetLookup[];
   docQueries?: DocQuery[];
   languageConcepts?: string[];
@@ -183,6 +184,53 @@ export type SemanticInventoryEvent = {
   reason?: string;
 };
 
+export type SemanticSocialMemoryEvent = {
+  operation?: "UPSERT" | "TOUCH" | "RETIRE";
+  memoryId: string;
+  participants?: string[];
+  originEvent?: string;
+  meaning?: string;
+  whoUnderstands?: string[];
+  emotionalTone?: string;
+  recurrenceDelta?: number;
+  lastUsed?: string;
+  importance?: "ROUTINE" | "IMPORTANT" | "ANCHOR";
+  source?: string;
+  tags?: string[];
+  notes?: string;
+};
+
+export type SemanticThreadEvent = {
+  operation: "OPEN" | "UPDATE" | "RESOLVE" | "EXPIRE";
+  threadId: string;
+  participants?: string[];
+  topic?: string;
+  summary?: string;
+  openedAt?: string;
+  lastTouched?: string;
+  waitingOn?: string;
+  triggerDue?: string;
+  importance?: "ROUTINE" | "IMPORTANT";
+  promoteTarget?: "NONE" | "SOCIAL_MEMORY" | "NPC_KNOWLEDGE" | "CANON";
+  promoteRef?: string;
+  source?: string;
+  tags?: string[];
+  notes?: string;
+};
+
+export type SemanticChatEvent = {
+  messageId: string;
+  channelId: string;
+  timestamp?: string;
+  senderId: string;
+  receiverId: string;
+  direction: "IN" | "OUT";
+  text: string;
+  delivery?: "QUEUED" | "SENT" | "DELIVERED" | "FAILED";
+  readStatus?: "UNREAD" | "READ";
+  notes?: string;
+};
+
 export type SemanticConditionSet = {
   conditionId: string;
   value: string;
@@ -283,6 +331,9 @@ export type SemanticCommitPlan = {
   generalXpEvents?: SemanticGeneralXpEvent[];
   learningEvents?: SemanticLearningEvent[];
   adaptationEvents?: SemanticAdaptationEvent[];
+  socialMemoryEvents?: SemanticSocialMemoryEvent[];
+  threadEvents?: SemanticThreadEvent[];
+  chatEvents?: SemanticChatEvent[];
   rowUpserts?: SemanticRowUpsert[];
   rowUpdates?: SemanticRowUpdate[];
   rowDeletes?: SemanticRowDelete[];
