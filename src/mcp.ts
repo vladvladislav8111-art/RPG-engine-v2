@@ -95,6 +95,7 @@ const structuredTableSchema = z.enum([
   "WEATHER_CURRENT",
   "BODY_INJURIES_CURRENT",
   "CHARACTERISTIC_ADAPTATION",
+  "ACTIVE_CONTEXT",
 ]);
 
 const learningModifiersSchema = z.object({
