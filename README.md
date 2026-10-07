@@ -46,8 +46,8 @@ Raw `sheetWrites` remain a migration/repair escape hatch. Structural grid change
 
 - `INVENTORY_CURRENT` is hot state, not item history. One stable instance/stack ID owns one row; quantity/custody/condition changes overwrite that row.
 - Zero quantity deletes the current row. Historical acquisition/consumption/transfer remains reconstructible from `SESSION_LOG` / `LIVE_TRANSACTION_ARCHIVE`.
-- Stable physical properties are looked up through GM PREGEN `ITEM_REFERENCE_ARCHIVE`. Current inventory stores a `Reference ID`; mass/volume cells are per-unit instance overrides only and are normally blank.
+- Stable physical properties are looked up through GM PREGEN `COMMON_OBJECT_TEMPLATES`. Current inventory stores a `Template ID`; mass/volume cells are per-unit instance overrides only and are normally blank.
 - Ordinary inventory changes use semantic `inventoryEvents`; generic row writes to `INVENTORY_CURRENT` are intentionally disallowed.
 - The engine resolves quantity deltas/sets, row reuse/deletion, custody/location/condition replacement, per-item mass/volume and current known inventory totals.
-- Unknown reference mass/volume remains unknown rather than fabricated; the engine reports incomplete totals explicitly.
+- Unknown template mass/volume remains unknown rather than fabricated; the engine reports incomplete totals explicitly.
 - `WORLD_CLOCKS`, `PROJECTS_CURRENT`, `OPPORTUNITIES_CURRENT` and `SERVICES_CURRENT` follow the same hot-state lifecycle: closed/completed entries are archived and rows become reusable.
