@@ -4,6 +4,7 @@ export const TABLES = {
   CHARACTERISTICS: { range: "CHARACTERISTICS!A1:H100", keyHeader: "Characteristic" },
   CHARACTERISTIC_ADAPTATION: { range: "CHARACTERISTIC_ADAPTATION!A1:L100", keyHeader: "Characteristic" },
   PLAYER_CONDITIONS: { range: "PLAYER_CONDITIONS!A1:F100", keyHeader: "Condition ID" },
+  SYSTEM_MODULES_CURRENT: { range: "SYSTEM_MODULES_CURRENT!A1:G200", keyHeader: "Module ID" },
   COMPETENCES: { range: "COMPETENCES!A1:L100", keyHeader: "Competence ID" },
   SPECIALIZATIONS: { range: "SPECIALIZATIONS!A1:I200", keyHeader: "Specialization" },
   MILESTONES: { range: "MILESTONES!A1:K100", keyHeader: "Milestone ID" },
