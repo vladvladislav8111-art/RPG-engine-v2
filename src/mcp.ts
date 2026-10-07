@@ -282,7 +282,7 @@ function buildServer() {
     {
       name: "rpg-v2-runtime",
       title: "RPG V2 Runtime",
-      version: "2.4.1",
+      version: "2.5.0",
     },
     { capabilities: { tools: {}, resources: {} } },
   );
@@ -311,7 +311,7 @@ function buildServer() {
       return toolJson({
         ok: true,
         engineVersion: RULESET_VERSION,
-        architectureVersion: "fast-storage-v3",
+        architectureVersion: "fast-storage-v3.1",
         hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
         saveId: state["CONTROL!B2"]?.[0]?.[0] ?? null,
