@@ -80,7 +80,7 @@ export function resolveSelarinWeatherRecords(input:{
   if(!profile) throw new Error("Selarin weather profile missing");
   const fronts=input.frontRows.filter(r=>str(r["Status"]).toUpperCase()==="ACTIVE");
   if(!fronts.length) throw new Error("Selarin weather fronts missing");
-  const zoneId=input.zoneId ?? str(profile["Zone ID"]) || "weatherzone.selarin";
+  const zoneId=input.zoneId ?? (str(profile["Zone ID"]) || "weatherzone.selarin");
   const targetAbs=absMinute(input.targetDay,input.targetTime);
   let cur=(input.currentRows??[]).find(r=>str(r["Weather ID"])==="weather.selarin.current");
   let front:WeatherRecord;
