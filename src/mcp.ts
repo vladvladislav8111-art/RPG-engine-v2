@@ -1,5 +1,5 @@
-import { createMcpHandler, McpServer } from "npm:@modelcontextprotocol/server@2.3.0";
-import * as z from "npm:zod@4.6.5/v4";
+import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
+import * as z from "zod/v4";
 
 import { commitTurn, prepareCommit } from "./commit.ts";
 import { config } from "./config.ts";
@@ -230,6 +230,26 @@ const semanticSchema = z.object({
     reason: z.string().min(1),
     evidence: z.string().optional(),
   })).optional(),
+  relationshipEvents: z.array(z.object({
+    operation: z.enum(["UPSERT", "RETIRE"]).optional(),
+    relationshipId: z.string().min(1),
+    actorId: z.string().min(1),
+    towardId: z.string().min(1),
+    trust: z.string().optional(),
+    respect: z.string().optional(),
+    warmth: z.string().optional(),
+    fear: z.string().optional(),
+    tension: z.string().optional(),
+    obligationDebt: z.string().optional(),
+    economicInterest: z.string().optional(),
+    valueCompatibility: z.string().optional(),
+    currentStance: z.string().optional(),
+    evidenceRefs: z.array(z.string().min(1)).max(50).optional(),
+    lastChanged: z.string().optional(),
+    lastEvaluated: z.string().optional(),
+    status: z.enum(["ACTIVE", "DORMANT"]).optional(),
+    notes: z.string().optional(),
+  })).optional(),
   socialMemoryEvents: z.array(z.object({
     operation: z.enum(["UPSERT", "TOUCH", "RETIRE"]).optional(),
     memoryId: z.string().min(1),
@@ -343,7 +363,7 @@ function buildServer() {
     {
       name: "rpg-v2-runtime",
       title: "RPG V2 Runtime",
-      version: "2.6.0",
+      version: "2.8.1",
     },
     { capabilities: { tools: {}, resources: {} } },
   );
@@ -375,6 +395,7 @@ function buildServer() {
         architectureVersion: "fast-storage-v3.1",
         hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
+        rawCommitsEnabled: config.allowRawCommits,
         saveId: state["CONTROL!B2"]?.[0]?.[0] ?? null,
         worldTime: state["CONTROL!B5"]?.[0]?.[0] ?? null,
         locationId: state["CONTROL!B6"]?.[0]?.[0] ?? null,
@@ -418,21 +439,21 @@ function buildServer() {
   );
 
   server.registerTool(
-    "commit_turn",
-    {
-      title: "Commit RPG turn",
-      description:
-        "Commit an RPG turn. Prefer one semantic fast-path payload: route meaningful social context through socialMemoryEvents/threadEvents/chatEvents, update only affected live-state rows, append reusable permanent knowledge to the appropriate LIVE document via docAppends, write the valid SESSION_LOG transaction, then verify current state. Chat direction/participants are validated. Resolving or expiring a thread with a non-NONE promoteTarget requires same-transaction destination evidence via promoteRef. Fleeting dialogue should not be persisted merely because it occurred.",
-      inputSchema: commitSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: true,
-        openWorldHint: false,
+      "commit_turn",
+      {
+        title: "Commit RPG turn",
+        description:
+          "Commit an RPG turn. Ordinary gameplay must use one semantic fast-path payload; raw sheet commits are disabled by default and reserved for deliberate migration/repair. Prefer one semantic fast-path payload: route meaningful social context through socialMemoryEvents/threadEvents/chatEvents, update only affected live-state rows, append reusable permanent knowledge to the appropriate LIVE document via docAppends, write the valid SESSION_LOG transaction, then verify current state. Chat direction/participants are validated. Resolving or expiring a thread with a non-NONE promoteTarget requires same-transaction destination evidence via promoteRef. Fleeting dialogue should not be persisted merely because it occurred.",
+        inputSchema: commitSchema,
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
       },
-    },
-    async (input) => toolJson(await commitTurn({ ...input, dryRun: false })),
-  );
+      async (input) => toolJson(await commitTurn({ ...input, dryRun: false })),
+    );
 
 
   server.registerResource(
@@ -628,7 +649,7 @@ function buildServer() {
   return server;
 }
 
-const mcpHandler = createMcpHandler(buildServer);
+const mcpHandler = createMcpHandler(() => buildServer());
 
 export async function handleMcp(request: Request): Promise<Response> {
   return await mcpHandler.fetch(request);
@@ -653,7 +674,7 @@ export async function diagnoseMcp(): Promise<{
       params: {
         protocolVersion: "2025-11-25",
         capabilities: {},
-        clientInfo: { name: "rpg-deno-diag", version: "1.0.0" },
+        clientInfo: { name: "rpg-runtime-diag", version: "2.8.1" },
       },
     }),
   });

@@ -13,6 +13,13 @@ function same(a: unknown, b: unknown): boolean {
   return String(a) === String(b);
 }
 
+async function appendDocsIdempotent(input: CommitRequest) {
+  return await Promise.all((input.docAppends ?? []).map(async (item) => {
+    const documentId = config.files[item.documentKey];
+    return { documentKey: item.documentKey, ...(await docsAppendIdempotent(documentId, input.txId, item.text)) };
+  }));
+}
+
 export async function prepareCommit(input: CommitRequest) {
   if (input.semantic) return await prepareSemanticCommit(input as CommitRequest & { semantic: NonNullable<CommitRequest["semantic"]> });
 
@@ -50,17 +57,39 @@ export async function prepareCommit(input: CommitRequest) {
 
 export async function commitTurn(input: CommitRequest) {
   if (!config.allowWrites) throw new Error("Writes are disabled. Set ALLOW_WRITES=true only after dry-run validation.");
+  if (!input.semantic && !input.dryRun && !config.allowRawCommits) {
+    throw new Error("Raw commits are disabled. Ordinary gameplay must use semantic commits; set ALLOW_RAW_COMMITS=true only for deliberate migration/repair.");
+  }
+
   const started = performance.now();
   const prepared: any = await prepareCommit(input);
   if (input.dryRun) return { ...prepared, committed: false };
+
+  // Semantic SESSION_LOG is the durable idempotency anchor across serverless cold starts.
+  // If Sheets committed but a later permanent-canon append failed, retry the requested
+  // doc appends by TX marker before reporting the replay as complete.
   if (prepared.alreadyCommitted) {
-    return { ...prepared, committed: true, idempotentReplay: true, elapsedMs: Math.round(performance.now() - started) };
+    const docs = await appendDocsIdempotent(input);
+    return {
+      ...prepared,
+      committed: true,
+      idempotentReplay: true,
+      docs,
+      elapsedMs: Math.round(performance.now() - started),
+    };
   }
 
   const txKey = ["tx", input.txId] as const;
   const prior = await cacheGet<{ state: string }>(txKey);
   if (prior?.state === "COMMITTED") {
-    return { ...prepared, committed: true, idempotentReplay: true, elapsedMs: Math.round(performance.now() - started) };
+    const docs = await appendDocsIdempotent(input);
+    return {
+      ...prepared,
+      committed: true,
+      idempotentReplay: true,
+      docs,
+      elapsedMs: Math.round(performance.now() - started),
+    };
   }
 
   await cacheSet(txKey, { state: "COMMITTING", saveTo: input.saveTo, startedAt: new Date().toISOString() });
@@ -68,10 +97,7 @@ export async function commitTurn(input: CommitRequest) {
     const sheetResult = await sheetsBatchUpdate(config.files.TEMP_RUNTIME, prepared.manifest.sheetWrites);
     await cacheSet(txKey, { state: "SHEET_COMMITTED_DOCS_PENDING", saveTo: input.saveTo });
 
-    const docs = await Promise.all((input.docAppends ?? []).map(async (item) => {
-      const documentId = config.files[item.documentKey];
-      return { documentKey: item.documentKey, ...(await docsAppendIdempotent(documentId, input.txId, item.text)) };
-    }));
+    const docs = await appendDocsIdempotent(input);
 
     const verify = await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2", "CONTROL!B5", "CONTROL!B6", "CONTROL!B8"]);
     const save = String(firstCell(verify, "CONTROL!B2") ?? "");

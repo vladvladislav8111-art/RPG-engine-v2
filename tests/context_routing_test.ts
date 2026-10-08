@@ -2,9 +2,11 @@ import {
   actorSnapshotFreshness,
   evaluateNpcContextGate,
   filterByParticipants,
+  filterRelationships,
   recentActorChat,
   resolveActorRefs,
   validateChatEventShape,
+  validateRelationshipEventShape,
   selectNpcCurrentRows,
 } from "../src/social_context.ts";
 
@@ -87,6 +89,7 @@ Deno.test("NPC context gate passes with all selected-actor surfaces loaded", () 
       "Current goal/activity": "working a warehouse shift",
     },
     knowledgeLoaded: true,
+    relationshipsLoaded: true,
     socialMemoryLoaded: true,
     openThreadsLoaded: true,
     recentChatLoaded: true,
@@ -106,6 +109,7 @@ Deno.test("NPC context gate blocks missing current state instead of improvising"
     actorId: "npc.max.earth",
     current: null,
     knowledgeLoaded: true,
+    relationshipsLoaded: true,
     socialMemoryLoaded: true,
     openThreadsLoaded: true,
     recentChatLoaded: true,
@@ -121,6 +125,7 @@ Deno.test("NPC context gate distinguishes empty loaded chat from disabled chat l
     actorId: "npc.local",
     current: { "NPC ID": "npc.local", "Importance": "MINOR" },
     knowledgeLoaded: true,
+    relationshipsLoaded: true,
     socialMemoryLoaded: true,
     openThreadsLoaded: true,
     recentChatLoaded: true,
@@ -184,6 +189,7 @@ Deno.test("KEY NPC gate blocks forced stale snapshot", () => {
       "Current goal/activity": "working",
     },
     knowledgeLoaded: true,
+    relationshipsLoaded: true,
     socialMemoryLoaded: true,
     openThreadsLoaded: true,
     recentChatLoaded: true,
@@ -195,5 +201,44 @@ Deno.test("KEY NPC gate blocks forced stale snapshot", () => {
   });
   if (result.ready || !result.blockers.includes("key_offscreen_advance_required")) {
     throw new Error("forced stale KEY snapshot must block substantive dialogue");
+  }
+});
+
+
+Deno.test("selected actor relationship context includes both directed sides", () => {
+  const rows = [
+    { "Relationship ID": "r1", "Actor ID": "npc.max.earth", "Toward ID": "player.shura" },
+    { "Relationship ID": "r2", "Actor ID": "npc.irina.earth", "Toward ID": "npc.max.earth" },
+    { "Relationship ID": "r3", "Actor ID": "npc.irina.earth", "Toward ID": "player.shura" },
+  ];
+  const selected = filterRelationships(rows, ["npc.max.earth"]);
+  if (selected.length !== 2 || selected[0]["Relationship ID"] !== "r1" || selected[1]["Relationship ID"] !== "r2") {
+    throw new Error("relationship filtering must include Actor and Toward sides");
+  }
+});
+
+Deno.test("relationship validator protects player agency", () => {
+  let playerRejected = false;
+  try {
+    validateRelationshipEventShape({ relationshipId: "bad.player", actorId: "player.shura", towardId: "npc.max.earth" });
+  } catch {
+    playerRejected = true;
+  }
+  if (!playerRejected) throw new Error("player.shura must not be stored as relationship Actor");
+});
+
+Deno.test("NPC context gate blocks a missing relationship surface", () => {
+  const result = evaluateNpcContextGate({
+    actorId: "npc.local",
+    current: { "NPC ID": "npc.local", "Importance": "MINOR" },
+    knowledgeLoaded: true,
+    relationshipsLoaded: false,
+    socialMemoryLoaded: true,
+    openThreadsLoaded: true,
+    recentChatLoaded: true,
+    recentChatLimit: 8,
+  });
+  if (result.ready || !result.blockers.includes("npc_relationship_surface_not_loaded")) {
+    throw new Error("missing relationship surface must block substantive reply");
   }
 });

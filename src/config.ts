@@ -1,16 +1,28 @@
 import type { DocKey } from "./types.ts";
 
+function rawEnv(name: string): string | undefined {
+  const g = globalThis as unknown as {
+    Deno?: { env?: { get?: (key: string) => string | undefined } };
+    process?: { env?: Record<string, string | undefined> };
+  };
+  return g.Deno?.env?.get?.(name) ?? g.process?.env?.[name];
+}
+
 function env(name: string, required = true): string {
-  const value = Deno.env.get(name);
+  const value = rawEnv(name);
   if (required && !value) throw new Error(`Missing environment variable: ${name}`);
   return value ?? "";
 }
 
+const runtime = (globalThis as unknown as { Deno?: unknown }).Deno ? "deno" : "node";
+
 export const config = {
-  port: Number(Deno.env.get("PORT") ?? "8000"),
+  runtime,
+  port: Number(rawEnv("PORT") ?? "8000"),
   apiKey: env("RUNTIME_API_KEY"),
-  allowWrites: (Deno.env.get("ALLOW_WRITES") ?? "false").toLowerCase() === "true",
-  enableKv: (Deno.env.get("ENABLE_KV") ?? "true").toLowerCase() === "true",
+  allowWrites: (rawEnv("ALLOW_WRITES") ?? "false").toLowerCase() === "true",
+  allowRawCommits: (rawEnv("ALLOW_RAW_COMMITS") ?? "false").toLowerCase() === "true",
+  enableKv: (rawEnv("ENABLE_KV") ?? (runtime === "deno" ? "true" : "false")).toLowerCase() === "true",
   google: {
     email: env("GOOGLE_SERVICE_ACCOUNT_EMAIL"),
     privateKey: env("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY").replace(/\\n/g, "\n"),

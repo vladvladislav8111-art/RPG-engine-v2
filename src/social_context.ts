@@ -132,11 +132,42 @@ export function filterByParticipants(
 }
 
 
+export function filterRelationships(
+  records: RuntimeRecord[],
+  actorIds: string[],
+): RuntimeRecord[] {
+  const wanted = new Set(actorIds);
+  if (!wanted.size) return [];
+  return records.filter((record) =>
+    wanted.has(String(record["Actor ID"] ?? "")) ||
+    wanted.has(String(record["Toward ID"] ?? ""))
+  );
+}
+
+export function validateRelationshipEventShape(event: {
+  relationshipId: string;
+  actorId: string;
+  towardId: string;
+}): void {
+  if (!event.relationshipId.trim()) throw new Error("relationshipId is required");
+  if (!event.actorId.trim() || !event.towardId.trim()) {
+    throw new Error(`relationship actor/toward required: ${event.relationshipId}`);
+  }
+  if (event.actorId === event.towardId) {
+    throw new Error(`relationship cannot target self: ${event.relationshipId}`);
+  }
+  if (event.actorId === "player.shura") {
+    throw new Error(`NPC_RELATIONSHIPS_CURRENT cannot store Shura as relationship Actor: ${event.relationshipId}`);
+  }
+}
+
+
 export type NpcContextGateActorResult = {
   actorId: string;
   ready: boolean;
   currentLoaded: boolean;
   knowledgeLoaded: boolean;
+  relationshipsLoaded: boolean;
   socialMemoryLoaded: boolean;
   openThreadsLoaded: boolean;
   recentChatLoaded: boolean;
@@ -154,6 +185,7 @@ export function evaluateNpcContextGate(input: {
   actorId: string;
   current: RuntimeRecord | null;
   knowledgeLoaded: boolean;
+  relationshipsLoaded: boolean;
   socialMemoryLoaded: boolean;
   openThreadsLoaded: boolean;
   recentChatLoaded: boolean;
@@ -173,6 +205,7 @@ export function evaluateNpcContextGate(input: {
 
   if (!currentLoaded) blockers.push("npc_current_missing");
   if (!input.knowledgeLoaded) blockers.push("npc_knowledge_surface_not_loaded");
+  if (!input.relationshipsLoaded) blockers.push("npc_relationship_surface_not_loaded");
   if (!input.socialMemoryLoaded) blockers.push("social_memory_surface_not_loaded");
   if (!input.openThreadsLoaded) blockers.push("open_threads_surface_not_loaded");
   if (input.recentChatLimit <= 0 || !input.recentChatLoaded) blockers.push("recent_chat_surface_not_loaded");
@@ -196,6 +229,7 @@ export function evaluateNpcContextGate(input: {
     ready: blockers.length === 0,
     currentLoaded,
     knowledgeLoaded: input.knowledgeLoaded,
+    relationshipsLoaded: input.relationshipsLoaded,
     socialMemoryLoaded: input.socialMemoryLoaded,
     openThreadsLoaded: input.openThreadsLoaded,
     recentChatLoaded: input.recentChatLoaded && input.recentChatLimit > 0,

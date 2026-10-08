@@ -1,11 +1,12 @@
 import { cacheGet, cacheSet } from "./cache.ts";
+import { loadBoundedActorTables, loadBoundedArchiveRows, scanActorContextIndex } from "./bounded_context.ts";
 import { config } from "./config.ts";
 import { docsGet, fileModifiedTime, sheetsBatchGet } from "./google.ts";
 import { PREGEN_TABLES, TABLES } from "./schema.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import { survivalBand } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
-import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
+import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
 
@@ -223,9 +224,20 @@ export async function getTurnContext(input: TurnContextRequest) {
     ...(needsCompetences ? [TABLES.COMPETENCES.range] : []),
   ]);
 
+  const boundedActorNames = new Set<keyof typeof TABLES>([
+    "NPC_CURRENT",
+    "NPC_KNOWLEDGE",
+    "NPC_RELATIONSHIPS_CURRENT",
+    "SOCIAL_MEMORY_CURRENT",
+    "OPEN_THREADS_CURRENT",
+    "NPC_ACTIVITY_RULES",
+    "SYSTEM_CHAT_LOG",
+  ]);
   const structuredNames: Array<keyof typeof TABLES> = [];
   const addStructured = (name: keyof typeof TABLES) => {
-    runtimeRanges.add(TABLES[name].range);
+    if (!(explicitActorRequest && boundedActorNames.has(name))) {
+      runtimeRanges.add(TABLES[name].range);
+    }
     if (!structuredNames.includes(name)) structuredNames.push(name);
   };
 
@@ -246,6 +258,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   if (explicitActorRequest || hasAny(tagSet, ["NPC", "SOCIAL", "SERVICES"])) addStructured("NPC_CURRENT");
   if (explicitActorRequest) {
     addStructured("NPC_KNOWLEDGE");
+    addStructured("NPC_RELATIONSHIPS_CURRENT");
     addStructured("SOCIAL_MEMORY_CURRENT");
     addStructured("OPEN_THREADS_CURRENT");
     addStructured("NPC_ACTIVITY_RULES");
@@ -267,6 +280,10 @@ export async function getTurnContext(input: TurnContextRequest) {
   const pregenRequests: Array<{ key: string; range: string }> = [];
   if (explicitActorRequest) {
     pregenRequests.push({ key: "npcIdentityIndex", range: PREGEN_TABLES.NPC_IDENTITY_INDEX });
+    pregenRequests.push({ key: "archiveRegistry", range: PREGEN_TABLES.ARCHIVE_REGISTRY });
+  }
+  if (hasAny(tagSet, ["FACTION", "POLITICS", "WORLD", "AREA_PREP"])) {
+    pregenRequests.push({ key: "factionProcessSeeds", range: PREGEN_TABLES.FACTION_PROCESS_SEEDS });
   }
   if (hasAny(tagSet, ["THREAT", "CRIME", "WORLDGEN", "AREA_PREP"])) {
     pregenRequests.push({ key: "humanThreatProfiles", range: PREGEN_TABLES.HUMAN_THREAT_PROFILES });
@@ -292,11 +309,12 @@ export async function getTurnContext(input: TurnContextRequest) {
 
   const uniqueDocKeys = Array.from(new Set(docQueries.map((q) => q.documentKey)));
 
-  const [base, lookupResults, docs, pregens] = await Promise.all([
+  const [base, lookupResults, docs, pregens, actorIndexScan] = await Promise.all([
     sheetsBatchGet(config.files.TEMP_RUNTIME, [...runtimeRanges]),
     Promise.all(lookups.map(cachedLookup)),
     Promise.all(uniqueDocKeys.map(async (key) => [key, await cachedDoc(key)] as const)),
     Promise.all(pregenRequests.map(async (p) => ({ ...p, ...(await cachedPregen(p.range)) }))),
+    explicitActorRequest ? scanActorContextIndex(config.files.TEMP_RUNTIME) : Promise.resolve(null),
   ]);
 
   const control = base["CONTROL!A1:D12"] ?? [];
@@ -308,7 +326,9 @@ export async function getTurnContext(input: TurnContextRequest) {
   const sceneId = findControl(control, "current_scene_id");
   const turnToken = makeTurnToken({ saveId, worldDay, worldTime, locationId, sceneId });
 
-  const rawNpcCurrent = rowsToObjects(base[TABLES.NPC_CURRENT.range] ?? []);
+  const rawNpcCurrent = explicitActorRequest
+    ? rowsToObjects(actorIndexScan?.npcReferenceRows ?? [])
+    : rowsToObjects(base[TABLES.NPC_CURRENT.range] ?? []);
   const identityPregenRows = rowsToObjects(
     pregens.find((p) => p.key === "npcIdentityIndex")?.rows ?? [],
   );
@@ -317,10 +337,65 @@ export async function getTurnContext(input: TurnContextRequest) {
     ...requestedActorIds,
     ...actorResolution.filter((r) => r.status === "RESOLVED").flatMap((r) => r.actorIds),
   ])];
+  const activeNpcIds = new Set(rawNpcCurrent.map((r) => String(r["NPC ID"] ?? "")).filter(Boolean));
+  const identityNpcIds = new Set(identityPregenRows.map((r) => String(r["NPC ID"] ?? "")).filter(Boolean));
+  const dormantActorIds = resolvedActorIds.filter((id) => !activeNpcIds.has(id) && identityNpcIds.has(id));
+  const boundedActorLoad = explicitActorRequest && actorIndexScan
+    ? await loadBoundedActorTables(
+        config.files.TEMP_RUNTIME,
+        actorIndexScan,
+        resolvedActorIds,
+        recentChatLimit,
+      )
+    : null;
+
+  const archiveRegistryRows = rowsToObjects(
+    pregens.find((p) => p.key === "archiveRegistry")?.rows ?? [],
+  );
+  const canonicalNpcArchive = archiveRegistryRows.find((r) =>
+    String(r["Archive ID"] ?? "") === "archive.npc_memory.current" &&
+    String(r["Status"] ?? "").toUpperCase() === "ACTIVE"
+  ) ?? null;
+  let dormantArchiveRows: Array<Record<string, unknown>> = [];
+  let dormantArchiveError: string | null = null;
+  const archiveReadPlan: string[] = [];
+  if (dormantActorIds.length && canonicalNpcArchive) {
+    const archiveFileId = String(canonicalNpcArchive["Drive file ID"] ?? "").trim();
+    const archiveSheet = String(canonicalNpcArchive["Sheet/resource"] ?? "").trim();
+    if (archiveFileId && archiveSheet) {
+      try {
+        const archiveData = await loadBoundedArchiveRows(
+          archiveFileId,
+          archiveSheet,
+          dormantActorIds,
+        );
+        const wanted = new Set(dormantActorIds);
+        dormantArchiveRows = rowsToObjects(archiveData.rows).filter((r) =>
+          wanted.has(String(r["NPC ID"] ?? "")) &&
+          String(r["Active"] ?? "TRUE").toUpperCase() !== "FALSE"
+        );
+        archiveReadPlan.push(
+          `ARCHIVE:${String(canonicalNpcArchive["Archive ID"] ?? "npc_memory")}:BOUNDED`,
+          ...archiveData.readPlan,
+        );
+      } catch (error) {
+        dormantArchiveError = error instanceof Error ? error.message : String(error);
+      }
+    } else {
+      dormantArchiveError = "canonical NPC archive registry row is missing file or sheet";
+    }
+  }
 
   const structured: Record<string, unknown> = {};
   for (const name of structuredNames) {
-    let records = rowsToObjects(base[TABLES[name].range] ?? []);
+    const boundedRows = (
+      boundedActorLoad?.tables as Record<string, unknown[][] | undefined> | undefined
+    )?.[name];
+    let records = rowsToObjects(
+      (explicitActorRequest && boundedActorNames.has(name) && boundedRows)
+        ? boundedRows
+        : (base[TABLES[name].range] ?? []),
+    );
     if (name === "NPC_CURRENT") {
       records = selectNpcCurrentRows(records, locationId, resolvedActorIds, explicitActorRequest);
     } else if (["SERVICES_CURRENT", "OPPORTUNITIES_CURRENT", "MAP_KNOWLEDGE_CURRENT"].includes(name)) {
@@ -345,6 +420,9 @@ export async function getTurnContext(input: TurnContextRequest) {
       const wanted = new Set(resolvedActorIds);
       records = records.filter((r) => wanted.has(String(r["NPC ID"] ?? "")));
     }
+    if (name === "NPC_RELATIONSHIPS_CURRENT") {
+      records = filterRelationships(records, resolvedActorIds);
+    }
     if (name === "SOCIAL_MEMORY_CURRENT" || name === "OPEN_THREADS_CURRENT") {
       records = filterByParticipants(records, resolvedActorIds);
     }
@@ -363,6 +441,12 @@ export async function getTurnContext(input: TurnContextRequest) {
     if (p.key === "npcIdentityIndex") {
       const wanted = new Set(resolvedActorIds);
       records = records.filter((r) => wanted.has(String(r["NPC ID"] ?? "")));
+    }
+    if (p.key === "archiveRegistry") {
+      records = records.filter((r) => String(r["Status"] ?? "").toUpperCase() === "ACTIVE");
+    }
+    if (p.key === "factionProcessSeeds") {
+      records = records.filter((r) => !String(r["Status"] ?? "").toUpperCase().startsWith("RETIRED"));
     }
     if (p.key === "commonObjectTemplates") {
       const inventory = (structured.INVENTORY_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
@@ -458,6 +542,7 @@ export async function getTurnContext(input: TurnContextRequest) {
 
   const actorCurrent = (structured.NPC_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
   const actorKnowledge = (structured.NPC_KNOWLEDGE as Array<Record<string, unknown>> | undefined) ?? [];
+  const relationshipRows = (structured.NPC_RELATIONSHIPS_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
   const actorChatRows = (structured.SYSTEM_CHAT_LOG as Array<Record<string, unknown>> | undefined) ?? [];
   const socialMemoryRows = (structured.SOCIAL_MEMORY_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
   const openThreadRows = (structured.OPEN_THREADS_CURRENT as Array<Record<string, unknown>> | undefined) ?? [];
@@ -467,6 +552,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   const actors: Record<string, unknown> = {};
   const actorContextGate: Record<string, unknown> = {};
   const knowledgeLoaded = structuredNames.includes("NPC_KNOWLEDGE");
+  const relationshipsLoaded = structuredNames.includes("NPC_RELATIONSHIPS_CURRENT");
   const socialMemoryLoaded = structuredNames.includes("SOCIAL_MEMORY_CURRENT");
   const openThreadsLoaded = structuredNames.includes("OPEN_THREADS_CURRENT");
   const recentChatLoaded = structuredNames.includes("SYSTEM_CHAT_LOG");
@@ -478,19 +564,32 @@ export async function getTurnContext(input: TurnContextRequest) {
     const freshness = actorSnapshotFreshness({ worldDay, worldTime, current, activityRule });
     const durableIdentity =
       identityPregenRows.find((r) => String(r["NPC ID"] ?? "") === id) ?? null;
+    const archivedKnowledge = dormantArchiveRows.filter((r) => String(r["NPC ID"] ?? "") === id);
     actors[id] = {
       current,
       durableIdentity,
       knowledge: actorKnowledge.filter((r) => String(r["NPC ID"] ?? "") === id),
+      relationships: filterRelationships(relationshipRows, [id]),
       socialMemory: filterByParticipants(socialMemoryRows, [id]),
       openThreads: filterByParticipants(openThreadRows, [id]),
       recentChat: actorRecentChat[id] ?? [],
+      archivedKnowledge,
+      rematerialization: dormantActorIds.includes(id)
+        ? {
+            required: true,
+            archiveId: canonicalNpcArchive?.["Archive ID"] ?? null,
+            archivedFactCount: archivedKnowledge.length,
+            archiveError: dormantArchiveError,
+            rule: "derive current activity/location causally; archived facts are evidence, not present-state truth",
+          }
+        : null,
       autonomy: { activityRule, activeWorldClocks, freshness },
     };
     actorContextGate[id] = evaluateNpcContextGate({
       actorId: id,
       current,
       knowledgeLoaded,
+      relationshipsLoaded,
       socialMemoryLoaded,
       openThreadsLoaded,
       recentChatLoaded,
@@ -571,18 +670,40 @@ export async function getTurnContext(input: TurnContextRequest) {
         resolution: actorResolution,
         unresolvedRefs: actorResolution.filter((r) => r.status !== "RESOLVED"),
         dormantRefs: actorResolution.filter((r) => r.status === "RESOLVED" && r.materialization === "DORMANT"),
-        rematerializationRequiredActorIds: actorResolution
-          .filter((r) => r.status === "RESOLVED" && r.materialization === "DORMANT")
-          .flatMap((r) => r.actorIds),
+        rematerializationRequiredActorIds: dormantActorIds,
+        rematerializationPackets: Object.fromEntries(dormantActorIds.map((id) => [
+          id,
+          {
+            durableIdentity: identityPregenRows.find((r) => String(r["NPC ID"] ?? "") === id) ?? null,
+            archivedKnowledge: dormantArchiveRows.filter((r) => String(r["NPC ID"] ?? "") === id),
+            archiveId: canonicalNpcArchive?.["Archive ID"] ?? null,
+            archiveError: dormantArchiveError,
+          },
+        ])),
         contextGate: npcContextGate,
+        boundedReadStats: explicitActorRequest
+          ? {
+              indexApproxCells: actorIndexScan?.approxCellsRead ?? 0,
+              exactApproxCells: boundedActorLoad?.approxCellsRead ?? 0,
+              exactRangeCount: boundedActorLoad?.exactRangeCount ?? 0,
+              strategy: "fresh narrow-column index scan + exact-row batch reads; no persisted duplicate context index",
+            }
+          : null,
       },
       lookups: lookups.map((lookup, i) => ({ ...lookup, ...lookupResults[i] })),
       docs: queriedDocs,
       readPlan: [
         "TEMP:CORE",
         ...(needsCompetences ? ["TEMP:COMPETENCES"] : []),
-        ...structuredNames.map((n) => `TEMP:${n}`),
+        ...(actorIndexScan?.readPlan ?? []),
+        ...(boundedActorLoad?.readPlan ?? []),
+        ...structuredNames.map((n) =>
+          explicitActorRequest && boundedActorNames.has(n)
+            ? `TEMP:${n}:BOUNDED`
+            : `TEMP:${n}`
+        ),
         ...pregenRequests.map((p) => `GM_PREGEN:${p.key}`),
+        ...archiveReadPlan,
         ...lookups.map((l) => `${l.source}:${l.sheet}`),
         ...docQueries.map((d) => `DOC:${d.documentKey}`),
       ],

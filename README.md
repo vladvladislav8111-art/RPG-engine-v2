@@ -1,4 +1,4 @@
-# RPG V2 — Deno Runtime Gateway
+# RPG V2 — Runtime Gateway
 
 Deterministic service layer for the persistent RPG V2 campaign.
 
@@ -24,7 +24,7 @@ GM PREGEN contains compiled rules plus materialized region/district/service pack
 
 World Taren is separate from Shura learned state in `PLAYER_LANGUAGE`, `PLAYER_LEXICON` and `PLAYER_GRAMMAR`.
 
-All private and diagnostic endpoints require the runtime API key. `ALLOW_WRITES=true` enables authoritative commits.
+Production runs on Netlify Functions (Node.js 24). All private and diagnostic endpoints require `RUNTIME_API_KEY`. `ALLOW_WRITES=true` enables authoritative commits. Ordinary gameplay commits are semantic; raw `sheetWrites` commits remain disabled unless `ALLOW_RAW_COMMITS=true` is deliberately enabled for migration/repair.
 
 
 ## V2.5 architecture hardening
@@ -102,3 +102,46 @@ This is a context-integrity mechanism only. It does not decide what the NPC beli
 - GM PREGEN `HUMAN_THREAT_PROFILES` contains causal environment profiles for human predation without alignment probabilities, socioeconomic moral stereotypes, or atrocity quotas.
 
 Mutable live truth still has exactly one owner. Stable identity indexes and social memory are routing/context material, not duplicate live state.
+
+
+## V2.7.4 social/world context completion
+
+- `NPC_RELATIONSHIPS_CURRENT` is part of the selected-NPC context gate; relationship state is directed and multidimensional.
+- `relationshipEvents` is the semantic write path and rejects `player.shura` as relationship Actor, preserving player agency.
+- Dormant selected NPCs resolve through `NPC_IDENTITY_INDEX`; `ARCHIVE_REGISTRY` then loads only their canonical archived episodic knowledge into an explicit rematerialization packet. Archive evidence never becomes present activity/location by itself.
+- `FACTION_PROCESS_SEEDS` is available to relevant WORLD/FACTION/POLITICS/AREA_PREP context while remaining dormant until causal activation creates or links a live `WORLD_CLOCK`.
+- Rematerialization failures are surfaced explicitly instead of being guessed around.
+
+Current truth remains singular: relationships in `NPC_RELATIONSHIPS_CURRENT`, episodic history in the canonical NPC archive, stable identity in GM PREGEN, and active faction processes in `WORLD_CLOCKS`.
+
+
+## V2.8 production architecture
+
+V2.8 runs the gateway on the production Netlify Node.js serverless runtime while retaining the same authoritative Google-backed state model.
+
+### Fresh bounded actor reads
+
+Explicit selected-NPC context no longer needs to load full 2,000-row knowledge or 5,000-row chat tables. The fast path performs a fresh narrow-column index scan, resolves exact row numbers, then batch-loads only matching full rows. This index is computed per request and is not persisted, so it cannot become a second truth or silently go stale.
+
+Dormant NPC archive reads use the same pattern: scan only the NPC-ID column, then fetch exact archived rows for the resolved stable actor.
+
+### Portable runtime boundary
+
+- environment access works through Node process environments and retains a small compatibility adapter for alternate runtimes;
+- the cache is optional and non-authoritative;
+- the HTTP router is platform-neutral and lives in `src/http.ts`;
+- Netlify uses one gateway Function and preserves `/health`, `/context`, `/prepare-commit`, `/commit`, `/rng/int`, and authenticated `/mcp`;
+- bounded actor/archive reads scan only narrow ID columns and then fetch exact matching rows.
+
+SESSION_LOG/save/turn-token preconditions and Google state are the correctness layer across cold starts or instance replacement. If Sheets/SESSION_LOG commit succeeds but a permanent-canon `docAppend` fails, an idempotent replay retries the doc append by TX marker before reporting completion.
+
+
+## V2.8.1 Netlify production hardening
+
+- Production version: `2.8.1-netlify-production-hardening-2026-10-08`.
+- Anonymous/capability-token MCP routing was removed; `/mcp` is Bearer-protected only.
+- Raw commit writes are disabled by default with `ALLOW_RAW_COMMITS=false`; ordinary gameplay uses semantic commits.
+- Serverless recovery retries TX-marked permanent-canon document appends on semantic idempotent replay.
+- Reused semantic TX IDs are rejected if they point to a different turn/save.
+- Zero-second semantic dry-runs no longer emit no-op time/survival writes.
+- Vercel migration adapters/docs were removed from the production branch; Netlify is the active host.
