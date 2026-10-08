@@ -317,6 +317,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   if (hasAny(tagSet, ["CHARACTERISTIC", "PROGRESSION", "TRAINING", "PHYSICAL", "BODY"])) addStructured("CHARACTERISTIC_ADAPTATION");
   if (hasAny(tagSet, ["WORLD", "CLOCK", "WAIT", "REST", "TRAVEL", "WORK", "STUDY", "CRAFT"])) addStructured("WORLD_CLOCKS");
   if (hasAny(tagSet, ["WEATHER", "TRAVEL", "EXPLORATION", "SURVIVAL"])) addStructured("WEATHER_CURRENT");
+  if (hasAny(tagSet, ["RELIGION", "DIVINE", "GOD", "PRAYER", "TEMPLE", "EIRAN", "VEIRA", "SEREN", "SELVARA", "NERETH", "LORVEN", "KHARAD", "MARESS", "VAAR", "ULMAR"])) addStructured("DIVINE_ATTENTION_CURRENT");
 
   const pregenRequests: Array<{ key: string; range: string }> = [];
   const requestPregen = (key: string, range: string) => {
