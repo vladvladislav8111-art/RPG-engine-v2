@@ -1,4 +1,4 @@
-export const RULESET_VERSION = "2.8.3-netlify-deploy-context-guard-2026-10-08";
+export const RULESET_VERSION = "2.8.4-deno-production-restored-2026-10-08";
 
 export type LearningBand = "tiny" | "useful" | "substantial" | "breakthrough" | "exceptional";
 
