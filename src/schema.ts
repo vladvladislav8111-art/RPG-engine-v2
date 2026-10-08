@@ -30,6 +30,7 @@ export const TABLES = {
   WORLD_CLOCKS: { range: "WORLD_CLOCKS!A1:H200", keyHeader: "Process ID" },
   WEATHER_CURRENT: { range: "WEATHER_CURRENT!A1:J100", keyHeader: "Weather ID" },
   BODY_INJURIES_CURRENT: { range: "BODY_INJURIES_CURRENT!A1:P500", keyHeader: "Injury ID" },
+  DIVINE_ATTENTION_CURRENT: { range: "DIVINE_ATTENTION_CURRENT!A1:I100", keyHeader: "God ID" },
   ACTIVE_CONTEXT: { range: "ACTIVE_CONTEXT!A1:H50", keyHeader: "Slot" },
 } as const;
 
