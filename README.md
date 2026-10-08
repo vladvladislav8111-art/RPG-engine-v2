@@ -134,3 +134,14 @@ Dormant NPC archive reads use the same pattern: scan only the NPC-ID column, the
 - bounded actor/archive reads scan only narrow ID columns and then fetch exact matching rows.
 
 SESSION_LOG/save/turn-token preconditions and Google state are the correctness layer across cold starts or instance replacement. If Sheets/SESSION_LOG commit succeeds but a permanent-canon `docAppend` fails, an idempotent replay retries the doc append by TX marker before reporting completion.
+
+
+## V2.8.1 Netlify production hardening
+
+- Production version: `2.8.1-netlify-production-hardening-2026-10-08`.
+- Anonymous/capability-token MCP routing was removed; `/mcp` is Bearer-protected only.
+- Raw commit writes are disabled by default with `ALLOW_RAW_COMMITS=false`; ordinary gameplay uses semantic commits.
+- Serverless recovery retries TX-marked permanent-canon document appends on semantic idempotent replay.
+- Reused semantic TX IDs are rejected if they point to a different turn/save.
+- Zero-second semantic dry-runs no longer emit no-op time/survival writes.
+- Vercel migration adapters/docs were removed from the production branch; Netlify is the active host.

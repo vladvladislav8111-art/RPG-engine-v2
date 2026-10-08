@@ -242,6 +242,13 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   const txCol = headerIndex(sessionRows, "TX ID");
   const priorTx = sessionRows.slice(1).find((r) => String(r[txCol] ?? "") === input.txId);
   if (priorTx) {
+    const priorSave = String(priorTx[headerIndex(sessionRows, "Save ID")] ?? "");
+    const priorTurn = String(priorTx[headerIndex(sessionRows, "Turn ID")] ?? "");
+    if (priorSave !== input.saveTo || priorTurn !== input.turnId) {
+      throw new Error(
+        `tx id collision: ${input.txId} already belongs to turn ${priorTurn} / save ${priorSave}`,
+      );
+    }
     return {
       turnId: input.turnId,
       txId: input.txId,
