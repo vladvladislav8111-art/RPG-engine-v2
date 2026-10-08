@@ -305,6 +305,7 @@ export type StructuredRuntimeTable =
   | "WORLD_CLOCKS"
   | "WEATHER_CURRENT"
   | "BODY_INJURIES_CURRENT"
+  | "DIVINE_ATTENTION_CURRENT"
   | "ACTIVE_CONTEXT";
 
 export type SemanticRowUpsert = {
