@@ -145,3 +145,8 @@ SESSION_LOG/save/turn-token preconditions and Google state are the correctness l
 - Reused semantic TX IDs are rejected if they point to a different turn/save.
 - Zero-second semantic dry-runs no longer emit no-op time/survival writes.
 - Vercel migration adapters/docs were removed from the production branch; Netlify is the active host.
+
+
+## V2.8.2 idempotent replay correction
+
+Semantic TX replay is checked against durable SESSION_LOG before the optimistic current-save and turn-token guards. This allows a retry of the exact same committed request after the save/token have advanced, while rejecting TX-ID reuse for a different turn or target save. This is required for reliable serverless recovery after partial post-Sheets failures.

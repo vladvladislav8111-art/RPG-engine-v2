@@ -1,4 +1,4 @@
-export const RULESET_VERSION = "2.8.1-netlify-production-hardening-2026-10-08";
+export const RULESET_VERSION = "2.8.2-netlify-idempotency-hardening-2026-10-08";
 
 export type LearningBand = "tiny" | "useful" | "substantial" | "breakthrough" | "exceptional";
 

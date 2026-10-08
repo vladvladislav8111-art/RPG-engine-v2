@@ -199,9 +199,6 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   if (saveIndex < 0) throw new Error("CONTROL save_id missing");
   const saveRow = cloneRow(controlRows, saveIndex);
   const currentSave = String(saveRow[headerIndex(controlRows, "Value")] ?? "");
-  if (currentSave !== input.expectedSaveId) {
-    throw new Error(`save precondition failed: expected ${input.expectedSaveId}, got ${currentSave}`);
-  }
 
   const controlValue = (key: string) => {
     const i = findDataRow(controlRows, "Key", key);
@@ -214,30 +211,9 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     locationId: controlValue("current_location_id"),
     sceneId: controlValue("current_scene_id"),
   });
-  if (semantic.turnToken && semantic.turnToken !== token) {
-    throw new Error(`turn token stale: expected current ${token}, got ${semantic.turnToken}`);
-  }
 
-  const currentDay = asNumber(controlValue("world_day"), "world_day");
-  const currentTime = String(controlValue("world_time") ?? "");
-  let resolvedDay = semantic.control?.worldDay ?? currentDay;
-  let resolvedTime = semantic.control?.worldTime ?? currentTime;
-  if (semantic.elapsedSeconds != null) {
-    if (!Number.isFinite(semantic.elapsedSeconds) || semantic.elapsedSeconds < 0) {
-      throw new Error("elapsedSeconds must be a finite non-negative number");
-    }
-    const advancedClock = advanceClock(currentDay, currentTime, semantic.elapsedSeconds);
-    if (semantic.control?.worldDay != null && semantic.control.worldDay !== advancedClock.day) {
-      throw new Error("control.worldDay conflicts with elapsedSeconds");
-    }
-    if (semantic.control?.worldTime != null && semantic.control.worldTime !== advancedClock.time) {
-      throw new Error("control.worldTime conflicts with elapsedSeconds");
-    }
-    resolvedDay = advancedClock.day;
-    resolvedTime = advancedClock.time;
-  }
-  const resolvedInworldEnd = semantic.session.inworldEnd ?? `Day${resolvedDay} ${resolvedTime}`;
-
+  // Durable idempotency must be checked before optimistic save/turn-token guards:
+  // after a successful commit the current save/token have intentionally changed.
   const sessionRows = sheets[TABLES.SESSION_LOG.range] ?? [];
   const txCol = headerIndex(sessionRows, "TX ID");
   const priorTx = sessionRows.slice(1).find((r) => String(r[txCol] ?? "") === input.txId);
@@ -265,6 +241,33 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       outcomes: { learning: [], adaptation: [], resources: [], pendingChoices: [] },
     };
   }
+
+  if (currentSave !== input.expectedSaveId) {
+    throw new Error(`save precondition failed: expected ${input.expectedSaveId}, got ${currentSave}`);
+  }
+  if (semantic.turnToken && semantic.turnToken !== token) {
+    throw new Error(`turn token stale: expected current ${token}, got ${semantic.turnToken}`);
+  }
+
+  const currentDay = asNumber(controlValue("world_day"), "world_day");
+  const currentTime = String(controlValue("world_time") ?? "");
+  let resolvedDay = semantic.control?.worldDay ?? currentDay;
+  let resolvedTime = semantic.control?.worldTime ?? currentTime;
+  if (semantic.elapsedSeconds != null) {
+    if (!Number.isFinite(semantic.elapsedSeconds) || semantic.elapsedSeconds < 0) {
+      throw new Error("elapsedSeconds must be a finite non-negative number");
+    }
+    const advancedClock = advanceClock(currentDay, currentTime, semantic.elapsedSeconds);
+    if (semantic.control?.worldDay != null && semantic.control.worldDay !== advancedClock.day) {
+      throw new Error("control.worldDay conflicts with elapsedSeconds");
+    }
+    if (semantic.control?.worldTime != null && semantic.control.worldTime !== advancedClock.time) {
+      throw new Error("control.worldTime conflicts with elapsedSeconds");
+    }
+    resolvedDay = advancedClock.day;
+    resolvedTime = advancedClock.time;
+  }
+  const resolvedInworldEnd = semantic.session.inworldEnd ?? `Day${resolvedDay} ${resolvedTime}`;
 
   const dirty = new Map<string, Scalar[][]>();
   const writeRow = (table: RuntimeTableName, rows: unknown[][], dataIndex: number, row: unknown[]) => {
