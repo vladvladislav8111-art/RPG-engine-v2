@@ -1,8 +1,4 @@
 {
-  "imports": {
-    "@modelcontextprotocol/server": "npm:@modelcontextprotocol/server@2.3.0",
-    "zod/v4": "npm:zod@4.6.5/v4"
-  },
   "deploy": {
     "runtime": {
       "type": "dynamic",
