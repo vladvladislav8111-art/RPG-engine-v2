@@ -155,3 +155,10 @@ Semantic TX replay is checked against durable SESSION_LOG before the optimistic 
 ## V2.8.3 Netlify deploy-context guard
 
 The Netlify gateway rejects `/commit` and `/mcp` outside the Netlify `production` deploy context using the function request Context metadata. This is a second safety boundary on top of `ALLOW_WRITES` and `ALLOW_RAW_COMMITS`: Deploy Previews and branch deploys cannot reach write-capable surfaces even if the Netlify UI accidentally scopes `ALLOW_WRITES=true` too broadly.
+
+
+## Deno production restoration
+
+As of 2026-10-08 the primary ChatGPT RPG Runtime Bridge may again target the Deno deployment at `rpg-engine-v2.vladvladislav8111.deno.net`. The runtime core remains portable: Deno starts through `main.ts` and `Deno.serve`, while Netlify uses its separate adapter. Both paths share `src/http.ts` and the same Google-backed authoritative state.
+
+For Deno production keep `RUNTIME_API_KEY` server-side, `ALLOW_WRITES=true`, and `ALLOW_RAW_COMMITS=false`. Infrastructure validation must begin with read-only `/health` and `/context`; do not advance game time to test a deployment.
