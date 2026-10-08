@@ -1,4 +1,4 @@
-# RPG V2 — Deno Runtime Gateway
+# RPG V2 — Runtime Gateway
 
 Deterministic service layer for the persistent RPG V2 campaign.
 
@@ -24,7 +24,7 @@ GM PREGEN contains compiled rules plus materialized region/district/service pack
 
 World Taren is separate from Shura learned state in `PLAYER_LANGUAGE`, `PLAYER_LEXICON` and `PLAYER_GRAMMAR`.
 
-All private and diagnostic endpoints require the runtime API key. `ALLOW_WRITES=true` enables authoritative commits.
+Production runs on Netlify Functions (Node.js 24). All private and diagnostic endpoints require `RUNTIME_API_KEY`. `ALLOW_WRITES=true` enables authoritative commits. Ordinary gameplay commits are semantic; raw `sheetWrites` commits remain disabled unless `ALLOW_RAW_COMMITS=true` is deliberately enabled for migration/repair.
 
 
 ## V2.5 architecture hardening
@@ -115,9 +115,9 @@ Mutable live truth still has exactly one owner. Stable identity indexes and soci
 Current truth remains singular: relationships in `NPC_RELATIONSHIPS_CURRENT`, episodic history in the canonical NPC archive, stable identity in GM PREGEN, and active faction processes in `WORLD_CLOCKS`.
 
 
-## V2.8 migration-prep architecture
+## V2.8 production architecture
 
-V2.8 prepares the gateway for an official Node.js serverless runtime while retaining the same authoritative Google-backed state model.
+V2.8 runs the gateway on the production Netlify Node.js serverless runtime while retaining the same authoritative Google-backed state model.
 
 ### Fresh bounded actor reads
 
@@ -127,10 +127,10 @@ Dormant NPC archive reads use the same pattern: scan only the NPC-ID column, the
 
 ### Portable runtime boundary
 
-- environment access works through either Deno or Node process environments;
-- Deno KV becomes an optional cache adapter rather than a compile-time dependency;
+- environment access works through Node process environments and retains a small compatibility adapter for alternate runtimes;
+- the cache is optional and non-authoritative;
 - the HTTP router is platform-neutral and lives in `src/http.ts`;
-- Deno keeps a tiny `main.ts` adapter;
-- the Vercel adapter uses one gateway Function and preserves the public paths `/health`, `/context`, `/prepare-commit`, `/commit`, `/rng/int`, and `/mcp`.
+- Netlify uses one gateway Function and preserves `/health`, `/context`, `/prepare-commit`, `/commit`, `/rng/int`, and authenticated `/mcp`;
+- bounded actor/archive reads scan only narrow ID columns and then fetch exact matching rows.
 
-The cache remains non-authoritative. SESSION_LOG/save preconditions and Google state remain the correctness layer across cold starts or instance replacement.
+SESSION_LOG/save/turn-token preconditions and Google state are the correctness layer across cold starts or instance replacement. If Sheets/SESSION_LOG commit succeeds but a permanent-canon `docAppend` fails, an idempotent replay retries the doc append by TX marker before reporting completion.

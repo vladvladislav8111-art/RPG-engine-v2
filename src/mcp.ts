@@ -358,13 +358,12 @@ function toolJson(data: unknown) {
   };
 }
 
-function buildServer(options: { allowWriteTools?: boolean } = {}) {
-  const allowWriteTools = options.allowWriteTools ?? true;
+function buildServer() {
   const server = new McpServer(
     {
       name: "rpg-v2-runtime",
       title: "RPG V2 Runtime",
-      version: "2.7.4",
+      version: "2.8.0",
     },
     { capabilities: { tools: {}, resources: {} } },
   );
@@ -396,6 +395,7 @@ function buildServer(options: { allowWriteTools?: boolean } = {}) {
         architectureVersion: "fast-storage-v3.1",
         hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
+        rawCommitsEnabled: config.allowRawCommits,
         saveId: state["CONTROL!B2"]?.[0]?.[0] ?? null,
         worldTime: state["CONTROL!B5"]?.[0]?.[0] ?? null,
         locationId: state["CONTROL!B6"]?.[0]?.[0] ?? null,
@@ -438,13 +438,12 @@ function buildServer(options: { allowWriteTools?: boolean } = {}) {
     async (input) => toolJson(await prepareCommit({ ...input, dryRun: true })),
   );
 
-  if (allowWriteTools) {
-    server.registerTool(
+  server.registerTool(
       "commit_turn",
       {
         title: "Commit RPG turn",
         description:
-          "Commit an RPG turn. Prefer one semantic fast-path payload: route meaningful social context through socialMemoryEvents/threadEvents/chatEvents, update only affected live-state rows, append reusable permanent knowledge to the appropriate LIVE document via docAppends, write the valid SESSION_LOG transaction, then verify current state. Chat direction/participants are validated. Resolving or expiring a thread with a non-NONE promoteTarget requires same-transaction destination evidence via promoteRef. Fleeting dialogue should not be persisted merely because it occurred.",
+          "Commit an RPG turn. Ordinary gameplay must use one semantic fast-path payload; raw sheet commits are disabled by default and reserved for deliberate migration/repair. Prefer one semantic fast-path payload: route meaningful social context through socialMemoryEvents/threadEvents/chatEvents, update only affected live-state rows, append reusable permanent knowledge to the appropriate LIVE document via docAppends, write the valid SESSION_LOG transaction, then verify current state. Chat direction/participants are validated. Resolving or expiring a thread with a non-NONE promoteTarget requires same-transaction destination evidence via promoteRef. Fleeting dialogue should not be persisted merely because it occurred.",
         inputSchema: commitSchema,
         annotations: {
           readOnlyHint: false,
@@ -455,8 +454,6 @@ function buildServer(options: { allowWriteTools?: boolean } = {}) {
       },
       async (input) => toolJson(await commitTurn({ ...input, dryRun: false })),
     );
-  
-  }
 
 
   server.registerResource(
@@ -652,15 +649,10 @@ function buildServer(options: { allowWriteTools?: boolean } = {}) {
   return server;
 }
 
-const mcpHandler = createMcpHandler(() => buildServer({ allowWriteTools: true }));
-const mcpReadOnlyHandler = createMcpHandler(() => buildServer({ allowWriteTools: false }));
+const mcpHandler = createMcpHandler(() => buildServer());
 
 export async function handleMcp(request: Request): Promise<Response> {
   return await mcpHandler.fetch(request);
-}
-
-export async function handleMcpReadOnly(request: Request): Promise<Response> {
-  return await mcpReadOnlyHandler.fetch(request);
 }
 
 export async function diagnoseMcp(): Promise<{
@@ -682,7 +674,7 @@ export async function diagnoseMcp(): Promise<{
       params: {
         protocolVersion: "2025-11-25",
         capabilities: {},
-        clientInfo: { name: "rpg-deno-diag", version: "1.0.0" },
+        clientInfo: { name: "rpg-runtime-diag", version: "2.8.0" },
       },
     }),
   });

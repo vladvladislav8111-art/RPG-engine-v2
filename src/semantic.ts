@@ -292,8 +292,8 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     writeRow("ACTIVE_CONTEXT", activeContextRows, i, row);
   };
 
-  if (semantic.elapsedSeconds != null || c.worldDay != null) patchControl("world_day", resolvedDay);
-  if (semantic.elapsedSeconds != null || c.worldTime != null) patchControl("world_time", resolvedTime);
+  if ((semantic.elapsedSeconds ?? 0) > 0 || c.worldDay != null) patchControl("world_day", resolvedDay);
+  if ((semantic.elapsedSeconds ?? 0) > 0 || c.worldTime != null) patchControl("world_time", resolvedTime);
   if (c.locationId != null) {
     const locationChanged = String(controlValue("current_location_id") ?? "") !== c.locationId;
     patchControl("current_location_id", c.locationId);
@@ -393,7 +393,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   };
 
   const survivalOutcomes: unknown[] = [];
-  if (semantic.elapsedSeconds != null || semantic.survival) {
+  if ((semantic.elapsedSeconds ?? 0) > 0 || semantic.survival) {
     const elapsedMinutes = Math.max(0, Number(semantic.elapsedSeconds ?? 0) / 60);
     let inferredActivity: SurvivalActivity = "normal";
     if (!semantic.survival?.segments?.length && !semantic.survival?.defaultActivity) {
@@ -1436,8 +1436,8 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     },
     postState: {
       saveId: input.saveTo,
-      worldDay: semantic.elapsedSeconds != null || c.worldDay != null ? resolvedDay : controlValue("world_day"),
-      worldTime: semantic.elapsedSeconds != null || c.worldTime != null ? resolvedTime : controlValue("world_time"),
+      worldDay: (semantic.elapsedSeconds ?? 0) > 0 || c.worldDay != null ? resolvedDay : controlValue("world_day"),
+      worldTime: (semantic.elapsedSeconds ?? 0) > 0 || c.worldTime != null ? resolvedTime : controlValue("world_time"),
       locationId: c.locationId ?? controlValue("current_location_id"),
       sceneId: c.sceneId ?? controlValue("current_scene_id"),
       resources: postResources,

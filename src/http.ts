@@ -3,7 +3,7 @@ import { config } from "./config.ts";
 import { getTurnContext } from "./context.ts";
 import { sheetsBatchGet } from "./google.ts";
 import { HUD_UI_VERSION } from "./hud.ts";
-import { diagnoseMcp, handleMcp, handleMcpReadOnly } from "./mcp.ts";
+import { diagnoseMcp, handleMcp } from "./mcp.ts";
 import { intBetween } from "./rng.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import type { CommitRequest, TurnContextRequest } from "./types.ts";
@@ -47,6 +47,7 @@ export async function handleHttpRequest(
         engineVersion: RULESET_VERSION,
         hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
+        rawCommitsEnabled: config.allowRawCommits,
         googleConnected,
       });
     }
@@ -130,23 +131,8 @@ export async function handleHttpRequest(
     }
 
     if (pathname === "/mcp") {
-      if (authorized(req)) return await handleMcp(req);
-
-      const suppliedToken = url.searchParams.get("token");
-      if (config.mcpRouteToken && suppliedToken && suppliedToken === config.mcpRouteToken) {
-        return await handleMcpReadOnly(req);
-      }
-
-      return json({ error: "unauthorized" }, 401);
-    }
-
-    // Compatibility fallback for hosts that preserve custom wildcard paths.
-    if (pathname.startsWith("/mcp/")) {
-      const suppliedToken = decodeURIComponent(pathname.slice("/mcp/".length));
-      if (!config.mcpRouteToken || !suppliedToken || suppliedToken !== config.mcpRouteToken) {
-        return json({ error: "not_found" }, 404);
-      }
-      return await handleMcpReadOnly(req);
+      if (!authorized(req)) return json({ error: "unauthorized" }, 401);
+      return await handleMcp(req);
     }
 
     if (!authorized(req)) return json({ error: "unauthorized" }, 401);
@@ -164,6 +150,7 @@ export async function handleHttpRequest(
         runtime: config.runtime,
         hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
+        rawCommitsEnabled: config.allowRawCommits,
         saveId: state["CONTROL!B2"]?.[0]?.[0] ?? null,
         worldTime: state["CONTROL!B5"]?.[0]?.[0] ?? null,
         locationId: state["CONTROL!B6"]?.[0]?.[0] ?? null,
