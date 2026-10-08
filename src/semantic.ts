@@ -341,12 +341,28 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     if (resolvedLocation.startsWith("loc.ilyrian.selarin")) {
       const preg = await sheetsBatchGet(config.files.GM_PREGEN,[PREGEN_TABLES.SELARIN_WEATHER_PROFILE,PREGEN_TABLES.SELARIN_WEATHER_FRONTS]);
       const weatherRows=sheets[TABLES.WEATHER_CURRENT.range]??[];
+      const profileObjects=sheetObjects(preg[PREGEN_TABLES.SELARIN_WEATHER_PROFILE]??[]);
+      const frontObjects=sheetObjects(preg[PREGEN_TABLES.SELARIN_WEATHER_FRONTS]??[]);
+      let weatherObjects=sheetObjects(weatherRows);
+      let bootstrapped=false;
+      if(!weatherObjects.some(r=>String(r["Weather ID"]??"")==="weather.selarin.current")){
+        const startLocation=String(controlValue("current_location_id")??"");
+        const bootstrapDay=startLocation.startsWith("loc.ilyrian.selarin")?currentDay:resolvedDay;
+        const bootstrapTime=startLocation.startsWith("loc.ilyrian.selarin")?currentTime:resolvedTime;
+        const bootstrap=resolveSelarinWeatherRecords({
+          profileRows:profileObjects,frontRows:frontObjects,currentRows:[],
+          targetDay:bootstrapDay,targetTime:bootstrapTime,
+        });
+        weatherObjects=[bootstrap.record];
+        bootstrapped=true;
+      }
       const resolved=resolveSelarinWeatherRecords({
-        profileRows:sheetObjects(preg[PREGEN_TABLES.SELARIN_WEATHER_PROFILE]??[]),
-        frontRows:sheetObjects(preg[PREGEN_TABLES.SELARIN_WEATHER_FRONTS]??[]),
-        currentRows:sheetObjects(weatherRows),
+        profileRows:profileObjects,
+        frontRows:frontObjects,
+        currentRows:weatherObjects,
         targetDay:resolvedDay,targetTime:resolvedTime,
       });
+      resolved.initialized=bootstrapped;
       let wi=findDataRow(weatherRows,"Weather ID","weather.selarin.current");
       const wr=wi>=0?cloneRow(weatherRows,wi):Array(headers(weatherRows).length).fill("");
       for(const [k,v] of Object.entries(resolved.record)) setByHeader(weatherRows,wr,k,v as Scalar);
