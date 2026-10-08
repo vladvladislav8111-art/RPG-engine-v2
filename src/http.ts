@@ -93,7 +93,7 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
         dryRun: true,
         writesEnabled: config.allowWrites,
         elapsedMs: prepared.elapsedMs,
-        validationPass: prepared.validation.every((v: { pass: boolean }) => v.pass),
+        validationPass: prepared.validation?.every((v: { pass: boolean }) => v.pass) ?? false,
         sheetWritesInManifest: prepared.manifest.sheetWrites.length,
         docAppendsInManifest: prepared.manifest.docAppends.length,
       });
