@@ -32,6 +32,7 @@ import {
 import { hash32 } from "./rng.ts";
 import { computeSurvivalChange, survivalStaminaModifiers, type SurvivalActivity } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
+import { resolveSelarinWeatherRecords, sheetObjects } from "./weather.ts";
 import { validateChatEventShape, validateRelationshipEventShape } from "./social_context.ts";
 import type {
   CommitRequest,
@@ -187,6 +188,10 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   for (const item of semantic.rowUpserts ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowUpdates ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowDeletes ?? []) touched.add(item.table as RuntimeTableName);
+  if ((semantic.elapsedSeconds ?? 0) > 0) {
+    touched.add("WEATHER_CURRENT");
+    touched.add("OPPORTUNITIES_CURRENT");
+  }
 
   const ranges = [...touched].map((t) => TABLES[t].range);
   const sheets = await sheetsBatchGet(config.files.TEMP_RUNTIME, ranges);
@@ -292,6 +297,63 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   };
 
   const c = semantic.control ?? {};
+  const worldAutomationOutcomes: Record<string, unknown> = { weather: null, opportunities: [] };
+  if ((semantic.elapsedSeconds ?? 0) > 0) {
+    const opportunityRows = sheets[TABLES.OPPORTUNITIES_CURRENT.range] ?? [];
+    const targetAbs = resolvedDay * 1440 + Number(resolvedTime.slice(0,2)) * 60 + Number(resolvedTime.slice(3,5));
+    if (opportunityRows.length) {
+      const h = (name:string) => headerIndex(opportunityRows,name);
+      for (let i=0;i<opportunityRows.length-1;i++) {
+        const row=cloneRow(opportunityRows,i);
+        const policy=String(row[h("Lifecycle Policy")]??"").toUpperCase();
+        let lifecycle=String(row[h("Lifecycle State")]??"").toUpperCase();
+        if (!policy || ["RESOLVED","EXPIRED","FILLED","CANCELLED","COMPLETED"].some(x=>lifecycle.includes(x))) continue;
+        const availableDay=Number(row[h("Available Day")]??NaN), availableTime=String(row[h("Available Time")]??"");
+        const expiresDay=Number(row[h("Expires Day")]??NaN), expiresTime=String(row[h("Expires Time")]??"");
+        let changed=false, transition="";
+        if (policy==="SCHEDULED_LEAD" && lifecycle==="SCHEDULED" && Number.isFinite(availableDay) && /^\d{2}:\d{2}/.test(availableTime)) {
+          const a=availableDay*1440+Number(availableTime.slice(0,2))*60+Number(availableTime.slice(3,5));
+          if(targetAbs>=a){ setByHeader(opportunityRows,row,"Lifecycle State","AVAILABLE"); lifecycle="AVAILABLE"; changed=true; transition="AVAILABLE"; }
+        }
+        if (policy==="HARD_DEADLINE" && Number.isFinite(expiresDay) && /^\d{2}:\d{2}/.test(expiresTime)) {
+          const e=expiresDay*1440+Number(expiresTime.slice(0,2))*60+Number(expiresTime.slice(3,5));
+          if(targetAbs>=e){
+            setByHeader(opportunityRows,row,"Lifecycle State","EXPIRED");
+            setByHeader(opportunityRows,row,"State","EXPIRED / DEADLINE PASSED");
+            setByHeader(opportunityRows,row,"Slots Remaining",0);
+            changed=true; transition="EXPIRED";
+          }
+        }
+        const slots=Number(row[h("Slots Remaining")]??NaN);
+        if(Number.isFinite(slots)&&slots<=0&&!["RESOLVED","EXPIRED"].includes(lifecycle)&&policy!=="RESOLVED"){
+          setByHeader(opportunityRows,row,"Lifecycle State","FILLED");
+          changed=true; transition=transition||"FILLED";
+        }
+        if(changed){
+          setByHeader(opportunityRows,row,"Last Lifecycle Check",`Day${resolvedDay} ${resolvedTime}`);
+          writeRow("OPPORTUNITIES_CURRENT",opportunityRows,i,row);
+          (worldAutomationOutcomes.opportunities as unknown[]).push({offerId:row[h("Offer ID")],transition});
+        }
+      }
+    }
+
+    const resolvedLocation = String(c.locationId ?? controlValue("current_location_id") ?? "");
+    if (resolvedLocation.startsWith("loc.ilyrian.selarin")) {
+      const preg = await sheetsBatchGet(config.files.GM_PREGEN,[PREGEN_TABLES.SELARIN_WEATHER_PROFILE,PREGEN_TABLES.SELARIN_WEATHER_FRONTS]);
+      const weatherRows=sheets[TABLES.WEATHER_CURRENT.range]??[];
+      const resolved=resolveSelarinWeatherRecords({
+        profileRows:sheetObjects(preg[PREGEN_TABLES.SELARIN_WEATHER_PROFILE]??[]),
+        frontRows:sheetObjects(preg[PREGEN_TABLES.SELARIN_WEATHER_FRONTS]??[]),
+        currentRows:sheetObjects(weatherRows),
+        targetDay:resolvedDay,targetTime:resolvedTime,
+      });
+      let wi=findDataRow(weatherRows,"Weather ID","weather.selarin.current");
+      const wr=wi>=0?cloneRow(weatherRows,wi):Array(headers(weatherRows).length).fill("");
+      for(const [k,v] of Object.entries(resolved.record)) setByHeader(weatherRows,wr,k,v as Scalar);
+      if(wi>=0) writeRow("WEATHER_CURRENT",weatherRows,wi,wr); else appendRow("WEATHER_CURRENT",weatherRows,wr);
+      worldAutomationOutcomes.weather={initialized:resolved.initialized,transitions:resolved.transitions,frontId:resolved.record["Front ID"]};
+    }
+  }
   const activeContextRows = sheets[TABLES.ACTIVE_CONTEXT.range] ?? [];
   const patchActiveContext = (slot: string, pointer: Scalar) => {
     if (!activeContextRows.length) return;
@@ -1443,6 +1505,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       chat: chatOutcomes,
       resources: resourceOutcomes,
       pendingChoices,
+      worldAutomation: worldAutomationOutcomes,
     },
     postState: {
       saveId: input.saveTo,

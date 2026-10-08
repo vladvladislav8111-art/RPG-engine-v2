@@ -1,3 +1,4 @@
+import { resolveSelarinWeatherRecords } from "./weather.ts";
 export type PregenRecord = Record<string, unknown>;
 
 type LocalContextInput = {
@@ -623,6 +624,55 @@ function publicProcessSignals(
     }));
 }
 
+
+function majorScopeMatches(scope: string, districtId: string | null): boolean {
+  const s=upper(scope), id=str(districtId);
+  if (s==="CITYWIDE" || s==="ANY_DISTRICT") return true;
+  if (s==="WEST_FREIGHT") return id.includes("west_freight");
+  if (s==="CONCORD_FORUM") return id.includes("concord_forum");
+  if (s==="TEMPLE_MEDICAL") return id.includes("temple_medical");
+  if (s==="ARTISAN") return id.includes("artisan_terraces");
+  if (s==="MERCHANT_COURT") return id.includes("merchant_court");
+  if (s==="LICENSED_ARTS") return id.includes("licensed_arts");
+  return false;
+}
+function majorWeatherPass(condition: unknown, weather: PregenRecord[]): boolean {
+  const c=upper(condition); if(!c || c==="ANY") return true;
+  const text=JSON.stringify(weather).toUpperCase();
+  if(c==="HEAVY_RAIN") return text.includes("HEAVY_RAIN") || text.includes("HEAVY RAIN");
+  if(c==="DRY_OR_WINDY") return text.includes("CLEAR") || text.includes("FAIR_CLOUD") || text.includes("WINDY") || text.includes("DRY");
+  return true;
+}
+function majorEventCandidate(
+  rows:PregenRecord[], districtId:string|null, pulse:Record<string,unknown>|null,
+  live:LocalContextInput["live"], worldDay:unknown, worldTime:unknown,
+):Record<string,unknown>|null{
+  const metrics=(pulse?.metrics??{}) as Record<string,{value?:number}>;
+  const active=(live?.worldClocks??[]).filter(r=>upper(r["State"]).includes("ACTIVE"));
+  const weather=live?.weather??[];
+  const eligible=rows.filter(row=>{
+    if(upper(row["Status"])!=="ACTIVE" || !majorScopeMatches(str(row["Scope"]),districtId)) return false;
+    const prefix=str(row["Required process prefix"]);
+    if(prefix && !active.some(p=>str(p["Process ID"]).startsWith(prefix))) return false;
+    const metric=str(row["Required pulse metric"]);
+    if(metric && Number(metrics[metric]?.value??0)<Number(row["Min pulse"]??0)) return false;
+    return majorWeatherPass(row["Weather condition"],weather);
+  });
+  const bucket=Math.floor(timeMinutes(worldTime)/360);
+  const seed=`${str(worldDay)}|${bucket}|selarin-major`;
+  const triggered=eligible.filter(row=>{
+    const denom=Math.max(1,Math.floor(Number(row["Gate denominator"]??24)));
+    return hash32(seed+"|"+str(row["Event ID"]))%denom===0;
+  }).sort((a,b)=>hash32(seed+"|"+str(a["Event ID"]))-hash32(seed+"|"+str(b["Event ID"])));
+  const row=triggered[0]; if(!row) return null;
+  return {
+    seed,bucketHours:6,eventId:row["Event ID"],name:row["Name"],scope:row["Scope"],
+    durationMinHours:row["Duration min h"],durationMaxHours:row["Duration max h"],
+    worldClockEffect:row["WORLD_CLOCK effect"],publicVisibility:row["Public visibility"],guard:row["Guard"],
+    rule:"Candidate only. Validate a concrete cause/actors if required, then materialize a WORLD_CLOCK before treating it as real."
+  };
+}
+
 export function buildSelarinLocalContext(input: LocalContextInput): Record<string, unknown> | null {
   if (!isSelarinLocation(input.locationId)) return null;
   const { rows, tags, locationId } = input;
@@ -631,6 +681,18 @@ export function buildSelarinLocalContext(input: LocalContextInput): Record<strin
     (rows.selarinDistrictPulse ?? []).some((r) => str(r["District ID"]) === locationId) ? locationId : null
   );
   const phase = timePhase(input.worldTime);
+
+  let effectiveWeather = input.live?.weather ?? [];
+  if (!effectiveWeather.length && (rows.selarinWeatherProfile?.length ?? 0) && (rows.selarinWeatherFronts?.length ?? 0)) {
+    effectiveWeather = [resolveSelarinWeatherRecords({
+      profileRows: rows.selarinWeatherProfile ?? [],
+      frontRows: rows.selarinWeatherFronts ?? [],
+      currentRows: [],
+      targetDay: Number(input.worldDay),
+      targetTime: str(input.worldTime),
+    }).record];
+  }
+  const effectiveLive = { ...(input.live ?? {}), weather: effectiveWeather };
 
   const localServiceRows = localRows(
     rows.serviceDirectory ?? [],
@@ -701,7 +763,7 @@ export function buildSelarinLocalContext(input: LocalContextInput): Record<strin
     return tags.has(tag) || [...tags].some((t) => loadPolicy.includes(t));
   }).slice(0, 20);
 
-  const districtPulse = buildDistrictPulse(rows, input.live, districtId, locationId, phase);
+  const districtPulse = buildDistrictPulse(rows, effectiveLive, districtId, locationId, phase);
   const rhythmClass = upper((districtPulse?.rhythmClass ?? ""));
   const ambient = districtId && rhythmClass
     ? ambientCandidates(
@@ -712,7 +774,7 @@ export function buildSelarinLocalContext(input: LocalContextInput): Record<strin
         input.worldTime,
         districtId,
         districtPulse,
-        input.live,
+        effectiveLive,
         tags.has("AREA_PREP") ? 4 : 2,
       )
     : { seed: null, timeBucketMinutes: 20, candidates: [], rule: "No district pulse profile." };
@@ -724,18 +786,27 @@ export function buildSelarinLocalContext(input: LocalContextInput): Record<strin
   const npcAvailabilityHints = npcAvailability(
     npcSeeds,
     rows.selarinNpcRoutines ?? [],
-    input.live?.npcCurrent ?? [],
+    effectiveLive?.npcCurrent ?? [],
     phase,
   );
   const information = informationContext(
     rows.selarinRumorChannels ?? [],
     rows.selarinSocialNetwork ?? [],
-    input.live,
+    effectiveLive,
     districtId,
     hasAny(tags, ["SOCIAL", "RUMOR", "REPUTATION", "AREA_PREP"]),
   );
 
   const pulseMetrics = (districtPulse?.metrics ?? {}) as Record<string, { value?: number; band?: string }>;
+  const majorEvent = majorEventCandidate(
+    rows.selarinMajorEventTemplates ?? [],
+    districtId,
+    districtPulse,
+    effectiveLive,
+    input.worldDay,
+    input.worldTime,
+  );
+
   const competitionValue = clampMetric(
     Math.round((Number(pulseMetrics.crowd?.value ?? 0) + Number(pulseMetrics.trade?.value ?? 0)) / 2),
   );
@@ -746,13 +817,15 @@ export function buildSelarinLocalContext(input: LocalContextInput): Record<strin
     district: district ?? null,
     timePhase: phase,
     districtPulse,
+    weather: effectiveWeather[0] ?? null,
     ambient,
+    majorEventCandidate: majorEvent,
     risks,
     calendar,
     serviceAvailability: availability,
     npcAvailabilityHints,
     information,
-    publicProcessSignals: publicProcessSignals(input.live, districtId, locationId),
+    publicProcessSignals: publicProcessSignals(effectiveLive, districtId, locationId),
     competition: hasAny(tags, ["WORK", "JOB", "BOARD"]) ? {
       pressure: { value: competitionValue, band: metricLabel(competitionValue) },
       rule: "Pressure is a derived background indicator, not an applicant count. Real offers remain finite live state.",

@@ -198,3 +198,15 @@ committed time/location + tags
 ```
 
 This keeps off-screen simulation coarse and causal while making the active district feel inhabited.
+
+
+## V2.10 world automation
+
+V2.10 automates four high-frequency GM burdens while preserving player agency and causal world rules.
+
+- **Weather engine:** Selarin weather is derived from stable climate/front profiles and persisted in `WEATHER_CURRENT`. Committed elapsed time advances weather fronts automatically; local context can preview the same deterministic state before the first weather row exists.
+- **Routine Action Resolver:** the read-only `resolve_routine_action` MCP tool prepares semantic drafts for player-selected walking, eating, sleeping, service use and purchases. It computes canonical route distance/time and deterministic numeric service quotes, but never selects the action for Shura and never commits it.
+- **Opportunity lifecycle:** `OPPORTUNITIES_CURRENT` has structured availability, expiry, slots and lifecycle policy/state fields. Exact `HARD_DEADLINE` offers expire automatically on committed time advancement; vague/legacy soft windows do not become fake precise deadlines.
+- **Major city events:** World Pulse can surface rare deterministic candidates only when template gates are satisfied by current district pulse, weather and/or live processes. A candidate is not a real event until the GM validates a concrete cause and materializes it in `WORLD_CLOCKS`.
+
+The automation layer is intentionally asymmetric: arithmetic, clocks, route timing and machine lifecycle transitions are automated; NPC decisions, event causes, hidden knowledge and meaningful player choices remain GM/player domains.

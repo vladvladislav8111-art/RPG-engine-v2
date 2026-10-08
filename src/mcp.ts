@@ -15,6 +15,7 @@ import {
 } from "./physiology.ts";
 import { intBetween } from "./rng.ts";
 import { RULESET_VERSION } from "./rules.ts";
+import { resolveRoutineAction } from "./routine.ts";
 
 const docKeySchema = z.enum([
   "LIVE_CANON_INDEX",
@@ -80,6 +81,14 @@ const turnContextSchema = z.object({
   languageConcepts: z.array(z.string().min(1)).max(30).optional(),
   includeWorldLanguage: z.boolean().optional(),
 });
+
+const routineActionSchema = z.discriminatedUnion("type", [
+  z.object({ type:z.literal("walk"), destinationId:z.string().min(1), mode:z.enum(["normal","loaded"]).optional() }),
+  z.object({ type:z.literal("eat"), serviceId:z.string().min(1), foodId:z.enum(["food.bread_loaf","food.light_snack","food.ordinary_meal","food.substantial_meal","food.field_ration","food.fruit_portion"]).optional(), quotedPriceC:z.number().nonnegative().optional(), durationMinutes:z.number().positive().optional() }),
+  z.object({ type:z.literal("sleep"), serviceId:z.string().min(1).optional(), durationMinutes:z.number().positive(), quotedPriceC:z.number().nonnegative().optional() }),
+  z.object({ type:z.literal("use_service"), serviceId:z.string().min(1), quotedPriceC:z.number().nonnegative().optional(), durationMinutes:z.number().positive().optional() }),
+  z.object({ type:z.literal("buy"), serviceId:z.string().min(1), quantity:z.number().int().positive().optional(), quotedPriceC:z.number().nonnegative().optional(), durationMinutes:z.number().positive().optional(), itemId:z.string().min(1), templateId:z.string().min(1), item:z.string().min(1), unit:z.string().min(1), inventoryLocation:z.string().min(1).optional(), tags:z.string().optional(), conditionNotes:z.string().optional() }),
+]);
 
 const structuredTableSchema = z.enum([
   "OPPORTUNITIES_CURRENT",
@@ -364,7 +373,7 @@ function buildServer() {
     {
       name: "rpg-v2-runtime",
       title: "RPG V2 Runtime",
-      version: "2.9.0",
+      version: "2.10.0",
     },
     { capabilities: { tools: {}, resources: {} } },
   );
@@ -393,7 +402,7 @@ function buildServer() {
       return toolJson({
         ok: true,
         engineVersion: RULESET_VERSION,
-        architectureVersion: "world-pulse-v1",
+        architectureVersion: "world-automation-v2",
         hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
         rawCommitsEnabled: config.allowRawCommits,
@@ -420,6 +429,18 @@ function buildServer() {
       },
     },
     async (input) => toolJson(await getTurnContext(input)),
+  );
+
+  server.registerTool(
+    "resolve_routine_action",
+    {
+      title: "Resolve routine RPG action",
+      description:
+        "Read-only calculator for player-selected routine actions. Computes canonical walking routes/time, deterministic prices from numeric service ranges, routine service durations, and a semanticDraft for commit_turn. It never chooses a destination, purchase, meal, lodging, sleep duration or service for Shura and never commits anything.",
+      inputSchema: routineActionSchema,
+      annotations: { readOnlyHint:true, destructiveHint:false, idempotentHint:true, openWorldHint:false },
+    },
+    async (input) => toolJson(await resolveRoutineAction(input as any)),
   );
 
   server.registerTool(
@@ -679,7 +700,7 @@ export async function diagnoseMcp(): Promise<{
       params: {
         protocolVersion: "2025-11-25",
         capabilities: {},
-        clientInfo: { name: "rpg-runtime-diag", version: "2.9.0" },
+        clientInfo: { name: "rpg-runtime-diag", version: "2.10.0" },
       },
     }),
   });

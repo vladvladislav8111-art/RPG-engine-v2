@@ -382,6 +382,9 @@ export async function getTurnContext(input: TurnContextRequest) {
     requestPregen("selarinServiceHours", PREGEN_TABLES.SELARIN_SERVICE_HOURS);
     requestPregen("selarinNpcRoutines", PREGEN_TABLES.SELARIN_NPC_ROUTINES);
     requestPregen("selarinPulseOverlays", PREGEN_TABLES.SELARIN_PULSE_OVERLAYS);
+    requestPregen("selarinWeatherProfile", PREGEN_TABLES.SELARIN_WEATHER_PROFILE);
+    requestPregen("selarinWeatherFronts", PREGEN_TABLES.SELARIN_WEATHER_FRONTS);
+    requestPregen("selarinMajorEventTemplates", PREGEN_TABLES.SELARIN_MAJOR_EVENT_TEMPLATES);
   }
 
   const uniqueDocKeys = Array.from(new Set(docQueries.map((q) => q.documentKey)));
@@ -520,7 +523,7 @@ export async function getTurnContext(input: TurnContextRequest) {
     "selarinDeityAttention", "selarinFood", "selarinInfrastructure",
     "selarinDistrictPulse", "selarinPulsePhases", "selarinAmbientEvents", "selarinRiskEcology",
     "selarinRumorChannels", "selarinSocialNetwork", "selarinCalendar", "selarinServiceHours",
-    "selarinNpcRoutines", "selarinPulseOverlays",
+    "selarinNpcRoutines", "selarinPulseOverlays", "selarinWeatherProfile", "selarinWeatherFronts", "selarinMajorEventTemplates",
   ]);
   let languageLexiconRows: unknown[][] = [];
   for (const p of pregens) {
@@ -578,6 +581,9 @@ export async function getTurnContext(input: TurnContextRequest) {
           selarinServiceHours: rawPregenRecords.selarinServiceHours ?? [],
           selarinNpcRoutines: rawPregenRecords.selarinNpcRoutines ?? [],
           selarinPulseOverlays: rawPregenRecords.selarinPulseOverlays ?? [],
+          selarinWeatherProfile: rawPregenRecords.selarinWeatherProfile ?? [],
+          selarinWeatherFronts: rawPregenRecords.selarinWeatherFronts ?? [],
+          selarinMajorEventTemplates: rawPregenRecords.selarinMajorEventTemplates ?? [],
         },
         live: {
           worldClocks: (structured.WORLD_CLOCKS as Array<Record<string, unknown>> | undefined) ?? [],

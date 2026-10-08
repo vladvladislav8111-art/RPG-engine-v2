@@ -1,4 +1,4 @@
-export const RULESET_VERSION = "2.9.0-world-pulse-2026-10-08";
+export const RULESET_VERSION = "2.10.0-world-automation-2026-10-08";
 
 export type LearningBand = "tiny" | "useful" | "substantial" | "breakthrough" | "exceptional";
 
