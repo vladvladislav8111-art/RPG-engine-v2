@@ -658,8 +658,12 @@ export async function handleMcp(request: Request): Promise<Response> {
 export async function diagnoseMcp(): Promise<{
   ok: boolean;
   httpStatus: number;
+  contentType: string | null;
   protocolVersion: string | null;
   serverName: string | null;
+  serverVersion: string | null;
+  toolsCapability: boolean;
+  resourcesCapability: boolean;
 }> {
   const req = new Request("https://diag.local/mcp", {
     method: "POST",
