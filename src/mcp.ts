@@ -364,7 +364,7 @@ function buildServer() {
     {
       name: "rpg-v2-runtime",
       title: "RPG V2 Runtime",
-      version: "2.8.5",
+      version: "2.9.0",
     },
     { capabilities: { tools: {}, resources: {} } },
   );
@@ -393,7 +393,7 @@ function buildServer() {
       return toolJson({
         ok: true,
         engineVersion: RULESET_VERSION,
-        architectureVersion: "local-context-v4.0",
+        architectureVersion: "world-pulse-v1",
         hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
         rawCommitsEnabled: config.allowRawCommits,
@@ -679,7 +679,7 @@ export async function diagnoseMcp(): Promise<{
       params: {
         protocolVersion: "2025-11-25",
         capabilities: {},
-        clientInfo: { name: "rpg-runtime-diag", version: "2.8.5" },
+        clientInfo: { name: "rpg-runtime-diag", version: "2.9.0" },
       },
     }),
   });

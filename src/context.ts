@@ -254,7 +254,8 @@ export async function getTurnContext(input: TurnContextRequest) {
     "LAW", "WEAPON", "MAGIC", "RELIGION", "TEMPLE", "FOOD", "MEAL", "EAT", "SHOP", "LODGING",
     "REST", "SLEEP", "COURIER", "MESSAGE", "BATH", "HYGIENE", "FACTION", "POLITICS", "AREA_PREP",
     "GUILD", "CRAFT", "NPC", "DIVINE", "GOD", "PRAYER", "EIRAN", "VEIRA", "SEREN", "SELVARA",
-    "NERETH", "LORVEN", "KHARAD", "ULMAR",
+    "NERETH", "LORVEN", "KHARAD", "ULMAR", "SCENE", "AMBIENT", "RUMOR", "REPUTATION", "CRIME",
+    "THREAT", "OBSERVE", "LOOK",
   ]);
 
   const needsCompetences = input.turnClass !== "MICRO" || hasAny(tagSet, ["WORK", "LANGUAGE", "SKILL", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY"]);
@@ -317,6 +318,10 @@ export async function getTurnContext(input: TurnContextRequest) {
   if (hasAny(tagSet, ["CHARACTERISTIC", "PROGRESSION", "TRAINING", "PHYSICAL", "BODY"])) addStructured("CHARACTERISTIC_ADAPTATION");
   if (hasAny(tagSet, ["WORLD", "CLOCK", "WAIT", "REST", "TRAVEL", "WORK", "STUDY", "CRAFT"])) addStructured("WORLD_CLOCKS");
   if (hasAny(tagSet, ["WEATHER", "TRAVEL", "EXPLORATION", "SURVIVAL"])) addStructured("WEATHER_CURRENT");
+  if (needsLocalWorldContext) {
+    addStructured("WORLD_CLOCKS");
+    addStructured("WEATHER_CURRENT");
+  }
   if (hasAny(tagSet, ["RELIGION", "DIVINE", "GOD", "PRAYER", "TEMPLE", "EIRAN", "VEIRA", "SEREN", "SELVARA", "NERETH", "LORVEN", "KHARAD", "MARESS", "VAAR", "ULMAR"])) addStructured("DIVINE_ATTENTION_CURRENT");
 
   const pregenRequests: Array<{ key: string; range: string }> = [];
@@ -367,6 +372,16 @@ export async function getTurnContext(input: TurnContextRequest) {
     requestPregen("selarinDeityAttention", PREGEN_TABLES.SELARIN_DEITY_ATTENTION);
     requestPregen("selarinFood", PREGEN_TABLES.SELARIN_FOOD);
     requestPregen("selarinInfrastructure", PREGEN_TABLES.SELARIN_INFRASTRUCTURE);
+    requestPregen("selarinDistrictPulse", PREGEN_TABLES.SELARIN_DISTRICT_PULSE);
+    requestPregen("selarinPulsePhases", PREGEN_TABLES.SELARIN_PULSE_PHASES);
+    requestPregen("selarinAmbientEvents", PREGEN_TABLES.SELARIN_AMBIENT_EVENTS);
+    requestPregen("selarinRiskEcology", PREGEN_TABLES.SELARIN_RISK_ECOLOGY);
+    requestPregen("selarinRumorChannels", PREGEN_TABLES.SELARIN_RUMOR_CHANNELS);
+    requestPregen("selarinSocialNetwork", PREGEN_TABLES.SELARIN_SOCIAL_NETWORK);
+    requestPregen("selarinCalendar", PREGEN_TABLES.SELARIN_CALENDAR);
+    requestPregen("selarinServiceHours", PREGEN_TABLES.SELARIN_SERVICE_HOURS);
+    requestPregen("selarinNpcRoutines", PREGEN_TABLES.SELARIN_NPC_ROUTINES);
+    requestPregen("selarinPulseOverlays", PREGEN_TABLES.SELARIN_PULSE_OVERLAYS);
   }
 
   const uniqueDocKeys = Array.from(new Set(docQueries.map((q) => q.documentKey)));
@@ -503,6 +518,9 @@ export async function getTurnContext(input: TurnContextRequest) {
     "mapEdges", "economyAnchors", "factions", "selarinFastIndex", "selarinLaws",
     "selarinNpcPool", "selarinJobBoards", "selarinJobTemplates", "selarinCulture",
     "selarinDeityAttention", "selarinFood", "selarinInfrastructure",
+    "selarinDistrictPulse", "selarinPulsePhases", "selarinAmbientEvents", "selarinRiskEcology",
+    "selarinRumorChannels", "selarinSocialNetwork", "selarinCalendar", "selarinServiceHours",
+    "selarinNpcRoutines", "selarinPulseOverlays",
   ]);
   let languageLexiconRows: unknown[][] = [];
   for (const p of pregens) {
@@ -550,6 +568,22 @@ export async function getTurnContext(input: TurnContextRequest) {
           selarinDeityAttention: rawPregenRecords.selarinDeityAttention ?? [],
           selarinFood: rawPregenRecords.selarinFood ?? [],
           selarinInfrastructure: rawPregenRecords.selarinInfrastructure ?? [],
+          selarinDistrictPulse: rawPregenRecords.selarinDistrictPulse ?? [],
+          selarinPulsePhases: rawPregenRecords.selarinPulsePhases ?? [],
+          selarinAmbientEvents: rawPregenRecords.selarinAmbientEvents ?? [],
+          selarinRiskEcology: rawPregenRecords.selarinRiskEcology ?? [],
+          selarinRumorChannels: rawPregenRecords.selarinRumorChannels ?? [],
+          selarinSocialNetwork: rawPregenRecords.selarinSocialNetwork ?? [],
+          selarinCalendar: rawPregenRecords.selarinCalendar ?? [],
+          selarinServiceHours: rawPregenRecords.selarinServiceHours ?? [],
+          selarinNpcRoutines: rawPregenRecords.selarinNpcRoutines ?? [],
+          selarinPulseOverlays: rawPregenRecords.selarinPulseOverlays ?? [],
+        },
+        live: {
+          worldClocks: (structured.WORLD_CLOCKS as Array<Record<string, unknown>> | undefined) ?? [],
+          weather: (structured.WEATHER_CURRENT as Array<Record<string, unknown>> | undefined) ?? [],
+          npcCurrent: (structured.NPC_CURRENT as Array<Record<string, unknown>> | undefined) ?? [],
+          opportunities: (structured.OPPORTUNITIES_CURRENT as Array<Record<string, unknown>> | undefined) ?? [],
         },
       })
     : null;

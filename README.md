@@ -171,3 +171,30 @@ For Deno production keep `RUNTIME_API_KEY` server-side, `ALLOW_WRITES=true`, and
 - `nodeModulesDir: "auto"` keeps npm dependencies usable under Deno 2.x even while legacy `package.json` remains in the repository.
 - Deno type-check blockers in the diagnostic HTTP/MCP surfaces were corrected without changing gameplay semantics.
 - Production verification requires read-only `runtime_health` and `get_turn_context` before any gameplay commit.
+
+
+## V2.9 World Pulse
+
+V2.9 adds a read-only, data-driven local world pulse for pre-generated cities without simulating every NPC or district continuously.
+
+- District pulse combines a stable district baseline, time-of-day rhythm and active `WORLD_CLOCKS` overlays.
+- Ambient events are deterministic candidate seeds per committed time bucket; repeated reads do not reroll reality.
+- Risk ecology expresses causal pressure/conditions and never auto-creates theft, violence, fraud, fire or other incidents.
+- Calendar windows expose routine city rhythms without inventing special events.
+- Service availability combines stable hours/peak windows with the current committed time; live provider/queue state can still override.
+- Pregenerated NPC routines supply availability hints only while dormant; `NPC_CURRENT` overrides them after materialization.
+- Rumor channels and social-network edges describe possible information flow. They never copy private `NPC_KNOWLEDGE` automatically.
+- Job competition remains finite: board candidates are deterministic seeds, while real offers must materialize in `OPPORTUNITIES_CURRENT`.
+- Sensory baselines are rendering aids only and do not grant hidden information.
+
+Normal city turns therefore remain compact:
+
+```
+committed time/location + tags
+  -> localContext
+  -> district pulse + 2 ambient candidates + risks/calendar/availability
+  -> GM causal resolution
+  -> semantic commit only for real consequences
+```
+
+This keeps off-screen simulation coarse and causal while making the active district feel inhabited.
