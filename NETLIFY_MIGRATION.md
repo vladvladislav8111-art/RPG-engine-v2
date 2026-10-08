@@ -37,6 +37,8 @@ Deploy Previews / Branch Deploys:
 - `ALLOW_WRITES=false`
 - `ALLOW_RAW_COMMITS=false`
 
+The Netlify gateway also rejects `/commit` and `/mcp` whenever `context.deploy.context !== "production"`. This is defense in depth; keep the UI scopes correct anyway so non-production deploys do not receive unnecessary write-capable configuration.
+
 The cache is disposable. Correctness comes from Google state, save/turn-token preconditions, SESSION_LOG idempotency, and TX-marked document appends.
 
 ## Endpoints

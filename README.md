@@ -150,3 +150,8 @@ SESSION_LOG/save/turn-token preconditions and Google state are the correctness l
 ## V2.8.2 idempotent replay correction
 
 Semantic TX replay is checked against durable SESSION_LOG before the optimistic current-save and turn-token guards. This allows a retry of the exact same committed request after the save/token have advanced, while rejecting TX-ID reuse for a different turn or target save. This is required for reliable serverless recovery after partial post-Sheets failures.
+
+
+## V2.8.3 Netlify deploy-context guard
+
+The Netlify gateway rejects `/commit` and `/mcp` outside the Netlify `production` deploy context using the function request Context metadata. This is a second safety boundary on top of `ALLOW_WRITES` and `ALLOW_RAW_COMMITS`: Deploy Previews and branch deploys cannot reach write-capable surfaces even if the Netlify UI accidentally scopes `ALLOW_WRITES=true` too broadly.

@@ -25,12 +25,9 @@ async function body<T>(req: Request): Promise<T> {
   return await req.json() as T;
 }
 
-export async function handleHttpRequest(
-  req: Request,
-  routeOverride?: string,
-): Promise<Response> {
+export async function handleHttpRequest(req: Request): Promise<Response> {
   const url = new URL(req.url);
-  const pathname = routeOverride ?? url.pathname;
+  const pathname = url.pathname;
   try {
     if (pathname === "/" && req.method === "GET") {
       let googleConnected = false;
