@@ -162,3 +162,12 @@ The Netlify gateway rejects `/commit` and `/mcp` outside the Netlify `production
 As of 2026-10-08 the primary ChatGPT RPG Runtime Bridge may again target the Deno deployment at `rpg-engine-v2.vladvladislav8111.deno.net`. The runtime core remains portable: Deno starts through `main.ts` and `Deno.serve`, while Netlify uses its separate adapter. Both paths share `src/http.ts` and the same Google-backed authoritative state.
 
 For Deno production keep `RUNTIME_API_KEY` server-side, `ALLOW_WRITES=true`, and `ALLOW_RAW_COMMITS=false`. Infrastructure validation must begin with read-only `/health` and `/context`; do not advance game time to test a deployment.
+
+
+## V2.8.4 Deno production restoration
+
+- Production backend is again Deno Deploy through `main.ts` and the portable `src/http.ts` router.
+- `deno.json` explicitly selects a dynamic Deno runtime with `main.ts` as the entrypoint, preventing host auto-detection from selecting the old Netlify/Node setup.
+- `nodeModulesDir: "auto"` keeps npm dependencies usable under Deno 2.x even while legacy `package.json` remains in the repository.
+- Deno type-check blockers in the diagnostic HTTP/MCP surfaces were corrected without changing gameplay semantics.
+- Production verification requires read-only `runtime_health` and `get_turn_context` before any gameplay commit.
