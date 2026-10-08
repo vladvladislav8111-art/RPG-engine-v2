@@ -363,7 +363,7 @@ function buildServer() {
     {
       name: "rpg-v2-runtime",
       title: "RPG V2 Runtime",
-      version: "2.8.3",
+      version: "2.8.4",
     },
     { capabilities: { tools: {}, resources: {} } },
   );
@@ -678,7 +678,7 @@ export async function diagnoseMcp(): Promise<{
       params: {
         protocolVersion: "2025-11-25",
         capabilities: {},
-        clientInfo: { name: "rpg-runtime-diag", version: "2.8.3" },
+        clientInfo: { name: "rpg-runtime-diag", version: "2.8.4" },
       },
     }),
   });
