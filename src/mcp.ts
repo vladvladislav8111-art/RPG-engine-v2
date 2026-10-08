@@ -96,6 +96,7 @@ const structuredTableSchema = z.enum([
   "WORLD_CLOCKS",
   "WEATHER_CURRENT",
   "BODY_INJURIES_CURRENT",
+  "DIVINE_ATTENTION_CURRENT",
   "ACTIVE_CONTEXT",
 ]);
 
@@ -363,7 +364,7 @@ function buildServer() {
     {
       name: "rpg-v2-runtime",
       title: "RPG V2 Runtime",
-      version: "2.8.4",
+      version: "2.8.5",
     },
     { capabilities: { tools: {}, resources: {} } },
   );
@@ -392,7 +393,7 @@ function buildServer() {
       return toolJson({
         ok: true,
         engineVersion: RULESET_VERSION,
-        architectureVersion: "fast-storage-v3.1",
+        architectureVersion: "local-context-v4.0",
         hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
         rawCommitsEnabled: config.allowRawCommits,
@@ -678,7 +679,7 @@ export async function diagnoseMcp(): Promise<{
       params: {
         protocolVersion: "2025-11-25",
         capabilities: {},
-        clientInfo: { name: "rpg-runtime-diag", version: "2.8.4" },
+        clientInfo: { name: "rpg-runtime-diag", version: "2.8.5" },
       },
     }),
   });
