@@ -94,9 +94,12 @@ export function resolveSelarinWeatherRecords(input:{
     nextTime=str(cur["Next transition Time"]) || input.targetTime;
   }else{
     initialized=true;
-    front=weighted(fronts,zoneId+"|init|"+input.targetDay+"|"+Math.floor(minutes(input.targetTime)/180));
-    lastDay=input.targetDay; lastTime=input.targetTime;
-    const n=fromAbs(targetAbs+durationMinutes(front,zoneId+"|duration|"+input.targetDay+"|"+input.targetTime+"|"+str(front["Front ID"])));
+    const bucketMinutes=Math.max(60,Math.round(num(profile["Transition bucket min"],180)));
+    const anchorAbs=Math.floor(targetAbs/bucketMinutes)*bucketMinutes;
+    const anchor=fromAbs(anchorAbs);
+    front=weighted(fronts,zoneId+"|init|"+Math.floor(targetAbs/bucketMinutes));
+    lastDay=anchor.day; lastTime=anchor.time;
+    const n=fromAbs(anchorAbs+durationMinutes(front,zoneId+"|duration|"+Math.floor(anchorAbs/bucketMinutes)+"|"+str(front["Front ID"])));
     nextDay=n.day; nextTime=n.time;
   }
   for(let guard=0; guard<64 && targetAbs>=absMinute(nextDay,nextTime); guard++){
