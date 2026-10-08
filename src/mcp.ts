@@ -1,5 +1,5 @@
-import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
-import * as z from "zod/v4";
+import { createMcpHandler, McpServer } from "npm:@modelcontextprotocol/server@2.3.0";
+import * as z from "npm:zod@4.6.5/v4";
 
 import { commitTurn, prepareCommit } from "./commit.ts";
 import { config } from "./config.ts";
