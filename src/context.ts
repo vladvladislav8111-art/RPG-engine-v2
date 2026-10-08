@@ -6,6 +6,7 @@ import { PREGEN_TABLES, TABLES } from "./schema.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import { survivalBand } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
+import { buildSelarinLocalContext } from "./local_context.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
@@ -106,6 +107,39 @@ async function cachedPregen(a1: string): Promise<{ rows: unknown[][]; revision: 
   const rows = (await sheetsBatchGet(config.files.GM_PREGEN, [a1]))[a1] ?? [];
   await cacheSet(key, { rows });
   return { rows, revision, cache: "MISS" };
+}
+
+async function cachedPregenBatch(
+  requests: Array<{ key: string; range: string }>,
+): Promise<Array<{ key: string; range: string; rows: unknown[][]; revision: string | null; cache: "HIT" | "MISS" }>> {
+  if (!requests.length) return [];
+  const revision = await fileModifiedTime(config.files.GM_PREGEN);
+  const uniqueRanges = [...new Set(requests.map((r) => r.range))];
+  const cachedEntries = await Promise.all(uniqueRanges.map(async (range) => {
+    const cacheKey = ["sheet", "GM_PREGEN", revision ?? "none", range] as const;
+    const cached = await cacheGet<{ rows: unknown[][] }>(cacheKey);
+    return { range, cacheKey, cached };
+  }));
+  const misses = cachedEntries.filter((entry) => !entry.cached).map((entry) => entry.range);
+  const fresh = misses.length
+    ? await sheetsBatchGet(config.files.GM_PREGEN, misses)
+    : {};
+  const resolved = new Map<string, { rows: unknown[][]; cache: "HIT" | "MISS" }>();
+  await Promise.all(cachedEntries.map(async (entry) => {
+    if (entry.cached) {
+      resolved.set(entry.range, { rows: entry.cached.rows, cache: "HIT" });
+      return;
+    }
+    const rows = fresh[entry.range] ?? [];
+    await cacheSet(entry.cacheKey, { rows });
+    resolved.set(entry.range, { rows, cache: "MISS" });
+  }));
+  return requests.map((request) => ({
+    ...request,
+    rows: resolved.get(request.range)?.rows ?? [],
+    revision,
+    cache: resolved.get(request.range)?.cache ?? "MISS",
+  }));
 }
 
 function hasAny(tags: Set<string>, wanted: string[]): boolean {
@@ -215,6 +249,13 @@ export async function getTurnContext(input: TurnContextRequest) {
   const lookups = input.lookups ?? [];
   const docQueries = input.docQueries ?? [];
   const needsInventory = hasAny(tagSet, ["ITEM", "INVENTORY", "PURCHASE", "SALE", "CONSUME", "COMBAT", "CRAFT", "SURVIVAL", "STORAGE", "EQUIPMENT"]);
+  const needsLocalWorldContext = hasAny(tagSet, [
+    "SERVICES", "SOCIAL", "ECONOMY", "WORK", "JOB", "BOARD", "TRAVEL", "MAP", "EXPLORATION",
+    "LAW", "WEAPON", "MAGIC", "RELIGION", "TEMPLE", "FOOD", "MEAL", "EAT", "SHOP", "LODGING",
+    "REST", "SLEEP", "COURIER", "MESSAGE", "BATH", "HYGIENE", "FACTION", "POLITICS", "AREA_PREP",
+    "GUILD", "CRAFT", "NPC", "DIVINE", "GOD", "PRAYER", "EIRAN", "VEIRA", "SEREN", "SELVARA",
+    "NERETH", "LORVEN", "KHARAD", "ULMAR",
+  ]);
 
   const needsCompetences = input.turnClass !== "MICRO" || hasAny(tagSet, ["WORK", "LANGUAGE", "SKILL", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY"]);
   const runtimeRanges = new Set<string>([
@@ -278,33 +319,53 @@ export async function getTurnContext(input: TurnContextRequest) {
   if (hasAny(tagSet, ["WEATHER", "TRAVEL", "EXPLORATION", "SURVIVAL"])) addStructured("WEATHER_CURRENT");
 
   const pregenRequests: Array<{ key: string; range: string }> = [];
+  const requestPregen = (key: string, range: string) => {
+    if (!pregenRequests.some((p) => p.key === key)) pregenRequests.push({ key, range });
+  };
   if (explicitActorRequest) {
-    pregenRequests.push({ key: "npcIdentityIndex", range: PREGEN_TABLES.NPC_IDENTITY_INDEX });
-    pregenRequests.push({ key: "archiveRegistry", range: PREGEN_TABLES.ARCHIVE_REGISTRY });
+    requestPregen("npcIdentityIndex", PREGEN_TABLES.NPC_IDENTITY_INDEX);
+    requestPregen("archiveRegistry", PREGEN_TABLES.ARCHIVE_REGISTRY);
   }
   if (hasAny(tagSet, ["FACTION", "POLITICS", "WORLD", "AREA_PREP"])) {
-    pregenRequests.push({ key: "factionProcessSeeds", range: PREGEN_TABLES.FACTION_PROCESS_SEEDS });
+    requestPregen("factionProcessSeeds", PREGEN_TABLES.FACTION_PROCESS_SEEDS);
   }
   if (hasAny(tagSet, ["THREAT", "CRIME", "WORLDGEN", "AREA_PREP"])) {
-    pregenRequests.push({ key: "humanThreatProfiles", range: PREGEN_TABLES.HUMAN_THREAT_PROFILES });
+    requestPregen("humanThreatProfiles", PREGEN_TABLES.HUMAN_THREAT_PROFILES);
   }
   if (needsInventory) {
-    pregenRequests.push({ key: "commonObjectTemplates", range: PREGEN_TABLES.COMMON_OBJECT_TEMPLATES });
+    requestPregen("commonObjectTemplates", PREGEN_TABLES.COMMON_OBJECT_TEMPLATES);
   }
   if (hasAny(tagSet, ["SERVICES", "SOCIAL", "ECONOMY", "LANGUAGE", "WORK"])) {
-    pregenRequests.push({ key: "districtPacks", range: PREGEN_TABLES.DISTRICT_PACKS });
-    pregenRequests.push({ key: "serviceDirectory", range: PREGEN_TABLES.SERVICE_DIRECTORY });
+    requestPregen("districtPacks", PREGEN_TABLES.DISTRICT_PACKS);
+    requestPregen("serviceDirectory", PREGEN_TABLES.SERVICE_DIRECTORY);
   }
   if (hasAny(tagSet, ["PHYSICAL", "BODY", "COMBAT", "TRAVEL", "WORK", "TRAINING", "SURVIVAL"])) {
-    pregenRequests.push({ key: "actionStaminaProfiles", range: PREGEN_TABLES.ACTION_STAMINA_PROFILES });
+    requestPregen("actionStaminaProfiles", PREGEN_TABLES.ACTION_STAMINA_PROFILES);
   }
   if (hasAny(tagSet, ["LANGUAGE", "READ", "WRITE", "STUDY"]) || input.includeWorldLanguage || (input.languageConcepts?.length ?? 0) > 0) {
-    pregenRequests.push({ key: "languageMeta", range: PREGEN_TABLES.TAREN_LANGUAGE_META });
-    pregenRequests.push({ key: "languageGrammar", range: PREGEN_TABLES.TAREN_GRAMMAR });
-    pregenRequests.push({ key: "languageDerivation", range: PREGEN_TABLES.TAREN_DERIVATION });
+    requestPregen("languageMeta", PREGEN_TABLES.TAREN_LANGUAGE_META);
+    requestPregen("languageGrammar", PREGEN_TABLES.TAREN_GRAMMAR);
+    requestPregen("languageDerivation", PREGEN_TABLES.TAREN_DERIVATION);
     if (input.includeWorldLanguage || (input.languageConcepts?.length ?? 0) > 0) {
-      pregenRequests.push({ key: "languageLexicon", range: PREGEN_TABLES.TAREN_LEXICON });
+      requestPregen("languageLexicon", PREGEN_TABLES.TAREN_LEXICON);
     }
+  }
+
+  if (needsLocalWorldContext) {
+    requestPregen("districtPacks", PREGEN_TABLES.DISTRICT_PACKS);
+    requestPregen("serviceDirectory", PREGEN_TABLES.SERVICE_DIRECTORY);
+    requestPregen("mapEdges", PREGEN_TABLES.MAP_EDGES);
+    requestPregen("economyAnchors", PREGEN_TABLES.ECONOMY_ANCHORS);
+    requestPregen("factions", PREGEN_TABLES.FACTIONS);
+    requestPregen("selarinFastIndex", PREGEN_TABLES.SELARIN_FAST_INDEX);
+    requestPregen("selarinLaws", PREGEN_TABLES.SELARIN_CIVIC_LAW_INDEX);
+    requestPregen("selarinNpcPool", PREGEN_TABLES.SELARIN_NPC_POOL);
+    requestPregen("selarinJobBoards", PREGEN_TABLES.SELARIN_JOB_BOARDS);
+    requestPregen("selarinJobTemplates", PREGEN_TABLES.SELARIN_JOB_TEMPLATES);
+    requestPregen("selarinCulture", PREGEN_TABLES.SELARIN_CULTURE);
+    requestPregen("selarinDeityAttention", PREGEN_TABLES.SELARIN_DEITY_ATTENTION);
+    requestPregen("selarinFood", PREGEN_TABLES.SELARIN_FOOD);
+    requestPregen("selarinInfrastructure", PREGEN_TABLES.SELARIN_INFRASTRUCTURE);
   }
 
   const uniqueDocKeys = Array.from(new Set(docQueries.map((q) => q.documentKey)));
@@ -313,7 +374,7 @@ export async function getTurnContext(input: TurnContextRequest) {
     sheetsBatchGet(config.files.TEMP_RUNTIME, [...runtimeRanges]),
     Promise.all(lookups.map(cachedLookup)),
     Promise.all(uniqueDocKeys.map(async (key) => [key, await cachedDoc(key)] as const)),
-    Promise.all(pregenRequests.map(async (p) => ({ ...p, ...(await cachedPregen(p.range)) }))),
+    cachedPregenBatch(pregenRequests),
     explicitActorRequest ? scanActorContextIndex(config.files.TEMP_RUNTIME) : Promise.resolve(null),
   ]);
 
@@ -434,6 +495,14 @@ export async function getTurnContext(input: TurnContextRequest) {
   }
 
   const pregen: Record<string, unknown> = {};
+  const rawPregenRecords: Record<string, Array<Record<string, unknown>>> = Object.fromEntries(
+    pregens.map((p) => [p.key, rowsToObjects(p.rows)]),
+  );
+  const localSupportKeys = new Set([
+    "mapEdges", "economyAnchors", "factions", "selarinFastIndex", "selarinLaws",
+    "selarinNpcPool", "selarinJobBoards", "selarinJobTemplates", "selarinCulture",
+    "selarinDeityAttention", "selarinFood", "selarinInfrastructure",
+  ]);
   let languageLexiconRows: unknown[][] = [];
   for (const p of pregens) {
     let records = rowsToObjects(p.rows);
@@ -454,10 +523,35 @@ export async function getTurnContext(input: TurnContextRequest) {
       records = records.filter((r) => usedTemplateIds.has(String(r["Template ID"] ?? "")));
     }
     if (p.key === "languageLexicon") languageLexiconRows = p.rows;
-    if (p.key !== "languageLexicon" || input.includeWorldLanguage) {
+    if (!localSupportKeys.has(p.key) && (p.key !== "languageLexicon" || input.includeWorldLanguage)) {
       pregen[p.key] = { data: compactPregenRecords(p.key, records), revision: p.revision, cache: p.cache };
     }
   }
+
+  const localContext = needsLocalWorldContext
+    ? buildSelarinLocalContext({
+        locationId,
+        tags: tagSet,
+        worldDay,
+        worldTime,
+        rows: {
+          districtPacks: rawPregenRecords.districtPacks ?? [],
+          serviceDirectory: rawPregenRecords.serviceDirectory ?? [],
+          mapEdges: rawPregenRecords.mapEdges ?? [],
+          economyAnchors: rawPregenRecords.economyAnchors ?? [],
+          factions: rawPregenRecords.factions ?? [],
+          selarinFastIndex: rawPregenRecords.selarinFastIndex ?? [],
+          selarinLaws: rawPregenRecords.selarinLaws ?? [],
+          selarinNpcPool: rawPregenRecords.selarinNpcPool ?? [],
+          selarinJobBoards: rawPregenRecords.selarinJobBoards ?? [],
+          selarinJobTemplates: rawPregenRecords.selarinJobTemplates ?? [],
+          selarinCulture: rawPregenRecords.selarinCulture ?? [],
+          selarinDeityAttention: rawPregenRecords.selarinDeityAttention ?? [],
+          selarinFood: rawPregenRecords.selarinFood ?? [],
+          selarinInfrastructure: rawPregenRecords.selarinInfrastructure ?? [],
+        },
+      })
+    : null;
 
   const languageConcepts = (input.languageConcepts ?? []).map((q) => q.trim()).filter(Boolean);
   let languageLookup: unknown[] = [];
@@ -659,6 +753,7 @@ export async function getTurnContext(input: TurnContextRequest) {
       competences: needsCompetences ? rowsToObjects(base[TABLES.COMPETENCES.range] ?? []) : [],
       structured,
       pregen,
+      localContext,
       inventoryResolved,
       inventorySummary,
       languageLookup,
