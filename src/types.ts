@@ -247,6 +247,20 @@ export type SemanticOffscreenNpcEvent = {
   travelEvidence?: string;
 };
 
+export type SemanticRumorRelayEvent = {
+  factId: string;
+  sourceFactId: string;
+  sourceProcessId: string;
+  channelId: string;
+  senderNpcId: string;
+  receiverNpcId: string;
+  claim: string;
+  relayStart: string;
+  relayEnd: string;
+  accessEvidence: string;
+  tags?: string[];
+};
+
 export type SemanticWorkDemandEvent = {
   offerId: string;
   templateId: string;
@@ -399,6 +413,7 @@ export type SemanticCommitPlan = {
   offscreenNpcEvents?: SemanticOffscreenNpcEvent[];
   worldProcessEvents?: SemanticWorldProcessEvent[];
   workDemandEvents?: SemanticWorkDemandEvent[];
+  rumorRelayEvents?: SemanticRumorRelayEvent[];
   rowUpserts?: SemanticRowUpsert[];
   rowUpdates?: SemanticRowUpdate[];
   rowDeletes?: SemanticRowDelete[];
