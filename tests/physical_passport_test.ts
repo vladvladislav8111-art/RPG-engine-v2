@@ -1,4 +1,4 @@
-import { validateDimensionedTransformation,validatePhysicalPassport,type PhysicalPassport } from "../src/physical_passport.ts";
+import { permanentMaterialLocksInCanon, materialRefsInCanon, validateDimensionedTransformation,validatePhysicalPassport,type PhysicalPassport } from "../src/physical_passport.ts";
 
 const canonRefs=new Set(["LIVE_CANON_INDEX:material.test.ironlike_v1"]);
 const source:PhysicalPassport={
@@ -51,4 +51,24 @@ Deno.test("elongation to thinner outputs conserves mass and offcuts",()=>{
   });
   if(Math.abs(x.outputMass-0.64)>1e-12)throw new Error("wrong conversion");
   for(const p of [part,part2])validatePhysicalPassport(p,canonRefs,new Map());
+});
+
+Deno.test("canonical material registration is not backdated to Shura's earlier purchase",()=>{
+  const line="[MATID:material.vein_metal.native_v1|LOCKED:Day63 18:21:00|DENSITY:6100|CYCLIC:0.0125]";
+  const locks=permanentMaterialLocksInCanon(line);
+  const refs=materialRefsInCanon(line);
+  const prepared={...source,materialCanonRef:"material.vein_metal.native_v1",
+    densityKgM3:6100,measuredMassKg:0.61,originInworldTime:"Day63 18:22:00",
+    cyclicStrainLimit:0.0125, minBendRadiusM:undefined};
+  const accepted=validatePhysicalPassport(prepared,refs,new Map(),0.03,locks);
+  if(Math.abs(accepted.impliedMassKg-0.61)>1e-9)throw new Error("live material anchor failed");
+  for(const candidate of [
+    {...prepared,originInworldTime:"Day44 13:00:00"},
+    {...prepared,densityKgM3:8000,measuredMassKg:0.8},
+    {...prepared,cyclicStrainLimit:0.02},
+  ]){
+    let blocked=false;
+    try{validatePhysicalPassport(candidate,refs,new Map(),0.03,locks);}catch{blocked=true;}
+    if(!blocked)throw new Error("retrospective or stronger invented material accepted");
+  }
 });
