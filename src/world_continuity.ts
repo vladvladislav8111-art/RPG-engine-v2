@@ -78,6 +78,22 @@ export function worldContinuityReview(input: {
   };
 }
 
+export function worldClocksFromSparseRanges(data: Record<string, unknown[][]>): ContinuityRow[] {
+  const clockCore = data["WORLD_CLOCKS!A1:C500"] ?? [];
+  const clockDates = data["WORLD_CLOCKS!H1:H500"] ?? [];
+  const attributes = data["WORLD_CLOCKS!D1:G500"] ?? [];
+  return clockCore.slice(1).map((r, i) => ({
+    "Process ID": r[0],
+    "Name": r[1],
+    State: r[2],
+    Location: attributes[i + 1]?.[0],
+    "Current activity": attributes[i + 1]?.[1],
+    "Next milestone/window": attributes[i + 1]?.[2],
+    Visibility: attributes[i + 1]?.[3],
+    "Last advanced": clockDates[i + 1]?.[0],
+  }));
+}
+
 export function continuityFromSparseRanges(
   data: Record<string, unknown[][]>,
   worldDay: unknown,
@@ -89,9 +105,6 @@ export function continuityFromSparseRanges(
   const ruleCore = range("NPC_ACTIVITY_RULES!A1:C200");
   const ruleMinimum = range("NPC_ACTIVITY_RULES!G1:G200");
   const ruleDates = range("NPC_ACTIVITY_RULES!K1:K200");
-  const clockCore = range("WORLD_CLOCKS!A1:C500");
-  const clockDates = range("WORLD_CLOCKS!H1:H500");
-  const clockMilestone = range("WORLD_CLOCKS!F1:F500");
   const npcCurrent = npcCore.slice(1).map((r, i) => ({
     "NPC ID": r[0],
     Importance: r[3],
@@ -103,12 +116,7 @@ export function continuityFromSparseRanges(
     "Minimum elapsed": ruleMinimum[i + 1]?.[0],
     "Last activity tick": ruleDates[i + 1]?.[0],
   }));
-  const worldClocks = clockCore.slice(1).map((r, i) => ({
-    "Process ID": r[0],
-    State: r[2],
-    "Last advanced": clockDates[i + 1]?.[0],
-    "Next milestone/window": clockMilestone[i + 1]?.[0],
-  }));
+  const worldClocks = worldClocksFromSparseRanges(data);
   return worldContinuityReview({
     worldDay,
     worldTime,
@@ -126,5 +134,5 @@ export const CONTINUITY_SPARSE_RANGES = [
   "NPC_ACTIVITY_RULES!K1:K200",
   "WORLD_CLOCKS!A1:C500",
   "WORLD_CLOCKS!H1:H500",
-  "WORLD_CLOCKS!F1:F500",
+  "WORLD_CLOCKS!D1:G500",
 ];
