@@ -1,5 +1,5 @@
 import { config } from "./config.ts";
-import { sheetsBatchGet } from "./google.ts";
+import { docsGet, sheetsBatchGet } from "./google.ts";
 import {
   PREGEN_TABLES,
   TABLES,
@@ -40,6 +40,7 @@ import { validateWorkDemand } from "./work_demand.ts";
 import { validateRumorTransmission } from "./world_information.ts";
 import { validateMajorWorldEvent } from "./world_events.ts";
 import { auditMaterialTransformation } from "./physical_integrity.ts";
+import { materialRefsInCanon,passportToSheetRecord,validatePhysicalPassport } from "./physical_passport.ts";
 import type {
   CommitRequest,
   Scalar,
@@ -195,6 +196,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   for (const item of semantic.rowUpdates ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowDeletes ?? []) touched.add(item.table as RuntimeTableName);
   if ((semantic.worldProcessEvents?.length ?? 0) > 0) touched.add("WORLD_CLOCKS");
+  if ((semantic.physicalPassportEvents?.length ?? 0) > 0 || (semantic.materialTransformations?.length ?? 0) > 0) touched.add("PHYSICAL_PASSPORTS_CURRENT");
   if ((semantic.majorWorldEvents?.length ?? 0) > 0) {
     touched.add("WORLD_CLOCKS");
     touched.add("NPC_CURRENT");
@@ -222,7 +224,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   const ranges = [...touched].map((t) => TABLES[t].range);
   const sheets = await sheetsBatchGet(config.files.TEMP_RUNTIME, ranges);
   const gmTemplates = [
-    ...(((semantic.inventoryEvents?.length ?? 0) > 0 || (semantic.materialTransformations?.length ?? 0) > 0) ? [PREGEN_TABLES.COMMON_OBJECT_TEMPLATES] : []),
+    ...(((semantic.inventoryEvents?.length ?? 0) > 0 || (semantic.materialTransformations?.length ?? 0) > 0 || (semantic.physicalPassportEvents?.length ?? 0) > 0) ? [PREGEN_TABLES.COMMON_OBJECT_TEMPLATES] : []),
     ...((semantic.workDemandEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_JOB_TEMPLATES] : []),
     ...((semantic.rumorRelayEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_RUMOR_CHANNELS] : []),
     ...((semantic.majorWorldEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_MAJOR_EVENT_TEMPLATES] : []),
@@ -1229,6 +1231,71 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       reason: event.reason ?? null,
     });
   }
+
+  // Store GM-known physical dimensions BEFORE sale/use as immutable per-instance
+  // facts. Canonical material properties remain permanent canon, not this cache.
+  // Migration adds PHYSICAL_PASSPORTS_CURRENT before the bundled engine deploy.
+  const physicalPassportOutcomes: unknown[] = [];
+  if ((semantic.physicalPassportEvents?.length ?? 0) > 0) {
+    const physicalRows = sheets[TABLES.PHYSICAL_PASSPORTS_CURRENT.range] ?? [];
+    if (!physicalRows.length ||
+        !headers(physicalRows).includes("Material canon ref")) {
+      throw new Error("PHYSICAL_PASSPORTS_CURRENT schema migration required before passport registration");
+    }
+    const { text: canonText } = await docsGet(config.files.LIVE_CANON_INDEX);
+    const canonRefs = materialRefsInCanon(canonText);
+    const physicalExisting = new Map(
+      physicalRows.slice(1).filter((row) => String(row[0] ?? "")).map((row) => [
+        String(row[0]), {} as import("./physical_passport.ts").PhysicalPassport,
+      ]),
+    );
+    for (const event of semantic.physicalPassportEvents ?? []) {
+      const result = validatePhysicalPassport(event, canonRefs, physicalExisting);
+      const index = findDataRow(inventoryRows, "Item ID", event.itemId);
+      if (index < 0) throw new Error("cannot register physical passport without live owned inventory: " + event.itemId);
+      const item = cloneRow(inventoryRows, index);
+      const custody = String(item[headerIndex(inventoryRows, "Custodian")] ?? "");
+      const location = String(item[headerIndex(inventoryRows, "Location/container")] ?? "");
+      if (custody !== event.custodian || location !== event.location) {
+        throw new Error("passport custody does not match live inventory: " + event.itemId);
+      }
+      const massRaw = item[headerIndex(inventoryRows, "Mass kg override")];
+      const existingMass = String(massRaw ?? "").trim() === "" ? null : asNumber(massRaw, "item mass");
+      if (existingMass != null && Math.abs(existingMass - event.measuredMassKg) > Math.max(0.001, event.measuredMassKg * 0.03)) {
+        throw new Error("physical passport measured unit mass conflicts with live inventory: " + event.itemId);
+      }
+      if (existingMass == null) {
+        setByHeader(inventoryRows, item, "Mass kg override", event.measuredMassKg);
+        writeRow("INVENTORY_CURRENT", inventoryRows, index, item);
+      }
+      const row = Array(headers(physicalRows).length).fill("");
+      const record = passportToSheetRecord(event, input.txId);
+      for (const [field,value] of Object.entries(record)) {
+        setByHeader(physicalRows, row, field, value);
+      }
+      appendRow("PHYSICAL_PASSPORTS_CURRENT", physicalRows, row);
+      physicalExisting.set(event.itemId,event);
+      physicalPassportOutcomes.push(result);
+    }
+  }
+  if ((semantic.materialTransformations?.length ?? 0) > 0) {
+    const passportRows = sheets[TABLES.PHYSICAL_PASSPORTS_CURRENT.range] ?? [];
+    const available = new Set(passportRows.slice(1).map((row) => String(row[0] ?? "")));
+    const registeredThisTurn = new Set((semantic.physicalPassportEvents ?? []).map((p) => p.itemId));
+    for (const transformation of semantic.materialTransformations ?? []) {
+      for (const sourceId of transformation.sourceItemIds) {
+        if (!available.has(sourceId)) {
+          throw new Error("physical source has no pre-existing immutable passport: " + sourceId);
+        }
+      }
+      for (const productId of transformation.productItemIds) {
+        if (!registeredThisTurn.has(productId)) {
+          throw new Error("every fabricated product requires a new dimensioned passport in the same commit: " + productId);
+        }
+      }
+    }
+  }
+  worldAutomationOutcomes.physicalPassports = physicalPassportOutcomes;
 
   const systemModuleRows = sheets[TABLES.SYSTEM_MODULES_CURRENT.range] ?? [];
   let inventorySummary: unknown = null;
