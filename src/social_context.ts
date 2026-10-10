@@ -294,7 +294,9 @@ export function actorSnapshotFreshness(input: {
   const now = parseInworldMoment(`Day${String(input.worldDay ?? "")} ${String(input.worldTime ?? "")}`);
   const currentStamp = parseInworldMoment(input.current?.["Last updated"]);
   const ruleStamp = parseInworldMoment(input.activityRule?.["Last activity tick"]);
-  const latest = [currentStamp, ruleStamp].filter((v): v is number => v != null).sort((a,b) => b-a)[0] ?? null;
+  // NPC dialogue/status edits do not count as an independent life tick.
+  // Prefer the activity clock; use the NPC stamp only for actors without a tick.
+  const latest = ruleStamp ?? currentStamp;
   const { minimumMinutes, forcedMinutes } = activityElapsedThresholds(input.activityRule);
   const ageMinutes = now == null || latest == null ? null : Math.max(0, now - latest);
   return {
