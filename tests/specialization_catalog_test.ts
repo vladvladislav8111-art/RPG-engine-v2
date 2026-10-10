@@ -17,3 +17,27 @@ Deno.test("canonical paths are gated before first learning", () => {
  let denied=false;try{validateSpecializationAcquisition({...valid,elapsedSeconds:0});}catch{denied=true;}
  if(!denied)throw new Error("A zero-time unlock passed");
 });
+
+Deno.test("witness, live ownership and draft status block illicit discovery", () => {
+ const header=["Canonical asset ID","Competence ID","Runtime name","Observer required","Catalog state"];
+ const catalog=parseCanonicalSpecializations([header,
+ ["spec.body.sleight_of_hand","competence.body.physical_conditioning","Ловкость рук","YES","UNLOCKABLE_CANON"],
+ ["spec.body.coordination","competence.body.physical_conditioning","Coordination","NO","EXISTING_MAPPED"],
+ ["spec.body.fake","competence.body.physical_conditioning","Fake","NO","DESIGN_CANDIDATE"]]);
+ const proposal={catalogId:"spec.body.sleight_of_hand",playerIntent:"Шура учится фокусу с монетой",
+ trainingEvidence:"The observed coin concealment was corrected using actual viewer feedback",
+ evidenceRef:"training.day64.verified",observerNpcId:"npc.witness"};
+ const learning=[{competenceId:"competence.body.physical_conditioning",specialization:"Ловкость рук",
+ productiveMinutes:15,reason:"A real observer corrected hand motion through repeatable attempts"}];
+ const input={catalog,proposal,learningEvents:learning,elapsedSeconds:900,
+ presentObserverNpcIds:["npc.witness"],existingSpecializations:[]};
+ const rejects=(fn:()=>unknown)=>{let denied=false;try{fn();}catch{denied=true;}if(!denied)throw new Error("Unsafe unlock was accepted");};
+ validateSpecializationAcquisition(input);
+ rejects(()=>validateSpecializationAcquisition({...input,presentObserverNpcIds:[]}));
+ rejects(()=>validateSpecializationAcquisition({...input,existingSpecializations:[{
+ competenceId:"competence.body.physical_conditioning",runtimeName:"Ловкость рук"}]}));
+ rejects(()=>validateSpecializationAcquisition({...input,learningEvents:[]}));
+ rejects(()=>validateSpecializationAcquisition({...input,proposal:{...proposal,catalogId:"spec.body.coordination"}}));
+ rejects(()=>validateSpecializationAcquisition({...input,proposal:{...proposal,catalogId:"spec.body.fake"}}));
+ rejects(()=>validateSpecializationAcquisition({...input,proposal:{...proposal,trainingEvidence:"a guess"}}));
+});
