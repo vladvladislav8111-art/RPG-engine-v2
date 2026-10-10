@@ -7,7 +7,8 @@ import { RULESET_VERSION } from "./rules.ts";
 import { survivalBand } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
 import { buildSelarinLocalContext } from "./local_context.ts";
-import { CONTINUITY_SPARSE_RANGES, continuityFromSparseRanges } from "./world_continuity.ts";
+import { CONTINUITY_SPARSE_RANGES, continuityFromSparseRanges, worldClocksFromSparseRanges } from "./world_continuity.ts";
+import { buildWorldActionDocket } from "./world_scheduler.ts";
 import { resolveSceneActorIds } from "./scene_routing.ts";
 import { buildNpcBehavioralContext } from "./npc_behavior.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
@@ -421,6 +422,13 @@ export async function getTurnContext(input: TurnContextRequest) {
   const sceneId = findControl(control, "current_scene_id");
   const turnToken = makeTurnToken({ saveId, worldDay, worldTime, locationId, sceneId });
   const worldContinuity = continuityFromSparseRanges(continuityRanges, worldDay, worldTime);
+  const clockAgendaSeeds = rowsToObjects(pregens.find((p) => p.key === "factionProcessSeeds")?.rows ?? []);
+  const worldActionDocket = buildWorldActionDocket({
+    worldDay: Number(worldDay),
+    worldTime: String(worldTime),
+    clocks: worldClocksFromSparseRanges(continuityRanges),
+    factionSeeds: clockAgendaSeeds,
+  });
 
   const rawNpcCurrent = explicitActorRequest
     ? rowsToObjects(actorIndexScan?.npcReferenceRows ?? [])
@@ -813,6 +821,7 @@ export async function getTurnContext(input: TurnContextRequest) {
       resources,
       resourceDetails,
       worldContinuity,
+      worldActionDocket,
       survival: {
         satiety: { current: satiety, max: Number((resourceDetails["Satiety"] as any)?.max ?? 100), band: survivalBand(satiety) },
         hydration: { current: hydration, max: Number((resourceDetails["Hydration"] as any)?.max ?? 100), band: survivalBand(hydration) },
