@@ -183,7 +183,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     touched.add("CHARACTERISTICS");
   }
   if ((semantic.adaptationEvents?.length ?? 0) > 0) touched.add("CHARACTERISTIC_ADAPTATION");
-  if ((semantic.inventoryEvents?.length ?? 0) > 0 || (semantic.materialTransformations?.length ?? 0) > 0) {
+  if ((semantic.inventoryEvents?.length ?? 0) > 0 || (semantic.materialTransformations?.length ?? 0) > 0 || (semantic.physicalPassportEvents?.length ?? 0) > 0) {
     touched.add("INVENTORY_CURRENT");
     touched.add("SYSTEM_MODULES_CURRENT");
   }
@@ -1245,7 +1245,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     const { text: canonText } = await docsGet(config.files.LIVE_CANON_INDEX);
     const canonRefs = materialRefsInCanon(canonText);
     const physicalExisting = new Map(
-      physicalRows.slice(1).filter((row) => String(row[0] ?? "")).map((row) => [
+      physicalRows.slice(1).filter((row) => String(row[0] ?? "")).map((row): [string, import("./physical_passport.ts").PhysicalPassport] => [
         String(row[0]), {} as import("./physical_passport.ts").PhysicalPassport,
       ]),
     );
