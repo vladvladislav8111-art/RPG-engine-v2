@@ -125,3 +125,44 @@ export function validateDimensionedTransformation(input: {
   }
   return {sourceItemId:source.itemId,products:outputs.map(p=>p.itemId),outputMass,wasteKg:input.wasteKg};
 }
+
+export const PHYSICAL_PASSPORT_HEADERS = [
+  "Item ID", "Material canon ref", "Origin TX", "Origin inworld time",
+  "Geometry kind", "Length m", "Width m", "Thickness m", "Radius m",
+  "Measured volume m3", "Measured mass kg", "Density kg/m3",
+  "Cyclic strain limit", "Minimum bend radius m", "Dimensions evidence",
+  "Material evidence", "First custodian", "First location", "Status",
+  "Last verified TX", "Notes",
+];
+
+export function materialRefsInCanon(text: string): ReadonlySet<string> {
+  return new Set([...text.matchAll(/\\[MATID:(material\\.[a-z0-9_.-]+)\\]/gi)].map((m)=>m[1]));
+}
+
+export function passportToSheetRecord(
+  p: PhysicalPassport, latestTx: string, comment = "",
+): Record<string, string | number> {
+  return {
+    "Item ID": p.itemId,
+    "Material canon ref": p.materialCanonRef,
+    "Origin TX": p.originTxId,
+    "Origin inworld time": p.originInworldTime,
+    "Geometry kind": p.geometryKind,
+    "Length m": p.lengthM ?? "",
+    "Width m": p.widthM ?? "",
+    "Thickness m": p.thicknessM ?? "",
+    "Radius m": p.radiusM ?? "",
+    "Measured volume m3": p.measuredVolumeM3 ?? "",
+    "Measured mass kg": p.measuredMassKg,
+    "Density kg/m3": p.densityKgM3,
+    "Cyclic strain limit": p.cyclicStrainLimit ?? "",
+    "Minimum bend radius m": p.minBendRadiusM ?? "",
+    "Dimensions evidence": p.dimensionsEvidence,
+    "Material evidence": p.materialEvidence,
+    "First custodian": p.custodian,
+    "First location": p.location,
+    "Status": "LOCKED/IMMUTABLE",
+    "Last verified TX": latestTx,
+    "Notes": comment,
+  };
+}
