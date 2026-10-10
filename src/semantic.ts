@@ -178,7 +178,10 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     "SESSION_LOG",
   ]);
   if ((semantic.choiceResolutions?.length ?? 0) > 0) touched.add("MILESTONES");
-  if ((semantic.specializationUnlockEvents?.length ?? 0) > 0) touched.add("NPC_CURRENT");
+  if ((semantic.specializationUnlockEvents?.length ?? 0) > 0) {
+    touched.add("NPC_CURRENT");
+    touched.add("ACTIVE_CONTEXT");
+  }
   if ((semantic.generalXpEvents?.length ?? 0) > 0) touched.add("CHARACTERISTICS");
   if (semantic.control?.sceneId != null || semantic.control?.locationId != null || semantic.sceneActorIds != null) touched.add("ACTIVE_CONTEXT");
   if ((semantic.exertionEvents?.length ?? 0) > 0 || (semantic.restEvents?.length ?? 0) > 0 || (semantic.injuryEvents?.length ?? 0) > 0 || (semantic.adaptationEvents?.length ?? 0) > 0) {
@@ -1462,10 +1465,22 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   const npcHeaders = npcForWitness[0]?.map((x) => String(x ?? "")) ?? [];
   const observerIdColumn = npcHeaders.indexOf("NPC ID");
   const observerLocationColumn = npcHeaders.indexOf("Current/last-known location");
+  const activeContextRows = sheets[TABLES.ACTIVE_CONTEXT.range] ?? [];
+  const activeCols = activeContextRows[0]?.map((x) => String(x ?? "")) ?? [];
+  const slotIx = activeCols.indexOf("Slot");
+  const pointerIx = activeCols.indexOf("Pointer");
+  const activeParticipantIds = semantic.sceneActorIds ??
+    (slotIx >= 0 && pointerIx >= 0
+      ? activeContextRows.slice(1).filter((row) =>
+          String(row[slotIx] ?? "").startsWith("participating_npc")
+        ).map((row) => String(row[pointerIx] ?? ""))
+      : []);
+  const activeParticipants = new Set(activeParticipantIds);
   const seenObservers = observerIdColumn >= 0 && observerLocationColumn >= 0
     ? npcForWitness.slice(1).filter((row) =>
         String(row[observerLocationColumn] ?? "") ===
-          String(semantic.control?.locationId ?? controlValue("current_location_id") ?? "")
+          String(semantic.control?.locationId ?? controlValue("current_location_id") ?? "") &&
+        activeParticipants.has(String(row[observerIdColumn] ?? ""))
       ).map((row) => String(row[observerIdColumn] ?? ""))
     : [];
   for (const proposal of semantic.specializationUnlockEvents ?? []) {
