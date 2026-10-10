@@ -25,10 +25,10 @@ export function worldContinuityReview(input: {
   worldClocks: ContinuityRow[];
   worldClockReviewMinutes?: number;
 }) {
-  const rulesByActor = new Map(
+  const rulesByActor = new Map<string, ContinuityRow>(
     input.activityRules
       .filter((r) => String(r["NPC ID"] ?? "").trim())
-      .map((r) => [String(r["NPC ID"]), r]),
+      .map((r): [string, ContinuityRow] => [String(r["NPC ID"]), r]),
   );
   const keyNpcDue: KeyNpcDue[] = [];
   for (const npc of input.npcCurrent) {
