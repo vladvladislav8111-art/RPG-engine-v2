@@ -1,3 +1,4 @@
 Redeploy RPG Runtime Bridge Deno production
-Target: 2.8.5-selarin-local-context-2026-10-08
-Reason: retry after hourly Deno deployment quota window reset
+Target: scene actor memory routing (merged PR #13, commit d9a5d6bd3aeddc3aba7584aaee0e5497641aee56)
+Reason: production /context still on earlier build after GitHub merge; request one deployment refresh
+Keep existing Deno Site identity, backend URL, secrets and write permissions unchanged.
