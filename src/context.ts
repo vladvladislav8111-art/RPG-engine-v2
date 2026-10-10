@@ -297,7 +297,7 @@ export async function getTurnContext(input: TurnContextRequest) {
     if (!structuredNames.includes(name)) structuredNames.push(name);
   };
 
-  if (hasAny(tagSet, ["SKILL", "WORK", "LANGUAGE", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY"])) {
+  if (hasAny(tagSet, ["SKILL", "WORK", "LANGUAGE", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY", "TRAINING", "SPECIALIZATION", "DEXTERITY", "HANDS"])) {
     addStructured("SPECIALIZATIONS");
     addStructured("MILESTONES");
     addStructured("PENDING_CHOICES");
@@ -353,6 +353,9 @@ export async function getTurnContext(input: TurnContextRequest) {
   // including dialogue/quiet turns where the player never requests WORLD tags.
   // Dormant seeds never become live events merely by being read.
   requestPregen("factionProcessSeeds", PREGEN_TABLES.FACTION_PROCESS_SEEDS);
+  if (hasAny(tagSet, ["SKILL", "TRAINING", "SPECIALIZATION", "DEXTERITY", "HANDS"])) {
+    requestPregen("canonicalSpecializations", PREGEN_TABLES.CANON_SPECIALIZATION_REGISTRY);
+  }
   if (hasAny(tagSet, ["THREAT", "CRIME", "WORLDGEN", "AREA_PREP"])) {
     requestPregen("humanThreatProfiles", PREGEN_TABLES.HUMAN_THREAT_PROFILES);
   }
