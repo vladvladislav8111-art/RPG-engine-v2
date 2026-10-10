@@ -267,6 +267,9 @@ export type SemanticMajorEvent = {
   startDay: number;
   startTime: string;
   durationHours: number;
+  observedPulseValue?: number;
+  pulseEvidence?: string;
+  observedWeatherCondition?: string;
 };
 
 export type SemanticRumorRelayEvent = {
