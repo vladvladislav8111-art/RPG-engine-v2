@@ -136,7 +136,7 @@ export const PHYSICAL_PASSPORT_HEADERS = [
 ];
 
 export function materialRefsInCanon(text: string): ReadonlySet<string> {
-  return new Set([...text.matchAll(/\\[MATID:(material\\.[a-z0-9_.-]+)\\]/gi)].map((m)=>m[1]));
+  return new Set([...text.matchAll(/\[MATID:(material\.[a-z0-9_.-]+)\]/gi)].map((m)=>m[1]));
 }
 
 export function passportToSheetRecord(
