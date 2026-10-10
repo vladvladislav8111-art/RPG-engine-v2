@@ -356,6 +356,9 @@ export async function getTurnContext(input: TurnContextRequest) {
   if (hasAny(tagSet, ["SKILL", "TRAINING", "SPECIALIZATION", "DEXTERITY", "HANDS"])) {
     requestPregen("canonicalSpecializations", PREGEN_TABLES.CANON_SPECIALIZATION_REGISTRY);
   }
+  if (hasAny(tagSet, ["MAP", "AREA_PREP", "EXPLORATION", "LOOK", "SCENE"])) {
+    requestPregen("nearbyLocalAssets", PREGEN_TABLES.LOCATIONS);
+  }
   if (hasAny(tagSet, ["THREAT", "CRIME", "WORLDGEN", "AREA_PREP"])) {
     requestPregen("humanThreatProfiles", PREGEN_TABLES.HUMAN_THREAT_PROFILES);
   }
@@ -560,6 +563,13 @@ export async function getTurnContext(input: TurnContextRequest) {
   for (const p of pregens) {
     let records = rowsToObjects(p.rows);
     if (p.key === "districtPacks" || p.key === "serviceDirectory") records = filterByLocation(records, locationId);
+    if (p.key === "nearbyLocalAssets") {
+      // Present only already canonical places in this district; other
+      // neighborhoods/hidden interior sites remain undisclosed GM data.
+      records = records.filter((row) =>
+        String(row["Parent"] ?? "") === locationId ||
+        String(row["Location ID"] ?? "") === locationId);
+    }
     if (p.key === "npcIdentityIndex") {
       const wanted = new Set(resolvedActorIds);
       records = records.filter((r) => wanted.has(String(r["NPC ID"] ?? "")));
