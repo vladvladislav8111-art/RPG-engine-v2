@@ -548,7 +548,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   }
   if (semantic.sceneActorIds != null) {
     const actorIds = [...new Set(semantic.sceneActorIds)];
-    if (actorIds.some((id) => !/^npc\\.[a-z0-9_.-]+$/i.test(id))) {
+    if (actorIds.some((id) => !/^npc\.[a-z0-9_.-]+$/i.test(id))) {
       throw new Error("sceneActorIds must contain stable NPC IDs");
     }
     patchActiveContext("participating_npc", actorIds.join(";"));
