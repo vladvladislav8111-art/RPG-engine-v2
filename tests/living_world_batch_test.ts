@@ -43,7 +43,7 @@ Deno.test("work pay, time and duplicate ID cannot be rerolled beyond source", ()
     [{...demand,payC:250},[], "pay"],
     [{...demand,durationMinutes:5},[],"duration"],
     [demand,[{"Offer ID":demand.offerId}], "duplicate"],
-  ] as const;
+  ];
   for (const [event, existing] of bad) {
     let rejected = false;
     try { validateWorkDemand(event,[template],[investigation],[employer],existing,63,"18:21"); }
