@@ -13,6 +13,9 @@ export type MaterializeMajorWorldEvent = {
   startDay: number;
   startTime: string;
   durationHours: number;
+  observedPulseValue?: number;
+  pulseEvidence?: string;
+  observedWeatherCondition?: string;
 };
 
 /**
@@ -64,6 +67,33 @@ export function validateMajorWorldEvent(input: {
       e.concreteEffects.trim().length < 45 ||
       e.nextReview.trim().length < 22) {
     throw new Error("major world event lacks concrete trigger, physical effect or next check");
+  }
+  const scope = String(tpl["Scope"] ?? "").toUpperCase();
+  const requiredDistrict: Record<string, string> = {
+    WEST_FREIGHT: "west_freight",
+    CONCORD_FORUM: "concord_forum",
+    ARTISAN: "artisan_terraces",
+    MERCHANT_COURT: "merchant_court",
+    TEMPLE_MEDICAL: "temple_medical",
+    LICENSED_ARTS: "licensed_arts",
+  };
+  const needle = requiredDistrict[scope];
+  if (needle && !e.locationId.includes(needle)) {
+    throw new Error("major event location does not match template district scope");
+  }
+  const requiredMetric = String(tpl["Required pulse metric"] ?? "").trim();
+  const minPulse = Number(tpl["Min pulse"] ?? 0);
+  if (requiredMetric && (
+    !Number.isFinite(e.observedPulseValue) ||
+    (e.observedPulseValue ?? -1) < minPulse ||
+    (e.pulseEvidence?.trim().length ?? 0) < 45
+  )) {
+    throw new Error("major event requires actual district-pulse evidence at threshold");
+  }
+  const requiredWeather = String(tpl["Weather condition"] ?? "").toUpperCase();
+  if (requiredWeather && requiredWeather !== "ANY" &&
+      e.observedWeatherCondition?.toUpperCase() !== requiredWeather) {
+    throw new Error("major event weather gate not verified");
   }
   const min = Number(tpl["Duration min h"]);
   const max = Number(tpl["Duration max h"]);
