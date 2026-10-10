@@ -1465,7 +1465,6 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   const npcHeaders = npcForWitness[0]?.map((x) => String(x ?? "")) ?? [];
   const observerIdColumn = npcHeaders.indexOf("NPC ID");
   const observerLocationColumn = npcHeaders.indexOf("Current/last-known location");
-  const activeContextRows = sheets[TABLES.ACTIVE_CONTEXT.range] ?? [];
   const activeCols = activeContextRows[0]?.map((x) => String(x ?? "")) ?? [];
   const slotIx = activeCols.indexOf("Slot");
   const pointerIx = activeCols.indexOf("Pointer");
