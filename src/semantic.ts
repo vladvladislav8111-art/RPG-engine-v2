@@ -192,6 +192,8 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   if ((semantic.elapsedSeconds ?? 0) > 0) {
     touched.add("WEATHER_CURRENT");
     touched.add("OPPORTUNITIES_CURRENT");
+  }
+  if ((semantic.elapsedSeconds ?? 0) > 0 || (semantic.offscreenNpcEvents?.length ?? 0) > 0) {
     touched.add("NPC_CURRENT");
     touched.add("NPC_ACTIVITY_RULES");
     touched.add("WORLD_CLOCKS");
@@ -376,7 +378,9 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   }
   // Key NPCs may not silently skip elapsed world time. A semantic offscreen
   // resolution is required; merely restamping a row would erase real history.
-  if ((semantic.elapsedSeconds ?? 0) > 0) {
+  // An authorized zero-elapsed reconciliation can also catch up NPCs to the
+  // existing committed world clock without changing Shura's day or scene.
+  if ((semantic.elapsedSeconds ?? 0) > 0 || (semantic.offscreenNpcEvents?.length ?? 0) > 0) {
     const npcRows = sheets[TABLES.NPC_CURRENT.range] ?? [];
     const activityRows = sheets[TABLES.NPC_ACTIVITY_RULES.range] ?? [];
     const clockRows = sheets[TABLES.WORLD_CLOCKS.range] ?? [];
