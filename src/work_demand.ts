@@ -50,6 +50,10 @@ export function validateWorkDemand(
       !liveNpcRows.some((r) => str(r["NPC ID"]) === event.employerId)) {
     throw new Error("work demand requires a materialized, existing employer NPC: " + event.employerId);
   }
+  const employer = liveNpcRows.find((r) => str(r["NPC ID"]) === event.employerId)!;
+  if (!str(employer["Current/last-known location"]).startsWith("loc.ilyrian.selarin")) {
+    throw new Error("Selarin employer must actually be present in Selarin");
+  }
   const process = liveClocks.find((r) => str(r["Process ID"]) === event.sourceProcessId &&
     str(r["State"]).toUpperCase().startsWith("ACTIVE"));
   if (!process) throw new Error("work demand needs an ACTIVE real source process: " + event.sourceProcessId);
