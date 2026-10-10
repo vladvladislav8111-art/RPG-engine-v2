@@ -36,6 +36,7 @@ import { resolveSelarinWeatherRecords, sheetObjects } from "./weather.ts";
 import { validateChatEventShape, validateRelationshipEventShape } from "./social_context.ts";
 import { worldContinuityReview } from "./world_continuity.ts";
 import { reviewWorldProcesses } from "./world_process.ts";
+import { validateWorkDemand } from "./work_demand.ts";
 import type {
   CommitRequest,
   Scalar,
@@ -191,6 +192,11 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   for (const item of semantic.rowUpdates ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowDeletes ?? []) touched.add(item.table as RuntimeTableName);
   if ((semantic.worldProcessEvents?.length ?? 0) > 0) touched.add("WORLD_CLOCKS");
+  if ((semantic.workDemandEvents?.length ?? 0) > 0) {
+    touched.add("WORLD_CLOCKS");
+    touched.add("NPC_CURRENT");
+    touched.add("OPPORTUNITIES_CURRENT");
+  }
   if ((semantic.elapsedSeconds ?? 0) > 0) {
     touched.add("WEATHER_CURRENT");
     touched.add("OPPORTUNITIES_CURRENT");
@@ -203,9 +209,14 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
 
   const ranges = [...touched].map((t) => TABLES[t].range);
   const sheets = await sheetsBatchGet(config.files.TEMP_RUNTIME, ranges);
-  const inventoryTemplateRows = (semantic.inventoryEvents?.length ?? 0) > 0
-    ? (await sheetsBatchGet(config.files.GM_PREGEN, [PREGEN_TABLES.COMMON_OBJECT_TEMPLATES]))[PREGEN_TABLES.COMMON_OBJECT_TEMPLATES] ?? []
-    : [];
+  const gmTemplates = [
+    ...((semantic.inventoryEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.COMMON_OBJECT_TEMPLATES] : []),
+    ...((semantic.workDemandEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_JOB_TEMPLATES] : []),
+  ];
+  const templateData = gmTemplates.length
+    ? await sheetsBatchGet(config.files.GM_PREGEN, gmTemplates) : {};
+  const inventoryTemplateRows = templateData[PREGEN_TABLES.COMMON_OBJECT_TEMPLATES] ?? [];
+  const workTemplateRows = templateData[PREGEN_TABLES.SELARIN_JOB_TEMPLATES] ?? [];
 
   const controlRows = sheets[TABLES.CONTROL.range] ?? [];
   const saveIndex = findDataRow(controlRows, "Key", "save_id");
@@ -508,6 +519,43 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     });
   }
   worldAutomationOutcomes.worldProcessAdvances = processAdvances;
+
+  // Demand exists only if a named, live employer faces a bounded workload.
+  // Candidate rows in GM PREGEN or a synthetic daily board seed are never paid work.
+  const workDemandOutcomes: unknown[] = [];
+  if ((semantic.workDemandEvents?.length ?? 0) > 0) {
+    const offerRows = sheets[TABLES.OPPORTUNITIES_CURRENT.range] ?? [];
+    const npcRows = sheets[TABLES.NPC_CURRENT.range] ?? [];
+    const rowsToRecords = (rows: unknown[][]) => rows.slice(1).map((row) =>
+      Object.fromEntries(headers(rows).map((field, index) => [field, row[index] ?? null]))
+    );
+    const templates = rowsToRecords(workTemplateRows);
+    const npcs = rowsToRecords(npcRows);
+    const liveClocks = rowsToRecords(clockRows);
+    for (const demand of semantic.workDemandEvents ?? []) {
+      const record = validateWorkDemand(
+        demand, templates, liveClocks, npcs, rowsToRecords(offerRows),
+        resolvedDay, resolvedTime,
+      );
+      const newRow = Array(headers(offerRows).length).fill("");
+      for (const [field, value] of Object.entries(record)) {
+        setByHeader(offerRows, newRow, field, value as Scalar);
+      }
+      appendRow("OPPORTUNITIES_CURRENT", offerRows, newRow);
+      workDemandOutcomes.push({
+        offerId: demand.offerId,
+        employerId: demand.employerId,
+        sourceProcessId: demand.sourceProcessId,
+        templateId: demand.templateId,
+        payC: demand.payC,
+        slots: demand.slots,
+        expiresDay: demand.expiresDay,
+        expiresTime: demand.expiresTime,
+        evidence: demand.materializedDemand,
+      });
+    }
+  }
+  worldAutomationOutcomes.workDemand = workDemandOutcomes;
 
   const activeContextRows = sheets[TABLES.ACTIVE_CONTEXT.range] ?? [];
   const patchActiveContext = (slot: string, pointer: Scalar) => {
