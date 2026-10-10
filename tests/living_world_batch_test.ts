@@ -39,7 +39,7 @@ Deno.test("work template alone cannot make a job", () => {
   }
 });
 Deno.test("work pay, time and duplicate ID cannot be rerolled beyond source", () => {
-  const bad = [
+  const bad: Array<[typeof demand, Array<Record<string, unknown>>, string]> = [
     [{...demand,payC:250},[], "pay"],
     [{...demand,durationMinutes:5},[],"duration"],
     [demand,[{"Offer ID":demand.offerId}], "duplicate"],
