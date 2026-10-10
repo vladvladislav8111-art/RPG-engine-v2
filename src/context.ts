@@ -306,6 +306,9 @@ export async function getTurnContext(input: TurnContextRequest) {
     addStructured("INVENTORY_CURRENT");
     addStructured("SYSTEM_MODULES_CURRENT");
   }
+  if (hasAny(tagSet, ["CRAFT", "MATERIAL", "MATERIAL_PASSPORT", "PHYSICAL", "ENGINEERING"])) {
+    addStructured("PHYSICAL_PASSPORTS_CURRENT");
+  }
   if (hasAny(tagSet, ["SERVICES", "SOCIAL", "ECONOMY", "LANGUAGE", "WORK"])) {
     addStructured("SERVICES_CURRENT");
     addStructured("OPPORTUNITIES_CURRENT");
@@ -346,9 +349,10 @@ export async function getTurnContext(input: TurnContextRequest) {
     requestPregen("npcIdentityIndex", PREGEN_TABLES.NPC_IDENTITY_INDEX);
     requestPregen("archiveRegistry", PREGEN_TABLES.ARCHIVE_REGISTRY);
   }
-  if (hasAny(tagSet, ["FACTION", "POLITICS", "WORLD", "AREA_PREP"])) {
-    requestPregen("factionProcessSeeds", PREGEN_TABLES.FACTION_PROCESS_SEEDS);
-  }
+  // The small faction seed index is always used by worldActionDocket,
+  // including dialogue/quiet turns where the player never requests WORLD tags.
+  // Dormant seeds never become live events merely by being read.
+  requestPregen("factionProcessSeeds", PREGEN_TABLES.FACTION_PROCESS_SEEDS);
   if (hasAny(tagSet, ["THREAT", "CRIME", "WORLDGEN", "AREA_PREP"])) {
     requestPregen("humanThreatProfiles", PREGEN_TABLES.HUMAN_THREAT_PROFILES);
   }
