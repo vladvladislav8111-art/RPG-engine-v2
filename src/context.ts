@@ -8,6 +8,7 @@ import { survivalBand } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
 import { buildSelarinLocalContext } from "./local_context.ts";
 import { CONTINUITY_SPARSE_RANGES, continuityFromSparseRanges } from "./world_continuity.ts";
+import { resolveSceneActorIds } from "./scene_routing.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
@@ -241,8 +242,18 @@ function filterByLocation(records: Array<Record<string, unknown>>, locationId: s
 
 export async function getTurnContext(input: TurnContextRequest) {
   const started = performance.now();
+  // The current scene actors are derived routing hints, bounded to the latest
+  // authoritative CONTROL scene/location. The cache cannot override the save.
+  const sceneRouting = await sheetsBatchGet(config.files.TEMP_RUNTIME, [
+    "CONTROL!A1:D12", "ACTIVE_CONTEXT!A1:F15",
+  ]);
+  const routingControlRows = sceneRouting["CONTROL!A1:D12"] ?? [];
+  const routedSceneActorIds = resolveSceneActorIds(
+    routingControlRows, sceneRouting["ACTIVE_CONTEXT!A1:F15"] ?? [],
+  );
+  const routeSaveId = String(findControl(routingControlRows, "save_id") ?? "");
   const tagSet = new Set((input.tags ?? []).map((t) => t.toUpperCase()));
-  const requestedActorIds = input.actorIds ?? [];
+  const requestedActorIds = [...new Set([...(input.actorIds ?? []), ...routedSceneActorIds])];
   const actorRefs = input.actorRefs ?? [];
   const explicitActorRequest = requestedActorIds.length > 0 || actorRefs.length > 0;
   const requireNpcContextGate = input.requireNpcContextGate ?? explicitActorRequest;
@@ -401,6 +412,7 @@ export async function getTurnContext(input: TurnContextRequest) {
 
   const control = base["CONTROL!A1:D12"] ?? [];
   const saveId = String(findControl(control, "save_id") ?? "");
+  if (routeSaveId && routeSaveId !== saveId) throw new Error("context scene routing snapshot changed during read; retry");
   const worldDay = findControl(control, "world_day");
   const worldTime = findControl(control, "world_time");
   const locationId = String(findControl(control, "current_location_id") ?? "");
@@ -805,6 +817,7 @@ export async function getTurnContext(input: TurnContextRequest) {
       actors,
       actorContext: {
         requestedActorIds,
+        routedSceneActorIds,
         requestedActorRefs: actorRefs,
         resolvedActorIds,
         resolution: actorResolution,
@@ -834,6 +847,7 @@ export async function getTurnContext(input: TurnContextRequest) {
       docs: queriedDocs,
       readPlan: [
         "TEMP:CORE",
+        "TEMP:SCENE_ROUTING",
         "TEMP:WORLD_CONTINUITY_SPARSE",
         ...(needsCompetences ? ["TEMP:COMPETENCES"] : []),
         ...(actorIndexScan?.readPlan ?? []),
