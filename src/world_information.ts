@@ -51,6 +51,12 @@ export function validateRumorTransmission(input: {
       throw new Error("rumor participant not materialized: " + id);
     }
   }
+  for (const participant of [e.senderNpcId, e.receiverNpcId]) {
+    const npc = input.npcCurrent.find((r) => str(r["NPC ID"]) === participant);
+    if (!str(npc?.["Current/last-known location"]).startsWith("loc.ilyrian.selarin")) {
+      throw new Error("Selarin rumor network cannot teleport a distant participant: " + participant);
+    }
+  }
   const source = input.npcKnowledge.find((r) =>
     str(r["NPC ID"]) === e.senderNpcId && str(r["Fact ID"]) === e.sourceFactId &&
     str(r["Active"]).toUpperCase() !== "FALSE");
