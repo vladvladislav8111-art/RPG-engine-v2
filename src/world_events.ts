@@ -51,6 +51,12 @@ export function validateMajorWorldEvent(input: {
       e.participatingNpcIds.some((id) => !present.has(id))) {
     throw new Error("major world event requires already materialized participating actors");
   }
+  for (const actorId of e.participatingNpcIds) {
+    const current = input.npcs.find((r) => r["NPC ID"] === actorId);
+    if (!String(current?.["Current/last-known location"] ?? "").startsWith("loc.ilyrian.selarin")) {
+      throw new Error("participating event actor must already be in Selarin; no uncommitted teleportation");
+    }
+  }
   if (!e.locationId.startsWith("loc.ilyrian.selarin")) {
     throw new Error("Selarin major event must have a real Selarin location");
   }
