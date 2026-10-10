@@ -247,6 +247,24 @@ export type SemanticOffscreenNpcEvent = {
   travelEvidence?: string;
 };
 
+export type SemanticWorkDemandEvent = {
+  offerId: string;
+  templateId: string;
+  employerId: string;
+  sourceProcessId: string;
+  materializedDemand: string;
+  taskScope: string;
+  payC: number;
+  durationMinutes: number;
+  slots: number;
+  locationId: string;
+  availableDay: number;
+  availableTime: string;
+  expiresDay: number;
+  expiresTime: string;
+  accessCondition: string;
+};
+
 export type SemanticWorldProcessEvent = {
   processId: string;
   /** GM resolution of what actors/institutions actually did and what changed. */
@@ -380,6 +398,7 @@ export type SemanticCommitPlan = {
   chatEvents?: SemanticChatEvent[];
   offscreenNpcEvents?: SemanticOffscreenNpcEvent[];
   worldProcessEvents?: SemanticWorldProcessEvent[];
+  workDemandEvents?: SemanticWorkDemandEvent[];
   rowUpserts?: SemanticRowUpsert[];
   rowUpdates?: SemanticRowUpdate[];
   rowDeletes?: SemanticRowDelete[];
