@@ -7,7 +7,7 @@ const template = {
   "Duration min min": "45", "Duration max min": "150",
   "Hazard": "professional",
 };
-const employer = { "NPC ID": "npc.selarin.ovar_0390" };
+const employer = { "NPC ID": "npc.selarin.ovar_0390", "Current/last-known location": "loc.ilyrian.selarin.west_freight_ring" };
 const investigation = { "Process ID": "process.selarin.forged_seal_investigation_0343", State: "ACTIVE" };
 const demand = {
   offerId: "offer.selarin.ovar.test_1000",
@@ -56,7 +56,7 @@ const channels=[{
   "Channel ID":"rumor.selarin.freight_clerks",
   "Status":"ACTIVE","Typical latency":"1–4h",
 }];
-const npcs=[{"NPC ID":"npc.selarin.ovar_0390"},{"NPC ID":"npc.selarin.pool_2003"}];
+const npcs=[{"NPC ID":"npc.selarin.ovar_0390","Current/last-known location":"loc.ilyrian.selarin.west_freight_ring"},{"NPC ID":"npc.selarin.pool_2003","Current/last-known location":"loc.ilyrian.selarin.copy_market"}];
 const facts=[{
   "NPC ID":"npc.selarin.ovar_0390",
   "Fact ID":"fact.ovar.public_queue_source",
