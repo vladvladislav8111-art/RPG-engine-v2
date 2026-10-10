@@ -188,6 +188,36 @@ function boardCandidates(
   });
 }
 
+function liveWorkOffers(
+  offers: PregenRecord[],
+  locationId: string,
+  districtId: string | null,
+): Array<Record<string, unknown>> {
+  return offers.filter((offer) => {
+    const state = upper(offer["Lifecycle State"]);
+    const globalState = upper(offer["State"]);
+    const slots = Number(offer["Slots Remaining"] ?? 0);
+    if (!["AVAILABLE", "OPEN", "ACTIVE"].includes(state) ||
+        /COMPLETED|EXPIRED|CLOSED|RESOLVED|FILLED|CANCELLED/.test(globalState) ||
+        !Number.isFinite(slots) || slots < 1) return false;
+    const loc = str(offer["Location/start"]);
+    return loc === locationId || (!!districtId &&
+      (loc === districtId || loc.startsWith(districtId + ".")));
+  }).slice(0, 12).map((offer) => ({
+    offerId: offer["Offer ID"],
+    employer: offer["Employer"],
+    location: offer["Location/start"],
+    task: offer["Task"],
+    pay: offer["Pay"],
+    payCondition: offer["Pay condition"],
+    slotsRemaining: offer["Slots Remaining"],
+    expires: offer["Expiry/departure"],
+    reason: offer["Source/opportunity"],
+    access: offer["Why available to Shura"],
+    note: "A live employer opportunity, NOT accepted or guaranteed to the player.",
+  }));
+}
+
 function selectEconomy(rows: PregenRecord[], tags: Set<string>): PregenRecord[] {
   const selarin = rows.filter((r) => upper(r["Region"]) === "SELARIN");
   if (tags.has("ECONOMY") || tags.has("AREA_PREP")) return selarin;
@@ -837,6 +867,7 @@ export function buildSelarinLocalContext(input: LocalContextInput): Record<strin
     factions: selectFactions(rows.factions ?? [], tags).slice(0, 16),
     boardDirectory: boardDirectory.slice(0, 10),
     localBoardCandidates: generatedBoards,
+    verifiedOpenWorkOffers: hasAny(tags, ["WORK", "JOB", "BOARD"]) ? liveWorkOffers(effectiveLive?.opportunities ?? [], locationId, districtId) : [],
     npcSeeds,
     culture: culture.slice(0, 16),
     food: food.slice(0, 16),
