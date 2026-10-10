@@ -34,6 +34,7 @@ import { computeSurvivalChange, survivalStaminaModifiers, type SurvivalActivity 
 import { makeTurnToken } from "./turn_token.ts";
 import { resolveSelarinWeatherRecords, sheetObjects } from "./weather.ts";
 import { validateChatEventShape, validateRelationshipEventShape } from "./social_context.ts";
+import { worldContinuityReview } from "./world_continuity.ts";
 import type {
   CommitRequest,
   Scalar,
@@ -192,6 +193,11 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     touched.add("WEATHER_CURRENT");
     touched.add("OPPORTUNITIES_CURRENT");
   }
+  if ((semantic.elapsedSeconds ?? 0) > 0 || (semantic.offscreenNpcEvents?.length ?? 0) > 0) {
+    touched.add("NPC_CURRENT");
+    touched.add("NPC_ACTIVITY_RULES");
+    touched.add("WORLD_CLOCKS");
+  }
 
   const ranges = [...touched].map((t) => TABLES[t].range);
   const sheets = await sheetsBatchGet(config.files.TEMP_RUNTIME, ranges);
@@ -297,7 +303,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   };
 
   const c = semantic.control ?? {};
-  const worldAutomationOutcomes: Record<string, unknown> = { weather: null, opportunities: [] };
+  const worldAutomationOutcomes: Record<string, unknown> = { weather: null, opportunities: [], keyNpcAdvances: [], clocksNeedingReview: [] };
   if ((semantic.elapsedSeconds ?? 0) > 0) {
     const opportunityRows = sheets[TABLES.OPPORTUNITIES_CURRENT.range] ?? [];
     const targetAbs = resolvedDay * 1440 + Number(resolvedTime.slice(0,2)) * 60 + Number(resolvedTime.slice(3,5));
@@ -370,6 +376,74 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       worldAutomationOutcomes.weather={initialized:resolved.initialized,transitions:resolved.transitions,frontId:resolved.record["Front ID"]};
     }
   }
+  // Key NPCs may not silently skip elapsed world time. A semantic offscreen
+  // resolution is required; merely restamping a row would erase real history.
+  // An authorized zero-elapsed reconciliation can also catch up NPCs to the
+  // existing committed world clock without changing Shura's day or scene.
+  if ((semantic.elapsedSeconds ?? 0) > 0 || (semantic.offscreenNpcEvents?.length ?? 0) > 0) {
+    const npcRows = sheets[TABLES.NPC_CURRENT.range] ?? [];
+    const activityRows = sheets[TABLES.NPC_ACTIVITY_RULES.range] ?? [];
+    const clockRows = sheets[TABLES.WORLD_CLOCKS.range] ?? [];
+    const objects = (rows: unknown[][]) => {
+      if (!rows.length) return [] as Record<string, unknown>[];
+      const names = headers(rows);
+      return rows.slice(1).map((row) =>
+        Object.fromEntries(names.map((name, i) => [name, row[i] ?? null]))
+      );
+    };
+    const review = worldContinuityReview({
+      worldDay: resolvedDay,
+      worldTime: resolvedTime,
+      npcCurrent: objects(npcRows),
+      activityRules: objects(activityRows),
+      worldClocks: objects(clockRows),
+    });
+    worldAutomationOutcomes.clocksNeedingReview = review.activeClocksOverdue;
+    const events = semantic.offscreenNpcEvents ?? [];
+    const provided = new Map(events.map((event) => [event.actorId, event]));
+    if (provided.size !== events.length) throw new Error("duplicate offscreenNpcEvents actorId");
+    const due = review.keyNpcDue.filter((a) => a.reason !== "ACTIVITY_RULE_MISSING");
+    for (const item of due) {
+      if (!provided.has(item.actorId)) {
+        throw new Error(`key NPC offscreen advance required before committing time: ${item.actorId} (${item.ageMinutes ?? "unknown"} minutes). Provide semantic.offscreenNpcEvents with causal summary.`);
+      }
+    }
+    const npcAdvances: unknown[] = [];
+    for (const event of events) {
+      if (event.currentGoal.trim().length < 12 || event.elapsedSummary.trim().length < 24) {
+        throw new Error(`offscreenNpcEvents needs substantive currentGoal and elapsedSummary: ${event.actorId}`);
+      }
+      const ni = findDataRow(npcRows, "NPC ID", event.actorId);
+      const ai = findDataRow(activityRows, "NPC ID", event.actorId);
+      if (ni < 0 || ai < 0) throw new Error(`missing key NPC or activity rule: ${event.actorId}`);
+      const npc = cloneRow(npcRows, ni);
+      const activity = cloneRow(activityRows, ai);
+      if (String(activity[headerIndex(activityRows, "State")] ?? "").toUpperCase() !== "ACTIVE") {
+        throw new Error(`cannot tick inactive NPC: ${event.actorId}`);
+      }
+      const previousLocation = String(npc[headerIndex(npcRows, "Current/last-known location")] ?? "");
+      if (event.locationId && event.locationId !== previousLocation && !event.travelEvidence?.trim()) {
+        throw new Error(`offscreen travel requires causal travelEvidence: ${event.actorId}`);
+      }
+      setByHeader(npcRows, npc, "Current goal/activity", `${resolvedInworldEnd}: ${event.currentGoal.trim()}`);
+      setByHeader(npcRows, npc, "Last updated", resolvedInworldEnd);
+      if (event.locationId) setByHeader(npcRows, npc, "Current/last-known location", event.locationId);
+      setByHeader(activityRows, activity, "Last activity tick", resolvedInworldEnd);
+      writeRow("NPC_CURRENT", npcRows, ni, npc);
+      writeRow("NPC_ACTIVITY_RULES", activityRows, ai, activity);
+      npcAdvances.push({
+        actorId: event.actorId,
+        from: review.keyNpcDue.find((x) => x.actorId === event.actorId)?.lastActivityTick ?? null,
+        to: resolvedInworldEnd,
+        elapsedSummary: event.elapsedSummary.trim(),
+        currentGoal: event.currentGoal.trim(),
+        locationId: event.locationId ?? previousLocation,
+        travelEvidence: event.travelEvidence ?? null,
+      });
+    }
+    worldAutomationOutcomes.keyNpcAdvances = npcAdvances;
+  }
+
   const activeContextRows = sheets[TABLES.ACTIVE_CONTEXT.range] ?? [];
   const patchActiveContext = (slot: string, pointer: Scalar) => {
     if (!activeContextRows.length) return;
@@ -1468,7 +1542,12 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   setByHeader(sessionRows, sessionRow, "Action summary", semantic.session.actionSummary);
   setByHeader(sessionRows, sessionRow, "Deltas JSON", JSON.stringify(semantic.session.deltas ?? {}));
   setByHeader(sessionRows, sessionRow, "New canon JSON", JSON.stringify(semantic.session.newCanon ?? {}));
-  setByHeader(sessionRows, sessionRow, "World advances JSON", JSON.stringify(semantic.session.worldAdvances ?? {}));
+  const gmWorldAdvances = semantic.session.worldAdvances;
+  const worldAdvanceLog = gmWorldAdvances && typeof gmWorldAdvances === "object" &&
+      !Array.isArray(gmWorldAdvances)
+    ? { ...(gmWorldAdvances as Record<string, unknown>), engineContinuity: worldAutomationOutcomes }
+    : { gmWorldAdvances: gmWorldAdvances ?? {}, engineContinuity: worldAutomationOutcomes };
+  setByHeader(sessionRows, sessionRow, "World advances JSON", JSON.stringify(worldAdvanceLog));
   setByHeader(sessionRows, sessionRow, "Notes", semantic.session.notes ?? "");
   setByHeader(sessionRows, sessionRow, "Committed at", new Date().toISOString());
   setByHeader(sessionRows, sessionRow, "Ruleset version", RULESET_VERSION);

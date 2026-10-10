@@ -3,11 +3,28 @@ name: Deno Check
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      RUNTIME_API_KEY: ci-not-a-secret
+      GOOGLE_SERVICE_ACCOUNT_EMAIL: ci@example.invalid
+      GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: ci-invalid-private-key
+      TEMP_RUNTIME_ID: ci-placeholder
+      GM_PREGEN_ID: ci-placeholder
+      LIVE_CANON_INDEX_ID: ci-placeholder
+      LIVE_PLAYER_INVENTORY_ID: ci-placeholder
+      LIVE_JOURNAL_LANGUAGE_DISCOVERIES_ID: ci-placeholder
+      LIVE_NPCS_KNOWLEDGE_SOCIAL_ID: ci-placeholder
+      LIVE_MAPS_LOCATIONS_STATE_ID: ci-placeholder
+      LIVE_WORLD_OPPORTUNITIES_ID: ci-placeholder
+      LIVE_PROJECTS_LONGFORM_ID: ci-placeholder
+      LIVE_SESSION_LOG_ID: ci-placeholder
+      LIVE_TRANSACTION_ARCHIVE_ID: ci-placeholder
+      ENABLE_KV: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,3 +34,5 @@ jobs:
           deno-version: v2.x
       - name: Check runtime entrypoint
         run: deno check main.ts
+      - name: Run regression tests
+        run: deno task test

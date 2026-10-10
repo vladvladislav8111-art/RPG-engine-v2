@@ -7,6 +7,7 @@ import { RULESET_VERSION } from "./rules.ts";
 import { survivalBand } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
 import { buildSelarinLocalContext } from "./local_context.ts";
+import { CONTINUITY_SPARSE_RANGES, continuityFromSparseRanges } from "./world_continuity.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
@@ -389,12 +390,13 @@ export async function getTurnContext(input: TurnContextRequest) {
 
   const uniqueDocKeys = Array.from(new Set(docQueries.map((q) => q.documentKey)));
 
-  const [base, lookupResults, docs, pregens, actorIndexScan] = await Promise.all([
+  const [base, lookupResults, docs, pregens, actorIndexScan, continuityRanges] = await Promise.all([
     sheetsBatchGet(config.files.TEMP_RUNTIME, [...runtimeRanges]),
     Promise.all(lookups.map(cachedLookup)),
     Promise.all(uniqueDocKeys.map(async (key) => [key, await cachedDoc(key)] as const)),
     cachedPregenBatch(pregenRequests),
     explicitActorRequest ? scanActorContextIndex(config.files.TEMP_RUNTIME) : Promise.resolve(null),
+    sheetsBatchGet(config.files.TEMP_RUNTIME, CONTINUITY_SPARSE_RANGES),
   ]);
 
   const control = base["CONTROL!A1:D12"] ?? [];
@@ -405,6 +407,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   const locationDisplay = findControl(control, "current_location_display");
   const sceneId = findControl(control, "current_scene_id");
   const turnToken = makeTurnToken({ saveId, worldDay, worldTime, locationId, sceneId });
+  const worldContinuity = continuityFromSparseRanges(continuityRanges, worldDay, worldTime);
 
   const rawNpcCurrent = explicitActorRequest
     ? rowsToObjects(actorIndexScan?.npcReferenceRows ?? [])
@@ -786,6 +789,7 @@ export async function getTurnContext(input: TurnContextRequest) {
       sceneId,
       resources,
       resourceDetails,
+      worldContinuity,
       survival: {
         satiety: { current: satiety, max: Number((resourceDetails["Satiety"] as any)?.max ?? 100), band: survivalBand(satiety) },
         hydration: { current: hydration, max: Number((resourceDetails["Hydration"] as any)?.max ?? 100), band: survivalBand(hydration) },
@@ -830,6 +834,7 @@ export async function getTurnContext(input: TurnContextRequest) {
       docs: queriedDocs,
       readPlan: [
         "TEMP:CORE",
+        "TEMP:WORLD_CONTINUITY_SPARSE",
         ...(needsCompetences ? ["TEMP:COMPETENCES"] : []),
         ...(actorIndexScan?.readPlan ?? []),
         ...(boundedActorLoad?.readPlan ?? []),
