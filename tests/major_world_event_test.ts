@@ -14,7 +14,7 @@ const clock = {
   "Process ID": "process.selarin.forged_seal_investigation_0343",
   State: "ACTIVE",
 };
-const actor = { "NPC ID": "npc.selarin.ovar_0390" };
+const actor = { "NPC ID": "npc.selarin.ovar_0390", "Current/last-known location": "loc.ilyrian.selarin.west_freight_ring" };
 const event = {
   processId: "process.event.selarin.public_hearing_foo",
   templateId: "major.selarin.forged_seal_hearing",
