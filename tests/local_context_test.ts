@@ -205,3 +205,45 @@ Deno.test("calendar exposes only the current routine window", () => {
   const value = make("14:34:00");
   if (value.calendar.current[0]?.id !== "cal.test") throw new Error("current calendar window missing");
 });
+
+Deno.test("pre-generated board seeds are separate from finite real job offers", () => {
+  const packet = buildSelarinLocalContext({
+    locationId: "loc.ilyrian.selarin.west_freight_ring",
+    tags: new Set(["WORK", "JOB", "BOARD"]),
+    worldDay: 63,
+    worldTime: "16:00",
+    rows: {
+      districtPacks: [district],
+      selarinJobBoards: [board],
+      selarinJobTemplates: templates,
+    },
+    live: {
+      opportunities: [
+        {
+          "Offer ID":"offer.real.01",
+          "Lifecycle State":"AVAILABLE",
+          "State":"OPEN / NO CONTRACT SIGNED",
+          "Slots Remaining":1,
+          "Location/start":"loc.ilyrian.selarin.west_freight_ring",
+          Employer:"npc.selarin.ovar_0390",
+          Task:"One sourced clerical packet",
+        },
+        {
+          "Offer ID":"offer.expired.02",
+          "Lifecycle State":"EXPIRED",
+          "State":"EXPIRED",
+          "Slots Remaining":0,
+          "Location/start":"loc.ilyrian.selarin.west_freight_ring",
+        },
+      ],
+    },
+  });
+  if (!packet) throw new Error("Selarin context absent");
+  const live = packet.verifiedOpenWorkOffers as Array<Record<string, unknown>>;
+  if(live.length!==1||live[0].offerId!=="offer.real.01") {
+    throw new Error("candidates or expired contracts leaked into verified employer offers");
+  }
+  if(!Array.isArray(packet.localBoardCandidates)) {
+    throw new Error("template possibilities should remain GM proposals only");
+  }
+});

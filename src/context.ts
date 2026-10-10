@@ -7,8 +7,10 @@ import { RULESET_VERSION } from "./rules.ts";
 import { survivalBand } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
 import { buildSelarinLocalContext } from "./local_context.ts";
-import { CONTINUITY_SPARSE_RANGES, continuityFromSparseRanges } from "./world_continuity.ts";
+import { CONTINUITY_SPARSE_RANGES, continuityFromSparseRanges, worldClocksFromSparseRanges } from "./world_continuity.ts";
+import { buildWorldActionDocket } from "./world_scheduler.ts";
 import { resolveSceneActorIds } from "./scene_routing.ts";
+import { buildNpcBehavioralContext } from "./npc_behavior.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
@@ -304,6 +306,9 @@ export async function getTurnContext(input: TurnContextRequest) {
     addStructured("INVENTORY_CURRENT");
     addStructured("SYSTEM_MODULES_CURRENT");
   }
+  if (hasAny(tagSet, ["CRAFT", "MATERIAL", "MATERIAL_PASSPORT", "PHYSICAL", "ENGINEERING"])) {
+    addStructured("PHYSICAL_PASSPORTS_CURRENT");
+  }
   if (hasAny(tagSet, ["SERVICES", "SOCIAL", "ECONOMY", "LANGUAGE", "WORK"])) {
     addStructured("SERVICES_CURRENT");
     addStructured("OPPORTUNITIES_CURRENT");
@@ -344,9 +349,10 @@ export async function getTurnContext(input: TurnContextRequest) {
     requestPregen("npcIdentityIndex", PREGEN_TABLES.NPC_IDENTITY_INDEX);
     requestPregen("archiveRegistry", PREGEN_TABLES.ARCHIVE_REGISTRY);
   }
-  if (hasAny(tagSet, ["FACTION", "POLITICS", "WORLD", "AREA_PREP"])) {
-    requestPregen("factionProcessSeeds", PREGEN_TABLES.FACTION_PROCESS_SEEDS);
-  }
+  // The small faction seed index is always used by worldActionDocket,
+  // including dialogue/quiet turns where the player never requests WORLD tags.
+  // Dormant seeds never become live events merely by being read.
+  requestPregen("factionProcessSeeds", PREGEN_TABLES.FACTION_PROCESS_SEEDS);
   if (hasAny(tagSet, ["THREAT", "CRIME", "WORLDGEN", "AREA_PREP"])) {
     requestPregen("humanThreatProfiles", PREGEN_TABLES.HUMAN_THREAT_PROFILES);
   }
@@ -420,6 +426,13 @@ export async function getTurnContext(input: TurnContextRequest) {
   const sceneId = findControl(control, "current_scene_id");
   const turnToken = makeTurnToken({ saveId, worldDay, worldTime, locationId, sceneId });
   const worldContinuity = continuityFromSparseRanges(continuityRanges, worldDay, worldTime);
+  const clockAgendaSeeds = rowsToObjects(pregens.find((p) => p.key === "factionProcessSeeds")?.rows ?? []);
+  const worldActionDocket = buildWorldActionDocket({
+    worldDay: Number(worldDay),
+    worldTime: String(worldTime),
+    clocks: worldClocksFromSparseRanges(continuityRanges),
+    factionSeeds: clockAgendaSeeds,
+  });
 
   const rawNpcCurrent = explicitActorRequest
     ? rowsToObjects(actorIndexScan?.npcReferenceRows ?? [])
@@ -734,6 +747,16 @@ export async function getTurnContext(input: TurnContextRequest) {
           }
         : null,
       autonomy: { activityRule, activeWorldClocks, freshness },
+      behavioralContext: buildNpcBehavioralContext({
+        actorId: id,
+        current,
+        knowledge: actorKnowledge.filter((r) => String(r["NPC ID"] ?? "") === id),
+        relationships: filterRelationships(relationshipRows, [id]),
+        memories: filterByParticipants(socialMemoryRows, [id]),
+        openThreads: filterByParticipants(openThreadRows, [id]),
+        recentChat: actorRecentChat[id] ?? [],
+        activeWorldClocks,
+      }),
     };
     actorContextGate[id] = evaluateNpcContextGate({
       actorId: id,
@@ -802,6 +825,7 @@ export async function getTurnContext(input: TurnContextRequest) {
       resources,
       resourceDetails,
       worldContinuity,
+      worldActionDocket,
       survival: {
         satiety: { current: satiety, max: Number((resourceDetails["Satiety"] as any)?.max ?? 100), band: survivalBand(satiety) },
         hydration: { current: hydration, max: Number((resourceDetails["Hydration"] as any)?.max ?? 100), band: survivalBand(hydration) },

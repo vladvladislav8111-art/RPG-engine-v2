@@ -247,6 +247,63 @@ export type SemanticOffscreenNpcEvent = {
   travelEvidence?: string;
 };
 
+export type SemanticMaterialTransformation = {
+  sourceItemIds: string[];
+  productItemIds: string[];
+  processEvidence: string;
+  wasteDisposition: string;
+  transferEvidence?: string;
+};
+
+export type SemanticMajorEvent = {
+  processId: string;
+  templateId: string;
+  sourceProcessId: string;
+  locationId: string;
+  participatingNpcIds: string[];
+  causalTrigger: string;
+  concreteEffects: string;
+  nextReview: string;
+  startDay: number;
+  startTime: string;
+  durationHours: number;
+  observedPulseValue?: number;
+  pulseEvidence?: string;
+  observedWeatherCondition?: string;
+};
+
+export type SemanticRumorRelayEvent = {
+  factId: string;
+  sourceFactId: string;
+  sourceProcessId: string;
+  channelId: string;
+  senderNpcId: string;
+  receiverNpcId: string;
+  claim: string;
+  relayStart: string;
+  relayEnd: string;
+  accessEvidence: string;
+  tags?: string[];
+};
+
+export type SemanticWorkDemandEvent = {
+  offerId: string;
+  templateId: string;
+  employerId: string;
+  sourceProcessId: string;
+  materializedDemand: string;
+  taskScope: string;
+  payC: number;
+  durationMinutes: number;
+  slots: number;
+  locationId: string;
+  availableDay: number;
+  availableTime: string;
+  expiresDay: number;
+  expiresTime: string;
+  accessCondition: string;
+};
+
 export type SemanticWorldProcessEvent = {
   processId: string;
   /** GM resolution of what actors/institutions actually did and what changed. */
@@ -366,6 +423,8 @@ export type SemanticCommitPlan = {
   resourceSets?: SemanticResourceSet[];
   conditions?: SemanticConditionSet[];
   inventoryEvents?: SemanticInventoryEvent[];
+  materialTransformations?: SemanticMaterialTransformation[];
+  physicalPassportEvents?: import("./physical_passport.ts").PhysicalPassport[];
   survival?: SemanticSurvival;
   choiceResolutions?: SemanticChoiceResolution[];
   exertionEvents?: SemanticExertionEvent[];
@@ -380,6 +439,9 @@ export type SemanticCommitPlan = {
   chatEvents?: SemanticChatEvent[];
   offscreenNpcEvents?: SemanticOffscreenNpcEvent[];
   worldProcessEvents?: SemanticWorldProcessEvent[];
+  workDemandEvents?: SemanticWorkDemandEvent[];
+  rumorRelayEvents?: SemanticRumorRelayEvent[];
+  majorWorldEvents?: SemanticMajorEvent[];
   rowUpserts?: SemanticRowUpsert[];
   rowUpdates?: SemanticRowUpdate[];
   rowDeletes?: SemanticRowDelete[];

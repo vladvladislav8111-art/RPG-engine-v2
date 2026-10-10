@@ -10,6 +10,7 @@ export const TABLES = {
   MILESTONES: { range: "MILESTONES!A1:K100", keyHeader: "Milestone ID" },
   PENDING_CHOICES: { range: "PENDING_CHOICES!A1:L300", keyHeader: "Choice ID" },
   INVENTORY_CURRENT: { range: "INVENTORY_CURRENT!A1:M500", keyHeader: "Item ID" },
+  PHYSICAL_PASSPORTS_CURRENT: { range: "PHYSICAL_PASSPORTS_CURRENT!A1:U600", keyHeader: "Item ID" },
   OPPORTUNITIES_CURRENT: { range: "OPPORTUNITIES_CURRENT!A1:W500", keyHeader: "Offer ID" },
   PROJECTS_CURRENT: { range: "PROJECTS_CURRENT!A1:N500", keyHeader: "Project ID" },
   NPC_CURRENT: { range: "NPC_CURRENT!A1:N500", keyHeader: "NPC ID" },
