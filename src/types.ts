@@ -349,6 +349,7 @@ export type SemanticCommitPlan = {
   turnToken?: string;
   elapsedSeconds?: number;
   control?: SemanticControl;
+  sceneActorIds?: string[];
   resourceDeltas?: SemanticResourceDelta[];
   resourceSets?: SemanticResourceSet[];
   conditions?: SemanticConditionSet[];
