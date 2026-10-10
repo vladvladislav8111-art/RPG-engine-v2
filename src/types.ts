@@ -247,6 +247,18 @@ export type SemanticOffscreenNpcEvent = {
   travelEvidence?: string;
 };
 
+export type SemanticWorldProcessEvent = {
+  processId: string;
+  /** GM resolution of what actors/institutions actually did and what changed. */
+  currentActivity: string;
+  /** Canonical facts, obligations and capability constraints supporting the outcome. */
+  causalBasis: string;
+  /** Next measurable milestone or gate; cannot imply an assured outcome. */
+  nextMilestone: string;
+  state?: string;
+  visibility?: string;
+};
+
 export type SemanticChatEvent = {
   messageId: string;
   channelId: string;
@@ -367,6 +379,7 @@ export type SemanticCommitPlan = {
   threadEvents?: SemanticThreadEvent[];
   chatEvents?: SemanticChatEvent[];
   offscreenNpcEvents?: SemanticOffscreenNpcEvent[];
+  worldProcessEvents?: SemanticWorldProcessEvent[];
   rowUpserts?: SemanticRowUpsert[];
   rowUpdates?: SemanticRowUpdate[];
   rowDeletes?: SemanticRowDelete[];
