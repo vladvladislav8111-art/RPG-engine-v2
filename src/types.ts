@@ -432,6 +432,7 @@ export type SemanticCommitPlan = {
   injuryEvents?: SemanticInjuryEvent[];
   generalXpEvents?: SemanticGeneralXpEvent[];
   learningEvents?: SemanticLearningEvent[];
+  specializationUnlockEvents?: import("./specialization_catalog.ts").UnlockProposal[];
   adaptationEvents?: SemanticAdaptationEvent[];
   relationshipEvents?: SemanticRelationshipEvent[];
   socialMemoryEvents?: SemanticSocialMemoryEvent[];
