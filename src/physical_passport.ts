@@ -1,3 +1,5 @@
+import { parseInworldMoment } from "./social_context.ts";
+
 export type PhysicalPassport = {
   itemId: string;
   materialCanonRef: string;
@@ -41,6 +43,7 @@ export function validatePhysicalPassport(
   canonRefs: ReadonlySet<string>,
   existing: ReadonlyMap<string, PhysicalPassport>,
   toleranceRatio = 0.03,
+  materialLocks?: ReadonlyMap<string, { lockedAt: number; densityKgM3: number; maxCyclicStrain: number }>,
 ): MaterialGeometryResult {
   if (!passport.itemId.startsWith("item.") ||
       !nonempty(passport.originTxId) ||
@@ -50,6 +53,22 @@ export function validatePhysicalPassport(
   }
   if (!canonRefs.has(passport.materialCanonRef)) {
     throw new Error("material fact not established in authoritative canon BEFORE this item");
+  }
+  if (materialLocks) {
+    const registered = materialLocks.get(passport.materialCanonRef);
+    if (!registered) throw new Error("physical material lacks a version-locked canonical property record");
+    const origin = parseInworldMoment(passport.originInworldTime);
+    if (origin == null || origin < registered.lockedAt) {
+      throw new Error("material properties were not canonized before this item's original transaction");
+    }
+    if (Math.abs(passport.densityKgM3 - registered.densityKgM3) / registered.densityKgM3 > 0.03) {
+      throw new Error("material density deviates from independently fixed permanent canon");
+    }
+    if (passport.cyclicStrainLimit != null &&
+        (passport.cyclicStrainLimit > registered.maxCyclicStrain ||
+          passport.cyclicStrainLimit < 0)) {
+      throw new Error("material cyclic flex claim exceeds pre-established canonical material limit");
+    }
   }
   if (existing.has(passport.itemId)) {
     throw new Error("physical instance passport already exists and is immutable; transform into new item ID");
@@ -135,8 +154,20 @@ export const PHYSICAL_PASSPORT_HEADERS = [
   "Last verified TX", "Notes",
 ];
 
+export function permanentMaterialLocksInCanon(text: string): ReadonlyMap<string, {lockedAt:number;densityKgM3:number;maxCyclicStrain:number}> {
+  const result=new Map<string,{lockedAt:number;densityKgM3:number;maxCyclicStrain:number}>();
+  const pattern=/\[MATID:(material\.[a-z0-9_.-]+)\|LOCKED:(Day\d+ \d{2}:\d{2}(?::\d{2})?)\|DENSITY:(\d+(?:\.\d+)?)\|CYCLIC:(\d+(?:\.\d+)?)\]/gi;
+  for(const match of text.matchAll(pattern)){
+    const lockedAt=parseInworldMoment(match[2]);
+    const densityKgM3=Number(match[3]),maxCyclicStrain=Number(match[4]);
+    if(lockedAt==null||densityKgM3<=0||maxCyclicStrain<0||maxCyclicStrain>1)continue;
+    if(result.has(match[1]))throw new Error("conflicting duplicate material canonical registry ID");
+    result.set(match[1],{lockedAt,densityKgM3,maxCyclicStrain});
+  }
+  return result;
+}
 export function materialRefsInCanon(text: string): ReadonlySet<string> {
-  return new Set([...text.matchAll(/\[MATID:(material\.[a-z0-9_.-]+)\]/gi)].map((m)=>m[1]));
+  return new Set(permanentMaterialLocksInCanon(text).keys());
 }
 
 export function passportToSheetRecord(
