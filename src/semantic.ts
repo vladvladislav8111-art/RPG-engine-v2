@@ -39,6 +39,7 @@ import { reviewWorldProcesses } from "./world_process.ts";
 import { validateWorkDemand } from "./work_demand.ts";
 import { validateRumorTransmission } from "./world_information.ts";
 import { validateMajorWorldEvent } from "./world_events.ts";
+import { auditMaterialTransformation } from "./physical_integrity.ts";
 import type {
   CommitRequest,
   Scalar,
@@ -181,7 +182,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     touched.add("CHARACTERISTICS");
   }
   if ((semantic.adaptationEvents?.length ?? 0) > 0) touched.add("CHARACTERISTIC_ADAPTATION");
-  if ((semantic.inventoryEvents?.length ?? 0) > 0) {
+  if ((semantic.inventoryEvents?.length ?? 0) > 0 || (semantic.materialTransformations?.length ?? 0) > 0) {
     touched.add("INVENTORY_CURRENT");
     touched.add("SYSTEM_MODULES_CURRENT");
   }
@@ -221,7 +222,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   const ranges = [...touched].map((t) => TABLES[t].range);
   const sheets = await sheetsBatchGet(config.files.TEMP_RUNTIME, ranges);
   const gmTemplates = [
-    ...((semantic.inventoryEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.COMMON_OBJECT_TEMPLATES] : []),
+    ...(((semantic.inventoryEvents?.length ?? 0) > 0 || (semantic.materialTransformations?.length ?? 0) > 0) ? [PREGEN_TABLES.COMMON_OBJECT_TEMPLATES] : []),
     ...((semantic.workDemandEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_JOB_TEMPLATES] : []),
     ...((semantic.rumorRelayEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_RUMOR_CHANNELS] : []),
     ...((semantic.majorWorldEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_MAJOR_EVENT_TEMPLATES] : []),
@@ -1098,6 +1099,31 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
 
   const inventoryRows = sheets[TABLES.INVENTORY_CURRENT.range] ?? [];
   const inventoryOutcomes: unknown[] = [];
+  const physicalAudits: unknown[] = [];
+  if ((semantic.materialTransformations?.length ?? 0) > 0) {
+    const toRecords = (rows: unknown[][]) => rows.slice(1).map((row) =>
+      Object.fromEntries(headers(rows).map((field, i) => [field, row[i] ?? null]))
+    );
+    const consumedIds = new Set<string>();
+    const producedIds = new Set<string>();
+    for (const transformation of semantic.materialTransformations ?? []) {
+      for (const id of transformation.sourceItemIds) {
+        if (consumedIds.has(id)) throw new Error("material source consumed more than once: " + id);
+        consumedIds.add(id);
+      }
+      for (const id of transformation.productItemIds) {
+        if (producedIds.has(id)) throw new Error("material product output duplicated: " + id);
+        producedIds.add(id);
+      }
+      physicalAudits.push(auditMaterialTransformation({
+        transformation,
+        inventoryBefore: toRecords(inventoryRows),
+        objectTemplates: toRecords(inventoryTemplateRows),
+        events: semantic.inventoryEvents ?? [],
+      }));
+    }
+  }
+  worldAutomationOutcomes.materialConservation = physicalAudits;
   for (const event of semantic.inventoryEvents ?? []) {
     if (event.qtyDelta != null && event.qtySet != null) {
       throw new Error(`inventory event cannot set both qtyDelta and qtySet: ${event.itemId}`);
@@ -1119,6 +1145,12 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     }
 
     const currentTemplateId = existingRow ? String(existingRow[headerIndex(inventoryRows, "Template ID")] ?? "").trim() : "";
+    if (existingRow && event.templateId != null && event.templateId !== currentTemplateId) {
+      throw new Error("existing physical instance cannot mutate its template identity: " + event.itemId + "; consume/source and instantiate new output instead");
+    }
+    if (existingRow && event.massKgOverride !== undefined && event.massKgOverride !== Number(existingRow[headerIndex(inventoryRows, "Mass kg override")]) && (event.reason?.length ?? 0) < 35) {
+      throw new Error("revising measured unit mass requires specific real measurement/processing evidence: " + event.itemId);
+    }
     const templateId = event.templateId ?? currentTemplateId;
     if (!templateId) throw new Error(`inventory templateId required: ${event.itemId}`);
     const templateIndex = findDataRow(inventoryTemplateRows, "Template ID", templateId);
