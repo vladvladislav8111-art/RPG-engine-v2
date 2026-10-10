@@ -424,6 +424,7 @@ export type SemanticCommitPlan = {
   conditions?: SemanticConditionSet[];
   inventoryEvents?: SemanticInventoryEvent[];
   materialTransformations?: SemanticMaterialTransformation[];
+  physicalPassportEvents?: import("./physical_passport.ts").PhysicalPassport[];
   survival?: SemanticSurvival;
   choiceResolutions?: SemanticChoiceResolution[];
   exertionEvents?: SemanticExertionEvent[];
