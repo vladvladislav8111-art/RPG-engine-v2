@@ -172,7 +172,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   ]);
   if ((semantic.choiceResolutions?.length ?? 0) > 0) touched.add("MILESTONES");
   if ((semantic.generalXpEvents?.length ?? 0) > 0) touched.add("CHARACTERISTICS");
-  if (semantic.control?.sceneId != null || semantic.control?.locationId != null) touched.add("ACTIVE_CONTEXT");
+  if (semantic.control?.sceneId != null || semantic.control?.locationId != null || semantic.sceneActorIds != null) touched.add("ACTIVE_CONTEXT");
   if ((semantic.exertionEvents?.length ?? 0) > 0 || (semantic.restEvents?.length ?? 0) > 0 || (semantic.injuryEvents?.length ?? 0) > 0 || (semantic.adaptationEvents?.length ?? 0) > 0) {
     touched.add("CHARACTERISTICS");
   }
@@ -466,6 +466,8 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       patchActiveContext("settlement", "");
       patchActiveContext("region_pack", "");
       patchActiveContext("default_turn_tags", "");
+      patchActiveContext("participating_npc", "");
+      patchActiveContext("active_clock", "");
     }
   }
   if (c.locationDisplay != null) patchControl("current_location_display", c.locationDisplay);
@@ -473,7 +475,18 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     const sceneChanged = String(controlValue("current_scene_id") ?? "") !== c.sceneId;
     patchControl("current_scene_id", c.sceneId);
     patchActiveContext("scene", c.sceneId);
-    if (sceneChanged) patchActiveContext("default_turn_tags", "");
+    if (sceneChanged) {
+      patchActiveContext("default_turn_tags", "");
+      patchActiveContext("participating_npc", "");
+      patchActiveContext("active_clock", "");
+    }
+  }
+  if (semantic.sceneActorIds != null) {
+    const actorIds = [...new Set(semantic.sceneActorIds)];
+    if (actorIds.some((id) => !/^npc\\.[a-z0-9_.-]+$/i.test(id))) {
+      throw new Error("sceneActorIds must contain stable NPC IDs");
+    }
+    patchActiveContext("participating_npc", actorIds.join(";"));
   }
   if (c.explorationPace != null) patchControl("exploration_pace", c.explorationPace);
   if (c.explorationStance != null) patchControl("exploration_stance", c.explorationStance);
