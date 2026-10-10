@@ -40,7 +40,7 @@ import { validateWorkDemand } from "./work_demand.ts";
 import { validateRumorTransmission } from "./world_information.ts";
 import { validateMajorWorldEvent } from "./world_events.ts";
 import { auditMaterialTransformation } from "./physical_integrity.ts";
-import { materialRefsInCanon,passportToSheetRecord,validatePhysicalPassport } from "./physical_passport.ts";
+import { materialRefsInCanon, permanentMaterialLocksInCanon, passportToSheetRecord, validatePhysicalPassport } from "./physical_passport.ts";
 import type {
   CommitRequest,
   Scalar,
@@ -1244,13 +1244,14 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     }
     const { text: canonText } = await docsGet(config.files.LIVE_CANON_INDEX);
     const canonRefs = materialRefsInCanon(canonText);
+    const materialLocks = permanentMaterialLocksInCanon(canonText);
     const physicalExisting = new Map(
       physicalRows.slice(1).filter((row) => String(row[0] ?? "")).map((row): [string, import("./physical_passport.ts").PhysicalPassport] => [
         String(row[0]), {} as import("./physical_passport.ts").PhysicalPassport,
       ]),
     );
     for (const event of semantic.physicalPassportEvents ?? []) {
-      const result = validatePhysicalPassport(event, canonRefs, physicalExisting);
+      const result = validatePhysicalPassport(event, canonRefs, physicalExisting, 0.03, materialLocks);
       const index = findDataRow(inventoryRows, "Item ID", event.itemId);
       if (index < 0) throw new Error("cannot register physical passport without live owned inventory: " + event.itemId);
       const item = cloneRow(inventoryRows, index);
