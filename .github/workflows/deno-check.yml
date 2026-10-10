@@ -3,6 +3,7 @@ name: Deno Check
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -17,3 +18,5 @@ jobs:
           deno-version: v2.x
       - name: Check runtime entrypoint
         run: deno check main.ts
+      - name: Run regression tests
+        run: deno task test
