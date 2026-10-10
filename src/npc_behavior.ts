@@ -46,7 +46,7 @@ export function buildNpcBehavioralContext(input: {
     .map((r) => ({
       threadId: r["Thread ID"],
       topic: r["Topic"],summary:r["Summary"],
-      waitingOn:r["Waiting on"],triggerDue:r["Trigger due"],
+      waitingOn:r["Waiting on"],triggerDue:r["Trigger/due"],
       importance:r["Importance"],
     }));
   const directedRelations = input.relationships.filter((r) => relevant(r, actorId))
@@ -66,8 +66,8 @@ export function buildNpcBehavioralContext(input: {
   return {
     ready: true,
     actorId,
-    stableTraits: str(current["Traits/personality"] || current["Temperament/personality"] || current["Personality"] || current["Traits"]),
-    capabilities: str(current["Skills/competences"] || current["Competence profile"] || current["Competences"]),
+    stableTraits: str(current["Identity anchors"]),
+    capabilities: str(current["Competence anchors"]),
     independentGoal: current["Current goal/activity"],
     currentLocation: current["Current/last-known location"],
     socialBoundaries: current["Notes"] ?? null,
