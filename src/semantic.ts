@@ -35,6 +35,7 @@ import { makeTurnToken } from "./turn_token.ts";
 import { resolveSelarinWeatherRecords, sheetObjects } from "./weather.ts";
 import { validateChatEventShape, validateRelationshipEventShape } from "./social_context.ts";
 import { worldContinuityReview } from "./world_continuity.ts";
+import { reviewWorldProcesses } from "./world_process.ts";
 import type {
   CommitRequest,
   Scalar,
@@ -189,6 +190,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   for (const item of semantic.rowUpserts ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowUpdates ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowDeletes ?? []) touched.add(item.table as RuntimeTableName);
+  if ((semantic.worldProcessEvents?.length ?? 0) > 0) touched.add("WORLD_CLOCKS");
   if ((semantic.elapsedSeconds ?? 0) > 0) {
     touched.add("WEATHER_CURRENT");
     touched.add("OPPORTUNITIES_CURRENT");
@@ -443,6 +445,69 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     }
     worldAutomationOutcomes.keyNpcAdvances = npcAdvances;
   }
+
+  // Every relevant ACTIVE clock must advance for a causal reason. Event-based
+  // watches and unfinished staffed commissions are not daily clock events.
+  // This check is part of semantic prepare/commit, never a hidden time tick.
+  const clockRows = sheets[TABLES.WORLD_CLOCKS.range] ?? [];
+  const clockObjects = clockRows.slice(1).map((row) =>
+    Object.fromEntries(headers(clockRows).map((field, i) => [field, row[i] ?? null]))
+  );
+  const processReview = reviewWorldProcesses({
+    worldDay: resolvedDay,
+    worldTime: resolvedTime,
+    rows: clockObjects,
+  });
+  worldAutomationOutcomes.clocksNeedingReview = processReview.activeClocksOverdue;
+  const processEvents = semantic.worldProcessEvents ?? [];
+  const processProvided = new Set(processEvents.map((e) => e.processId));
+  if (processProvided.size !== processEvents.length) throw new Error("duplicate worldProcessEvents processId");
+  if ((semantic.elapsedSeconds ?? 0) > 0) {
+    for (const due of processReview.activeClocksOverdue) {
+      if (!processProvided.has(due.processId)) {
+        throw new Error(`world process due for causal resolution: ${due.processId} (${due.reason}). Supply semantic.worldProcessEvents or do not advance time.`);
+      }
+    }
+  }
+  const processAdvances: unknown[] = [];
+  for (const event of processEvents) {
+    if (!event.processId?.trim() || event.currentActivity?.trim().length < 36 ||
+        event.causalBasis?.trim().length < 36 || event.nextMilestone?.trim().length < 18) {
+      throw new Error(`worldProcessEvents needs processId, meaningful activity, causalBasis and nextMilestone: ${event.processId ?? ""}`);
+    }
+    const index = findDataRow(clockRows, "Process ID", event.processId);
+    if (index < 0) throw new Error(`worldProcessEvents unknown process: ${event.processId}`);
+    const row = cloneRow(clockRows, index);
+    const oldState = String(row[headerIndex(clockRows, "State")] ?? "");
+    if (!oldState.toUpperCase().startsWith("ACTIVE")) {
+      throw new Error(`worldProcessEvents cannot advance inactive process: ${event.processId}`);
+    }
+    if ([...(semantic.rowUpserts ?? []), ...(semantic.rowUpdates ?? []), ...(semantic.rowDeletes ?? [])]
+      .some((change) => change.table === "WORLD_CLOCKS" && change.key === event.processId)) {
+      throw new Error(`cannot write WORLD_CLOCKS both generically and by worldProcessEvents: ${event.processId}`);
+    }
+    const state = event.state?.trim() || oldState;
+    if (/^(COMPLETED|CLOSED|RESOLVED|EXPIRED)/i.test(state) &&
+        event.causalBasis.trim().length < 80) {
+      throw new Error(`closing a world process needs specific causal closure evidence: ${event.processId}`);
+    }
+    setByHeader(clockRows, row, "Current activity", event.currentActivity.trim());
+    setByHeader(clockRows, row, "Next milestone/window", event.nextMilestone.trim());
+    setByHeader(clockRows, row, "Last advanced", `Day${resolvedDay} ${resolvedTime}`);
+    if (event.state != null) setByHeader(clockRows, row, "State", state);
+    if (event.visibility != null) setByHeader(clockRows, row, "Visibility", event.visibility);
+    writeRow("WORLD_CLOCKS", clockRows, index, row);
+    processAdvances.push({
+      processId: event.processId,
+      oldState,
+      newState: state,
+      causalBasis: event.causalBasis.trim(),
+      activity: event.currentActivity.trim(),
+      nextMilestone: event.nextMilestone.trim(),
+      at: `Day${resolvedDay} ${resolvedTime}`,
+    });
+  }
+  worldAutomationOutcomes.worldProcessAdvances = processAdvances;
 
   const activeContextRows = sheets[TABLES.ACTIVE_CONTEXT.range] ?? [];
   const patchActiveContext = (slot: string, pointer: Scalar) => {

@@ -1,4 +1,5 @@
-import { actorSnapshotFreshness, parseInworldMoment } from "./social_context.ts";
+import { actorSnapshotFreshness } from "./social_context.ts";
+import { reviewWorldProcesses, type WorldProcessDue } from "./world_process.ts";
 
 export type ContinuityRow = Record<string, unknown>;
 
@@ -10,12 +11,7 @@ export type KeyNpcDue = {
   reason: "OFFSCREEN_ADVANCE_DUE" | "ACTIVITY_RULE_MISSING" | "TIMESTAMP_UNKNOWN";
 };
 
-export type ActiveClockDue = {
-  processId: string;
-  ageMinutes: number | null;
-  lastAdvanced: string | null;
-  reason: "REVIEW_OVERDUE" | "TIMESTAMP_UNKNOWN";
-};
+export type ActiveClockDue = WorldProcessDue;
 
 export function worldContinuityReview(input: {
   worldDay: unknown;
@@ -63,31 +59,20 @@ export function worldContinuityReview(input: {
       });
     }
   }
-  const now = parseInworldMoment(`Day${String(input.worldDay ?? "")} ${String(input.worldTime ?? "")}`);
-  const reviewMinutes = input.worldClockReviewMinutes ?? 720;
-  const activeClocksOverdue: ActiveClockDue[] = [];
-  for (const clock of input.worldClocks) {
-    const state = String(clock["State"] ?? "").toUpperCase();
-    if (!state.startsWith("ACTIVE")) continue;
-    const processId = String(clock["Process ID"] ?? "").trim();
-    if (!processId) continue;
-    const lastAdvanced = String(clock["Last advanced"] ?? "").trim();
-    const parsed = parseInworldMoment(lastAdvanced);
-    const ageMinutes = now == null || parsed == null ? null : Math.max(0, now - parsed);
-    if (ageMinutes == null || ageMinutes >= reviewMinutes) {
-      activeClocksOverdue.push({
-        processId,
-        ageMinutes,
-        lastAdvanced: lastAdvanced || null,
-        reason: ageMinutes == null ? "TIMESTAMP_UNKNOWN" : "REVIEW_OVERDUE",
-      });
-    }
-  }
+  const processReview = reviewWorldProcesses({
+    worldDay: input.worldDay,
+    worldTime: input.worldTime,
+    rows: input.worldClocks,
+    defaultReviewMinutes: input.worldClockReviewMinutes,
+  });
+  const activeClocksOverdue = processReview.activeClocksOverdue;
   keyNpcDue.sort((a, b) => (b.ageMinutes ?? Infinity) - (a.ageMinutes ?? Infinity));
   activeClocksOverdue.sort((a, b) => (b.ageMinutes ?? Infinity) - (a.ageMinutes ?? Infinity));
   return {
     keyNpcDue,
     activeClocksOverdue,
+    eventTriggeredActive: processReview.eventTriggeredActive,
+    staffedPending: processReview.staffedPending,
     requiresKeyNpcReview: keyNpcDue.length > 0,
     note: "Clock entries are review prompts, not automatic events. Never invent jobs, earnings, crime or messages to clear a warning.",
   };
@@ -106,6 +91,7 @@ export function continuityFromSparseRanges(
   const ruleDates = range("NPC_ACTIVITY_RULES!K1:K200");
   const clockCore = range("WORLD_CLOCKS!A1:C500");
   const clockDates = range("WORLD_CLOCKS!H1:H500");
+  const clockMilestone = range("WORLD_CLOCKS!F1:F500");
   const npcCurrent = npcCore.slice(1).map((r, i) => ({
     "NPC ID": r[0],
     Importance: r[3],
@@ -121,6 +107,7 @@ export function continuityFromSparseRanges(
     "Process ID": r[0],
     State: r[2],
     "Last advanced": clockDates[i + 1]?.[0],
+    "Next milestone/window": clockMilestone[i + 1]?.[0],
   }));
   return worldContinuityReview({
     worldDay,
@@ -139,4 +126,5 @@ export const CONTINUITY_SPARSE_RANGES = [
   "NPC_ACTIVITY_RULES!K1:K200",
   "WORLD_CLOCKS!A1:C500",
   "WORLD_CLOCKS!H1:H500",
+  "WORLD_CLOCKS!F1:F500",
 ];
