@@ -247,6 +247,14 @@ export type SemanticOffscreenNpcEvent = {
   travelEvidence?: string;
 };
 
+export type SemanticMaterialTransformation = {
+  sourceItemIds: string[];
+  productItemIds: string[];
+  processEvidence: string;
+  wasteDisposition: string;
+  transferEvidence?: string;
+};
+
 export type SemanticMajorEvent = {
   processId: string;
   templateId: string;
@@ -412,6 +420,7 @@ export type SemanticCommitPlan = {
   resourceSets?: SemanticResourceSet[];
   conditions?: SemanticConditionSet[];
   inventoryEvents?: SemanticInventoryEvent[];
+  materialTransformations?: SemanticMaterialTransformation[];
   survival?: SemanticSurvival;
   choiceResolutions?: SemanticChoiceResolution[];
   exertionEvents?: SemanticExertionEvent[];
