@@ -239,6 +239,14 @@ export type SemanticThreadEvent = {
   notes?: string;
 };
 
+export type SemanticOffscreenNpcEvent = {
+  actorId: string;
+  currentGoal: string;
+  elapsedSummary: string;
+  locationId?: string;
+  travelEvidence?: string;
+};
+
 export type SemanticChatEvent = {
   messageId: string;
   channelId: string;
@@ -357,6 +365,7 @@ export type SemanticCommitPlan = {
   socialMemoryEvents?: SemanticSocialMemoryEvent[];
   threadEvents?: SemanticThreadEvent[];
   chatEvents?: SemanticChatEvent[];
+  offscreenNpcEvents?: SemanticOffscreenNpcEvent[];
   rowUpserts?: SemanticRowUpsert[];
   rowUpdates?: SemanticRowUpdate[];
   rowDeletes?: SemanticRowDelete[];
