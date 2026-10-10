@@ -37,6 +37,7 @@ import { validateChatEventShape, validateRelationshipEventShape } from "./social
 import { worldContinuityReview } from "./world_continuity.ts";
 import { reviewWorldProcesses } from "./world_process.ts";
 import { validateWorkDemand } from "./work_demand.ts";
+import { validateRumorTransmission } from "./world_information.ts";
 import type {
   CommitRequest,
   Scalar,
@@ -192,6 +193,11 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   for (const item of semantic.rowUpdates ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowDeletes ?? []) touched.add(item.table as RuntimeTableName);
   if ((semantic.worldProcessEvents?.length ?? 0) > 0) touched.add("WORLD_CLOCKS");
+  if ((semantic.rumorRelayEvents?.length ?? 0) > 0) {
+    touched.add("NPC_KNOWLEDGE");
+    touched.add("NPC_CURRENT");
+    touched.add("WORLD_CLOCKS");
+  }
   if ((semantic.workDemandEvents?.length ?? 0) > 0) {
     touched.add("WORLD_CLOCKS");
     touched.add("NPC_CURRENT");
@@ -212,11 +218,13 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   const gmTemplates = [
     ...((semantic.inventoryEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.COMMON_OBJECT_TEMPLATES] : []),
     ...((semantic.workDemandEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_JOB_TEMPLATES] : []),
+    ...((semantic.rumorRelayEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_RUMOR_CHANNELS] : []),
   ];
   const templateData = gmTemplates.length
     ? await sheetsBatchGet(config.files.GM_PREGEN, gmTemplates) : {};
   const inventoryTemplateRows = templateData[PREGEN_TABLES.COMMON_OBJECT_TEMPLATES] ?? [];
   const workTemplateRows = templateData[PREGEN_TABLES.SELARIN_JOB_TEMPLATES] ?? [];
+  const rumorChannelRows = templateData[PREGEN_TABLES.SELARIN_RUMOR_CHANNELS] ?? [];
 
   const controlRows = sheets[TABLES.CONTROL.range] ?? [];
   const saveIndex = findDataRow(controlRows, "Key", "save_id");
@@ -556,6 +564,41 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     }
   }
   worldAutomationOutcomes.workDemand = workDemandOutcomes;
+
+  // An NPC hears only from an existing informed sender on an actual channel.
+  // No free GM-truth broadcasts or spontaneous Shura-facing notifications.
+  const rumorOutcomes: unknown[] = [];
+  if ((semantic.rumorRelayEvents?.length ?? 0) > 0) {
+    const known = sheets[TABLES.NPC_KNOWLEDGE.range] ?? [];
+    const npcs = sheets[TABLES.NPC_CURRENT.range] ?? [];
+    const records = (rows: unknown[][]) => rows.slice(1).map((row) =>
+      Object.fromEntries(headers(rows).map((field, i) => [field, row[i] ?? null]))
+    );
+    for (const rumor of semantic.rumorRelayEvents ?? []) {
+      const rowData = validateRumorTransmission({
+        event: rumor,
+        channels: records(rumorChannelRows),
+        npcKnowledge: records(known),
+        npcCurrent: records(npcs),
+        worldClocks: records(clockRows),
+        currentDay: resolvedDay,
+        currentTime: resolvedTime,
+      });
+      const row = Array(headers(known).length).fill("");
+      for (const [field, value] of Object.entries(rowData)) {
+        setByHeader(known, row, field, value as Scalar);
+      }
+      appendRow("NPC_KNOWLEDGE", known, row);
+      rumorOutcomes.push({
+        factId: rumor.factId,
+        senderNpcId: rumor.senderNpcId,
+        receiverNpcId: rumor.receiverNpcId,
+        channelId: rumor.channelId,
+        relayEnd: rumor.relayEnd,
+      });
+    }
+  }
+  worldAutomationOutcomes.rumorRelays = rumorOutcomes;
 
   const activeContextRows = sheets[TABLES.ACTIVE_CONTEXT.range] ?? [];
   const patchActiveContext = (slot: string, pointer: Scalar) => {
