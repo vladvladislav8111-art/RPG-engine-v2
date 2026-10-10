@@ -9,6 +9,7 @@ import { makeTurnToken } from "./turn_token.ts";
 import { buildSelarinLocalContext } from "./local_context.ts";
 import { CONTINUITY_SPARSE_RANGES, continuityFromSparseRanges } from "./world_continuity.ts";
 import { resolveSceneActorIds } from "./scene_routing.ts";
+import { buildNpcBehavioralContext } from "./npc_behavior.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
@@ -734,6 +735,16 @@ export async function getTurnContext(input: TurnContextRequest) {
           }
         : null,
       autonomy: { activityRule, activeWorldClocks, freshness },
+      behavioralContext: buildNpcBehavioralContext({
+        actorId: id,
+        current,
+        knowledge: actorKnowledge.filter((r) => String(r["NPC ID"] ?? "") === id),
+        relationships: filterRelationships(relationshipRows, [id]),
+        memories: filterByParticipants(socialMemoryRows, [id]),
+        openThreads: filterByParticipants(openThreadRows, [id]),
+        recentChat: actorRecentChat[id] ?? [],
+        activeWorldClocks,
+      }),
     };
     actorContextGate[id] = evaluateNpcContextGate({
       actorId: id,
