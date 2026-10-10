@@ -247,6 +247,20 @@ export type SemanticOffscreenNpcEvent = {
   travelEvidence?: string;
 };
 
+export type SemanticMajorEvent = {
+  processId: string;
+  templateId: string;
+  sourceProcessId: string;
+  locationId: string;
+  participatingNpcIds: string[];
+  causalTrigger: string;
+  concreteEffects: string;
+  nextReview: string;
+  startDay: number;
+  startTime: string;
+  durationHours: number;
+};
+
 export type SemanticRumorRelayEvent = {
   factId: string;
   sourceFactId: string;
@@ -414,6 +428,7 @@ export type SemanticCommitPlan = {
   worldProcessEvents?: SemanticWorldProcessEvent[];
   workDemandEvents?: SemanticWorkDemandEvent[];
   rumorRelayEvents?: SemanticRumorRelayEvent[];
+  majorWorldEvents?: SemanticMajorEvent[];
   rowUpserts?: SemanticRowUpsert[];
   rowUpdates?: SemanticRowUpdate[];
   rowDeletes?: SemanticRowDelete[];
