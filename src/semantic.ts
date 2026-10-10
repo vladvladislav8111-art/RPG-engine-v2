@@ -38,6 +38,7 @@ import { worldContinuityReview } from "./world_continuity.ts";
 import { reviewWorldProcesses } from "./world_process.ts";
 import { validateWorkDemand } from "./work_demand.ts";
 import { validateRumorTransmission } from "./world_information.ts";
+import { validateMajorWorldEvent } from "./world_events.ts";
 import type {
   CommitRequest,
   Scalar,
@@ -193,6 +194,10 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   for (const item of semantic.rowUpdates ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowDeletes ?? []) touched.add(item.table as RuntimeTableName);
   if ((semantic.worldProcessEvents?.length ?? 0) > 0) touched.add("WORLD_CLOCKS");
+  if ((semantic.majorWorldEvents?.length ?? 0) > 0) {
+    touched.add("WORLD_CLOCKS");
+    touched.add("NPC_CURRENT");
+  }
   if ((semantic.rumorRelayEvents?.length ?? 0) > 0) {
     touched.add("NPC_KNOWLEDGE");
     touched.add("NPC_CURRENT");
@@ -219,12 +224,14 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     ...((semantic.inventoryEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.COMMON_OBJECT_TEMPLATES] : []),
     ...((semantic.workDemandEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_JOB_TEMPLATES] : []),
     ...((semantic.rumorRelayEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_RUMOR_CHANNELS] : []),
+    ...((semantic.majorWorldEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_MAJOR_EVENT_TEMPLATES] : []),
   ];
   const templateData = gmTemplates.length
     ? await sheetsBatchGet(config.files.GM_PREGEN, gmTemplates) : {};
   const inventoryTemplateRows = templateData[PREGEN_TABLES.COMMON_OBJECT_TEMPLATES] ?? [];
   const workTemplateRows = templateData[PREGEN_TABLES.SELARIN_JOB_TEMPLATES] ?? [];
   const rumorChannelRows = templateData[PREGEN_TABLES.SELARIN_RUMOR_CHANNELS] ?? [];
+  const majorEventTemplateRows = templateData[PREGEN_TABLES.SELARIN_MAJOR_EVENT_TEMPLATES] ?? [];
 
   const controlRows = sheets[TABLES.CONTROL.range] ?? [];
   const saveIndex = findDataRow(controlRows, "Key", "save_id");
@@ -599,6 +606,41 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     }
   }
   worldAutomationOutcomes.rumorRelays = rumorOutcomes;
+
+  // A pregen event candidate cannot become reality without a live source,
+  // named actors and measurable physical/social consequences.
+  const majorEventOutcomes: unknown[] = [];
+  if ((semantic.majorWorldEvents?.length ?? 0) > 0) {
+    const npcRows = sheets[TABLES.NPC_CURRENT.range] ?? [];
+    const records = (rows: unknown[][]) => rows.slice(1).map((row) =>
+      Object.fromEntries(headers(rows).map((field, i) => [field, row[i] ?? null]))
+    );
+    for (const event of semantic.majorWorldEvents ?? []) {
+      const newRecord = validateMajorWorldEvent({
+        event,
+        templates: records(majorEventTemplateRows),
+        clocks: records(clockRows),
+        npcs: records(npcRows),
+        worldDay: resolvedDay,
+        worldTime: resolvedTime,
+      });
+      const row = Array(headers(clockRows).length).fill("");
+      for (const [field, value] of Object.entries(newRecord)) {
+        setByHeader(clockRows, row, field, value as Scalar);
+      }
+      appendRow("WORLD_CLOCKS", clockRows, row);
+      majorEventOutcomes.push({
+        processId: event.processId,
+        templateId: event.templateId,
+        sourceProcessId: event.sourceProcessId,
+        actors: event.participatingNpcIds,
+        startDay: event.startDay,
+        durationHours: event.durationHours,
+        trigger: event.causalTrigger,
+      });
+    }
+  }
+  worldAutomationOutcomes.majorEvents = majorEventOutcomes;
 
   const activeContextRows = sheets[TABLES.ACTIVE_CONTEXT.range] ?? [];
   const patchActiveContext = (slot: string, pointer: Scalar) => {
