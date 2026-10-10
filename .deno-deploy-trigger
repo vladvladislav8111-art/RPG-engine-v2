@@ -1,4 +1,4 @@
-Redeploy RPG Runtime Bridge Deno production
-Target: scene actor memory routing (merged PR #13, commit d9a5d6bd3aeddc3aba7584aaee0e5497641aee56)
-Reason: production /context still on earlier build after GitHub merge; request one deployment refresh
-Keep existing Deno Site identity, backend URL, secrets and write permissions unchanged.
+RPG Runtime Bridge Deno production rollout request
+GitHub main: world process fix PR #14 merged as 1e68bdcad14be2271968ff6f4b3a4250b04ee67c
+Requires latest scene routing PR #13 and continuity PR #12.
+Production verification only: /health and /context first. Preserve production secrets, Site identity, committed save, write settings and URL.
