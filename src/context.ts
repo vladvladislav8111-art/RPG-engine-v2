@@ -13,6 +13,7 @@ import { ACHIEVEMENT_CATALOG_COUNTS } from "./world_sim_v3/achievement_catalog.t
 import { resolveSceneActorIds } from "./scene_routing.ts";
 import { buildNpcBehavioralContext } from "./npc_behavior.ts";
 import { buildTurnBrief, contactActorIdsForRequest } from "./turn_dispatcher.ts";
+import { buildSystemNotificationCenter } from "./system_notification_center.ts";
 import { availableCurrentOpportunities, parseLiveClock } from "./world_sim_v3/source_bridge.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
@@ -258,6 +259,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   );
   const routeSaveId = String(findControl(routingControlRows, "save_id") ?? "");
   const tagSet = new Set((input.tags ?? []).map((t) => t.toUpperCase()));
+  const wantsSystemInbox = hasAny(tagSet, ["NOTIFICATIONS", "INBOX", "SYSTEM_INBOX", "ALERTS"]);
   const sourceContacts = rowsToObjects(sceneRouting["SYSTEM_CONTACTS_CURRENT!A1:J200"] ?? []);
   const requestedActorIds = [...new Set([
     ...(input.actorIds ?? []), ...routedSceneActorIds,
@@ -285,6 +287,12 @@ export async function getTurnContext(input: TurnContextRequest) {
     "PLAYER_RESOURCES!A1:E20",
     "PLAYER_CONDITIONS!A1:F100",
     ...(needsCompetences ? [TABLES.COMPETENCES.range] : []),
+    ...(wantsSystemInbox ? [
+      TABLES.PROGRESSION_EVENTS.range,
+      "ACTOR_ACHIEVEMENTS!A1:I1000",
+      TABLES.SYSTEM_CHAT_LOG.range,
+      ...(config.systemNotificationAckEnabled ? [TABLES.SYSTEM_NOTIFICATION_ACK_CURRENT.range] : []),
+    ] : []),
   ]);
 
   const boundedActorNames = new Set<keyof typeof TABLES>([
@@ -850,6 +858,19 @@ export async function getTurnContext(input: TurnContextRequest) {
       worldContinuity,
       worldActionDocket,
       worldSimulationV3: { enabled: config.worldSimV3Enabled, mode: "READ_ONLY_PROPOSALS", maxBatchJobs: 12, achievementCandidates: ACHIEVEMENT_CATALOG_COUNTS.achievements, titleCandidates: ACHIEVEMENT_CATALOG_COUNTS.titles, committed: false },
+      systemNotificationCenter: wantsSystemInbox ? buildSystemNotificationCenter({
+        pendingChoices: (structured.PENDING_CHOICES as Array<Record<string, unknown>> | undefined) ?? [],
+        progressEvents: rowsToObjects(base[TABLES.PROGRESSION_EVENTS.range] ?? []),
+        achievements: rowsToObjects(base["ACTOR_ACHIEVEMENTS!A1:I1000"] ?? []),
+        contacts: sourceContacts,
+        chatEvents: rowsToObjects(base[TABLES.SYSTEM_CHAT_LOG.range] ?? []),
+        worldAgenda: worldActionDocket.items,
+        ackReceipts: config.systemNotificationAckEnabled
+          ? rowsToObjects(base[TABLES.SYSTEM_NOTIFICATION_ACK_CURRENT.range] ?? []) : [],
+        ackSourceReady: config.systemNotificationAckEnabled,
+        currentDay: Number(worldDay),
+        maxItems: 30,
+      }) : null,
       gmTurnBrief: buildTurnBrief({
         turnClass: input.turnClass,
         tags: input.tags ?? [],
@@ -913,6 +934,7 @@ export async function getTurnContext(input: TurnContextRequest) {
         "TEMP:CORE",
         "TEMP:SCENE_ROUTING",
         "TEMP:SYSTEM_CONTACTS_CURRENT:ACTIVE",
+        ...(wantsSystemInbox ? ["TEMP:SYSTEM_NOTIFICATION_CENTER:SOURCE_DERIVED"] : []),
         "TEMP:WORLD_CONTINUITY_SPARSE",
         ...(needsCompetences ? ["TEMP:COMPETENCES"] : []),
         ...(actorIndexScan?.readPlan ?? []),
