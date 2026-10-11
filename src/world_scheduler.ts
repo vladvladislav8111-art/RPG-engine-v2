@@ -28,14 +28,16 @@ export function buildWorldActionDocket(input: {
   clocks: WorldProcessRow[];
   factionSeeds?: FactionSeed[];
   maxItems?: number;
-}): {items: WorldAgendaItem[]; dueCount: number; nextDailyReview: string | null; requiresIndependentResolution: boolean} {
+}): {items: WorldAgendaItem[]; dueCount: number; hiddenDueCount: number; activeCount: number; nextDailyReview: string | null; requiresIndependentResolution: boolean} {
   const review = reviewWorldProcesses({
     worldDay: input.worldDay, worldTime: input.worldTime, rows: input.clocks,
   });
-  const due = new Set(review.activeClocksOverdue.map((p) => p.processId));
+  const dueAge = new Map(review.activeClocksOverdue.map((p) => [p.processId, p.ageMinutes]));
+  const due = new Set(dueAge.keys());
   const now = parseInworldMoment("Day" + input.worldDay + " " + input.worldTime);
   const seeds = input.factionSeeds ?? [];
   const items: WorldAgendaItem[] = [];
+  const nextByProcess = new Map<string, number>();
   let nextMinute: number | null = null;
   for (const row of input.clocks) {
     const state = String(row["State"] ?? "").toUpperCase();
@@ -48,8 +50,9 @@ export function buildWorldActionDocket(input: {
     const nextAt = policy.cadence === "DAILY_REVIEW" && lastAt != null ? lastAt + 1440 :
       policy.cadence === "STAFFED_MILESTONE" && policy.targetDay != null ?
         policy.targetDay * 1440 + (policy.targetMinute ?? 0) : null;
-    if (nextAt != null && now != null && nextAt > now && (nextMinute == null || nextAt < nextMinute)) {
-      nextMinute = nextAt;
+    if (nextAt != null && now != null && nextAt > now) {
+      nextByProcess.set(id, nextAt);
+      if (nextMinute == null || nextAt < nextMinute) nextMinute = nextAt;
     }
     const seed = seeds.find((s) =>
       String(s["Status"] ?? "").startsWith("ACTIVE") &&
@@ -85,13 +88,33 @@ export function buildWorldActionDocket(input: {
   }
   const weight = (status: WorldAgendaItem["reviewStatus"]) =>
     status === "DUE" ? 0 : status === "SCHEDULED" ? 1 : status === "AWAIT_STAFFED_WORK" ? 2 : 3;
-  items.sort((a,b)=>weight(a.reviewStatus)-weight(b.reviewStatus) ||
-    a.processId.localeCompare(b.processId));
-  const maxItems = Math.max(1,Math.min(25,Math.floor(input.maxItems ?? 10)));
+  // When a large city has more due processes than a bounded GM packet,
+  // oldest unresolved world work should not disappear behind lexicographic
+  // process IDs. Among scheduled processes show nearest next-review first.
+  // Event-only watchers stay low priority without being dropped from counts.
+  items.sort((a,b)=>{
+    const priority = weight(a.reviewStatus)-weight(b.reviewStatus);
+    if (priority) return priority;
+    if (a.reviewStatus === "DUE" && b.reviewStatus === "DUE") {
+      const overdue = (dueAge.get(b.processId) ?? 0) - (dueAge.get(a.processId) ?? 0);
+      if (overdue) return overdue;
+    }
+    if (a.reviewStatus === "SCHEDULED" && b.reviewStatus === "SCHEDULED") {
+      const nextA = nextByProcess.get(a.processId) ?? Number.POSITIVE_INFINITY;
+      const nextB = nextByProcess.get(b.processId) ?? Number.POSITIVE_INFINITY;
+      if (nextA !== nextB) return nextA-nextB;
+    }
+    return a.processId.localeCompare(b.processId);
+  });
+  const maxItems = Number.isFinite(input.maxItems) ?
+    Math.max(1, Math.min(25, Math.floor(input.maxItems!))) : 10;
   const dueCount = items.filter((i)=>i.reviewStatus==="DUE").length;
+  const selected = items.slice(0, maxItems);
   return {
-    items:items.slice(0,maxItems),
+    items: selected,
     dueCount,
+    hiddenDueCount: Math.max(0, dueCount-selected.filter(i=>i.reviewStatus==="DUE").length),
+    activeCount: items.length,
     nextDailyReview: nextMinute == null ? null : "Day" + Math.floor(nextMinute/1440) + " " +
       String(Math.floor((nextMinute%1440)/60)).padStart(2,"0") + ":" +
       String(nextMinute%60).padStart(2,"0"),
