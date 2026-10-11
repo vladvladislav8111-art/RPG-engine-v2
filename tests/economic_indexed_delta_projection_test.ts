@@ -24,8 +24,9 @@ const wageAuth:IndexedWageAuthority={
   sourceEvidenceRefs:new Set(["proof.fixture.contract","proof.fixture.accepted",
     "proof.fixture.completed"]),
   actualAcceptedContracts:new Map([[wageDemand,contract]]),
-  verifiedCompletedDemandIds:new Set([wageDemand]),
-  verifiedCancelledDemandIds:new Set(),
+  acceptedReservationProofByDemand:new Map([[wageDemand,"proof.fixture.accepted"]]),
+  verifiedCompletedProofByDemand:new Map([[wageDemand,"proof.fixture.completed"]]),
+  verifiedCancelledProofByDemand:new Map(),
 };
 const order:NpcWholesaleOrder={
   orderId:"order.fixture.wood",sellerAccountId:seller,buyerAccountId:payer,
