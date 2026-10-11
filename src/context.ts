@@ -297,7 +297,7 @@ export async function getTurnContext(input: TurnContextRequest) {
     if (!structuredNames.includes(name)) structuredNames.push(name);
   };
 
-  if (hasAny(tagSet, ["SKILL", "WORK", "LANGUAGE", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY"])) {
+  if (hasAny(tagSet, ["SKILL", "WORK", "LANGUAGE", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY", "TRAINING", "SPECIALIZATION", "DEXTERITY", "HANDS"])) {
     addStructured("SPECIALIZATIONS");
     addStructured("MILESTONES");
     addStructured("PENDING_CHOICES");
@@ -353,6 +353,12 @@ export async function getTurnContext(input: TurnContextRequest) {
   // including dialogue/quiet turns where the player never requests WORLD tags.
   // Dormant seeds never become live events merely by being read.
   requestPregen("factionProcessSeeds", PREGEN_TABLES.FACTION_PROCESS_SEEDS);
+  if (hasAny(tagSet, ["SKILL", "TRAINING", "SPECIALIZATION", "DEXTERITY", "HANDS"])) {
+    requestPregen("canonicalSpecializations", PREGEN_TABLES.CANON_SPECIALIZATION_REGISTRY);
+  }
+  if (hasAny(tagSet, ["MAP", "AREA_PREP", "EXPLORATION", "LOOK", "SCENE"])) {
+    requestPregen("nearbyLocalAssets", PREGEN_TABLES.LOCATIONS);
+  }
   if (hasAny(tagSet, ["THREAT", "CRIME", "WORLDGEN", "AREA_PREP"])) {
     requestPregen("humanThreatProfiles", PREGEN_TABLES.HUMAN_THREAT_PROFILES);
   }
@@ -557,6 +563,13 @@ export async function getTurnContext(input: TurnContextRequest) {
   for (const p of pregens) {
     let records = rowsToObjects(p.rows);
     if (p.key === "districtPacks" || p.key === "serviceDirectory") records = filterByLocation(records, locationId);
+    if (p.key === "nearbyLocalAssets") {
+      // Present only already canonical places in this district; other
+      // neighborhoods/hidden interior sites remain undisclosed GM data.
+      records = records.filter((row) =>
+        String(row["Parent"] ?? "") === locationId ||
+        String(row["Location ID"] ?? "") === locationId);
+    }
     if (p.key === "npcIdentityIndex") {
       const wanted = new Set(resolvedActorIds);
       records = records.filter((r) => wanted.has(String(r["NPC ID"] ?? "")));

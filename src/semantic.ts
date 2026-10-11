@@ -40,6 +40,7 @@ import { validateWorkDemand } from "./work_demand.ts";
 import { validateRumorTransmission } from "./world_information.ts";
 import { validateMajorWorldEvent } from "./world_events.ts";
 import { auditMaterialTransformation } from "./physical_integrity.ts";
+import { parseCanonicalSpecializations, validateSpecializationAcquisition } from "./specialization_catalog.ts";
 import { materialRefsInCanon, permanentMaterialLocksInCanon, passportToSheetRecord, validatePhysicalPassport } from "./physical_passport.ts";
 import type {
   CommitRequest,
@@ -177,6 +178,10 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     "SESSION_LOG",
   ]);
   if ((semantic.choiceResolutions?.length ?? 0) > 0) touched.add("MILESTONES");
+  if ((semantic.specializationUnlockEvents?.length ?? 0) > 0) {
+    touched.add("NPC_CURRENT");
+    touched.add("ACTIVE_CONTEXT");
+  }
   if ((semantic.generalXpEvents?.length ?? 0) > 0) touched.add("CHARACTERISTICS");
   if (semantic.control?.sceneId != null || semantic.control?.locationId != null || semantic.sceneActorIds != null) touched.add("ACTIVE_CONTEXT");
   if ((semantic.exertionEvents?.length ?? 0) > 0 || (semantic.restEvents?.length ?? 0) > 0 || (semantic.injuryEvents?.length ?? 0) > 0 || (semantic.adaptationEvents?.length ?? 0) > 0) {
@@ -228,6 +233,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     ...((semantic.workDemandEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_JOB_TEMPLATES] : []),
     ...((semantic.rumorRelayEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_RUMOR_CHANNELS] : []),
     ...((semantic.majorWorldEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_MAJOR_EVENT_TEMPLATES] : []),
+    ...((semantic.specializationUnlockEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.CANON_SPECIALIZATION_REGISTRY] : []),
   ];
   const templateData = gmTemplates.length
     ? await sheetsBatchGet(config.files.GM_PREGEN, gmTemplates) : {};
@@ -235,6 +241,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   const workTemplateRows = templateData[PREGEN_TABLES.SELARIN_JOB_TEMPLATES] ?? [];
   const rumorChannelRows = templateData[PREGEN_TABLES.SELARIN_RUMOR_CHANNELS] ?? [];
   const majorEventTemplateRows = templateData[PREGEN_TABLES.SELARIN_MAJOR_EVENT_TEMPLATES] ?? [];
+  const canonicalSpecializationRows = templateData[PREGEN_TABLES.CANON_SPECIALIZATION_REGISTRY] ?? [];
 
   const controlRows = sheets[TABLES.CONTROL.range] ?? [];
   const saveIndex = findDataRow(controlRows, "Key", "save_id");
@@ -1447,6 +1454,71 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     });
   }
 
+  // Newly possible specialties are not implicitly owned. Creation and the first
+  // learning award happen inside the SAME validated semantic transaction.
+  // No historic practice is back-credited, and no class/milestone is selected.
+  const specializationUnlockOutcomes: unknown[] = [];
+  const catalog = (semantic.specializationUnlockEvents?.length ?? 0) > 0
+    ? parseCanonicalSpecializations(canonicalSpecializationRows)
+    : [];
+  const npcForWitness = sheets[TABLES.NPC_CURRENT.range] ?? [];
+  const npcHeaders = npcForWitness[0]?.map((x) => String(x ?? "")) ?? [];
+  const observerIdColumn = npcHeaders.indexOf("NPC ID");
+  const observerLocationColumn = npcHeaders.indexOf("Current/last-known location");
+  const activeCols = activeContextRows[0]?.map((x) => String(x ?? "")) ?? [];
+  const slotIx = activeCols.indexOf("Slot");
+  const pointerIx = activeCols.indexOf("Pointer");
+  const activeParticipantIds = semantic.sceneActorIds ??
+    (slotIx >= 0 && pointerIx >= 0
+      ? activeContextRows.slice(1).filter((row) =>
+          String(row[slotIx] ?? "").startsWith("participating_npc")
+        ).map((row) => String(row[pointerIx] ?? ""))
+      : []);
+  const activeParticipants = new Set(activeParticipantIds);
+  const seenObservers = observerIdColumn >= 0 && observerLocationColumn >= 0
+    ? npcForWitness.slice(1).filter((row) =>
+        String(row[observerLocationColumn] ?? "") ===
+          String(semantic.control?.locationId ?? controlValue("current_location_id") ?? "") &&
+        activeParticipants.has(String(row[observerIdColumn] ?? ""))
+      ).map((row) => String(row[observerIdColumn] ?? ""))
+    : [];
+  for (const proposal of semantic.specializationUnlockEvents ?? []) {
+    const specCompetenceIndex = headerIndex(specRows, "Competence ID");
+    const specNameIndex = headerIndex(specRows, "Specialization");
+    const known = specRows.slice(1).filter((row) => row[specCompetenceIndex] && row[specNameIndex])
+      .map((row) => ({
+        competenceId: String(row[specCompetenceIndex]),
+        runtimeName: String(row[specNameIndex]),
+      }));
+    const entry = validateSpecializationAcquisition({
+      catalog, proposal,
+      learningEvents: semantic.learningEvents ?? [],
+      elapsedSeconds: Number(semantic.elapsedSeconds ?? 0),
+      presentObserverNpcIds: seenObservers,
+      existingSpecializations: known,
+    });
+    if (findDataRow(competenceRows, "Competence ID", entry.competenceId) < 0) {
+      throw new Error("Cannot unlock for unknown parent competence: " + entry.competenceId);
+    }
+    const newRow = Array(headers(specRows).length).fill("");
+    setByHeader(specRows, newRow, "Competence ID", entry.competenceId);
+    setByHeader(specRows, newRow, "Specialization", entry.runtimeName);
+    setByHeader(specRows, newRow, "Stars", 0);
+    setByHeader(specRows, newRow, "Visible band", "introductory practice");
+    setByHeader(specRows, newRow, "Domain", "body");
+    setByHeader(specRows, newRow, "Internal progress", 0);
+    setByHeader(specRows, newRow, "Next star threshold", nextStarThreshold(0) ?? 20);
+    setByHeader(specRows, newRow, "Growth reasons",
+      "Acquired from current verified practice: " + proposal.trainingEvidence +
+        " | ref=" + proposal.evidenceRef + " | chosen direction=" + proposal.playerIntent);
+    setByHeader(specRows, newRow, "Last TX", input.txId);
+    appendRow("SPECIALIZATIONS", specRows, newRow);
+    specializationUnlockOutcomes.push({
+      assetId: entry.assetId, specialization: entry.runtimeName,
+      parent: entry.competenceId, initialStars: 0, evidenceRef: proposal.evidenceRef,
+    });
+  }
+
   for (let eventIndex = 0; eventIndex < (semantic.learningEvents ?? []).length; eventIndex++) {
     const event = semantic.learningEvents![eventIndex];
     const i = findDataRow(competenceRows, "Competence ID", event.competenceId);
@@ -1902,6 +1974,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       generalXp: generalXpOutcomes,
       choiceResolutions: choiceResolutionOutcomes,
       learning: learningOutcomes,
+      specializationUnlocks: specializationUnlockOutcomes,
       adaptation: adaptationOutcomes,
       inventory: inventoryOutcomes,
       inventorySummary,
