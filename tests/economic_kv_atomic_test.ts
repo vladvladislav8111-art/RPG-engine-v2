@@ -1,6 +1,7 @@
 import {
   commitEconomicKvStaging, ackEconomicProjection, ec06Keys,
   type AtomicKvStore, type AtomicWrite, type KvKey, type KvEntry,
+  type EconomicProjectionOutbox,
 } from "../src/economic_kv_atomic.ts";
 import type {
   EconomicSnapshot,EconomicSettlementAuthority,EconomicOperation,
@@ -179,7 +180,7 @@ Deno.test("failed atomic write and stale revision emit no partial accounts or re
 Deno.test("projection remains durable pending after KV commit; exact ACK is idempotent",async()=>{
   const kv=seededStore();
   await commitEconomicKvStaging(kv,make("tx.fixture.pending",[wage]));
-  const pending=await kv.get(ec06Keys.outbox(scopeId,"tx.fixture.pending"));
+  const pending=await kv.get<EconomicProjectionOutbox>(ec06Keys.outbox(scopeId,"tx.fixture.pending"));
   if(pending.value?.state!=="PENDING_PROJECTION")throw Error("Lost pending projection");
   await rejects(()=>ackEconomicProjection(kv,{
     scopeId,txId:"tx.fixture.not_committed",actualVerifiedProofRef:"proof.fixture.outbox_approved",
