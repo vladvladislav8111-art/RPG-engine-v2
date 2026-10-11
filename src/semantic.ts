@@ -41,6 +41,7 @@ import { proposeSystemLevelEvents } from "./system_notifications.ts";
 import { buildSystemNotificationCenter, validateNotificationAck } from "./system_notification_center.ts";
 import { validateMilestoneOptions, resolveMilestoneOption } from "./milestone_choices.ts";
 import { auditPreparedTurn } from "./turn_fast_integrity_audit.ts";
+import { validateTurnCoverage } from "./turn_progression_coverage.ts";
 import { validateRumorTransmission } from "./world_information.ts";
 import { validateMajorWorldEvent } from "./world_events.ts";
 import { auditMaterialTransformation } from "./physical_integrity.ts";
@@ -172,6 +173,17 @@ function keyHeaderFor(table: StructuredRuntimeTable): string {
 export async function prepareSemanticCommit(input: CommitRequest & { semantic: SemanticCommitPlan }) {
   const started = performance.now();
   const semantic = input.semantic;
+  const turnProgressionCoverage = validateTurnCoverage({
+    elapsedSeconds:semantic.elapsedSeconds??0,turnClass:undefined,
+    review:semantic.progressionReview,
+    generalEvents:semantic.generalXpEvents??[],learningEvents:semantic.learningEvents??[],
+    adaptationEvents:semantic.adaptationEvents??[],
+    strict:config.turnProgressionReviewStrict,
+  });
+  // A paid offer cannot be created from an NPC salary without a live financial writer.
+  // This is deliberately more restrictive than source-only V3 proposals.
+  if ((semantic.workDemandEvents?.length??0)>0 && !config.ec06FundedOffersWriterReady)
+    throw Error("EC06_FUNDED_OFFERS_WRITER_NOT_ATTESTED");
   const touched = new Set<RuntimeTableName>([
     "CONTROL",
     "PLAYER_RESOURCES",
@@ -2137,6 +2149,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     outcomes: {
       systemNotifications,
       integrityAudit:postCommitAudit,
+      progressionCoverage:turnProgressionCoverage,
       notificationAcknowledgements: notificationAckOutcomes,
       exertion: exertionOutcomes,
       rest: restOutcomes,
