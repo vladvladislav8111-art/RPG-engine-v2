@@ -41,7 +41,8 @@ type IndexedDocLog={
   mutations:IndexedDeltaIntent["mutations"];
   receipt:IndexedTargetReceipt;
 };
-const prefixDelta="EC06_INDEX_DOC_DELTA_V1 ";\nconst ID=/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$/i;
+const prefixDelta="EC06_INDEX_DOC_DELTA_V1 ";
+const ID=/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$/i;
 const key=(r:RowKey)=>r.kind+"/"+r.id;
 const equal=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 function assertRowId(value:string){if(!ID.test(value)||value.length>180)throw Error("Invalid indexed staging row ID");}
