@@ -96,7 +96,7 @@ Deno.test("food, water, sanitation and shared daily reserves cannot be invented"
   denied(()=>audit(households,[{...supplies[0],verifiedDailyCapacity:Infinity},...supplies.slice(1)]),"unlimited well");
 });
 const active:ExistingServiceProcess={
-  processId:"process.selarin.merchant_verification_response_0389",
+  processId:"process.example.pending_city_work",
   status:"ACTIVE",
   canonicalOperatorId:people[0],
   currentDistrictId:district,
