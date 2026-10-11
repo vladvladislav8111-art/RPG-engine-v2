@@ -10,7 +10,7 @@ const balances:FundingBalanceProof[]=[
    saveId:save,sourceRowRef:"sheets.fixture.money_shura",
    sourceRevision:"revision.fixture.current_1"},
 ];
-const input={
+const input:Parameters<typeof auditProvenNpcLiquidity>[0]={
   currentSaveId:save,
   ownerIds:[shura,merchant],
   balances,
