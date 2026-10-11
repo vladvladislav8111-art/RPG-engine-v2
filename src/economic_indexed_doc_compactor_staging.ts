@@ -31,8 +31,10 @@ type StagingGoogleSnapshot={
   text:string;bodyEndIndex:number;window:Ec06DocWindow;
 };
 function readSnapshot(raw:unknown,scopeId:string):StagingGoogleSnapshot{
-  type Node={startIndex?:number;endIndex?:number;
-    paragraph?:{elements?:Array<{textRun?:{content?:string}}>}}};
+  type Run={content?:string};
+  type Element={textRun?:Run};
+  type Paragraph={elements?:Element[]};
+  type Node={startIndex?:number;endIndex?:number;paragraph?:Paragraph};
   type Tab={tabProperties?:{tabId?:string};
     documentTab?:{body?:{content?:Node[]}}};
   const doc=raw as {revisionId?:string;tabs?:Tab[]}|null;
