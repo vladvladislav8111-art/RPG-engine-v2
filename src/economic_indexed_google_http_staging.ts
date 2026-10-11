@@ -16,6 +16,10 @@
 import {config} from "./config.ts";
 import {authenticatedEconomicGoogleJson,type GoogleHttpJson} from "./economic_google_http_staging.ts";
 import {acquireGoogleProjectionFence} from "./economic_google_kv_exclusive_fence.ts";
+import {
+  parseBoundedIndexedDocWindow,ec06SegmentKey,MAX_EC06_DOC_TAIL,
+  type Ec06DocSegmentManifest,
+} from "./economic_indexed_doc_checkpoint_staging.ts";
 import type {AtomicKvStore} from "./economic_kv_atomic.ts";
 import type {
   IndexedDeltaTargetAdapter,IndexedDeltaIntent,IndexedTargetReceipt,
@@ -37,9 +41,7 @@ type IndexedDocLog={
   mutations:IndexedDeltaIntent["mutations"];
   receipt:IndexedTargetReceipt;
 };
-const prefixGenesis="EC06_INDEX_DOC_GENESIS_V1 ";
-const prefixDelta="EC06_INDEX_DOC_DELTA_V1 ";
-const ID=/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$/i;
+const prefixDelta="EC06_INDEX_DOC_DELTA_V1 ";\nconst ID=/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$/i;
 const key=(r:RowKey)=>r.kind+"/"+r.id;
 const equal=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 function assertRowId(value:string){if(!ID.test(value)||value.length>180)throw Error("Invalid indexed staging row ID");}
@@ -72,44 +74,23 @@ function flattenDoc(content:unknown):string{
 function parseDoc(raw:unknown,scopeId:string):{
   revisionId:string;tabId?:string;
   rows:Map<string,unknown>;receipts:Map<string,IndexedTargetReceipt>;
+  tailCount:number;checkpoint:import("./economic_indexed_doc_checkpoint_staging.ts").Ec06DocCheckpoint|null;
 }{
   if(!raw||typeof raw!=="object")throw Error("Google Doc staging response missing");
   const doc=raw as {
-    revisionId?:string;
-    body?:{content?:unknown};
-    tabs?:Array<{tabProperties?:{tabId?:string};documentTab?:{body?:{content?:unknown}}}>;
+    revisionId?:string;body?:{content?:unknown};
+    tabs?:Array<{tabProperties?:{tabId?:string};
+      documentTab?:{body?:{content?:unknown}}}>;
   };
   if(!doc.revisionId)throw Error("Native Google Docs revision guard unavailable");
+  if(doc.tabs&&doc.tabs.length!==1)
+    throw Error("Indexed single-Doc checkpoint cannot inspect other tabs");
   const tab=doc.tabs?.[0];
   const body=tab?flattenDoc(tab.documentTab?.body?.content):flattenDoc(doc.body?.content);
-  const lines=body.split("\n").map(s=>s.trim()).filter(Boolean);
-  const genesis=lines.filter(l=>l.startsWith(prefixGenesis));
-  if(genesis.length!==1)throw Error("Indexed staging archive requires exactly one genesis line");
-  const init=JSON.parse(genesis[0].slice(prefixGenesis.length)) as IndexedDocGenesis;
-  if(init.schema!=="EC06_INDEX_DOC_GENESIS_V1"||init.scopeId!==scopeId||
-     !init.rows||typeof init.rows!=="object"||Array.isArray(init.rows))
-    throw Error("Docs indexed staged genesis is unauthorized or malformed");
-  const rows=new Map<string,unknown>(Object.entries(init.rows));
-  const receipts=new Map<string,IndexedTargetReceipt>();
-  for(const l of lines.filter(x=>x.startsWith(prefixDelta))){
-    const change=JSON.parse(l.slice(prefixDelta.length)) as IndexedDocLog;
-    if(change.schema!=="EC06_INDEX_DOC_DELTA_V1"||change.scopeId!==scopeId||
-       !change.txId||receipts.has(change.txId)||
-       change.receipt?.target!=="LIVE_TRANSACTION_ARCHIVE"||
-       change.receipt.txId!==change.txId||change.receipt.scopeId!==scopeId||
-       change.receipt.journalHash!==change.journalHash||
-       change.receipt.rowIds.length!==change.mutations.length||
-       !change.receipt.rowIds.every((x,i)=>x===key(change.mutations[i])))
-      throw Error("Docs indexed TX replay/receipt is inconsistent");
-    for(const m of change.mutations){
-      const k=key(m);
-      if(!rows.has(k)||!equal(rows.get(k),m.before))
-        throw Error("Doc archive contains out-of-order indexed row history: "+k);
-      rows.set(k,structuredClone(m.after));
-    }
-    receipts.set(change.txId,change.receipt);
-  }
-  return {revisionId:doc.revisionId,tabId:tab?.tabProperties?.tabId,rows,receipts};
+  const window=parseBoundedIndexedDocWindow(body,scopeId);
+  return {revisionId:doc.revisionId,tabId:tab?.tabProperties?.tabId,
+    rows:window.rows,receipts:window.receipts,
+    tailCount:window.deltas.length,checkpoint:window.checkpoint};
 }
 function parseCells(raw:unknown,label:string,keyRequired:string):unknown{
   const value=(raw as {values?:unknown[][]}|null)?.values?.[0]??[];
@@ -188,7 +169,22 @@ export function makeIsolatedIndexedGoogleHttpAdapter(input:{
   }
   async function readDoc(){
     const raw=await http(docsRoot+"?includeTabsContent=true");
-    return parseDoc(raw,scopeId);
+    const document=parseDoc(raw,scopeId);
+    if(document.checkpoint){
+      const cp=document.checkpoint;
+      const record=await kv.get<Ec06DocSegmentManifest>(
+        ec06SegmentKey(scopeId,docId,cp.segmentNumber));
+      if(record.value?.schema!=="EC06_DOC_SEGMENT_MANIFEST_V1"||
+         record.value.state!=="APPLIED"||
+         record.value.scopeId!==scopeId||
+         record.value.physicalDocId!==docId||
+         record.value.segmentNumber!==cp.segmentNumber||
+         record.value.segmentHash!==cp.segmentHash||
+         record.value.rowsHash!==cp.rowsHash||
+         record.value.compactedTransactions!==cp.compactedTransactions)
+        throw Error("Google checkpoint lacks independently APPLIED primary KV proof");
+    }
+    return document;
   }
   async function receipts(target:DeltaTarget,txId:string):Promise<IndexedTargetReceipt|null>{
     return target==="TEMP_RUNTIME"?
@@ -222,6 +218,11 @@ export function makeIsolatedIndexedGoogleHttpAdapter(input:{
     },
     async applyRowsAndReceiptAtomically(target,intent,receipt){
       assertRows(intent);assertReceipt(target,intent,receipt);
+      // Check capacity BEFORE touching Sheets or acquiring a Google writer lock.
+      // A full Doc may only advance after independent KV-backed checkpointing.
+      if(target==="LIVE_TRANSACTION_ARCHIVE"&&
+         (await readDoc()).tailCount>=MAX_EC06_DOC_TAIL)
+        throw Error("Google Doc bounded tail full: manual verified checkpoint required");
       const physicalId=target==="TEMP_RUNTIME"?sheetId:docId;
       const lock=await acquireGoogleProjectionFence({
         kv,scopeId,target,resourceId:physicalId,
@@ -261,6 +262,8 @@ export function makeIsolatedIndexedGoogleHttpAdapter(input:{
           throw Error("Google indexed batch update did not confirm all row+receipt requests");
       }else{
         const source=await readDoc();
+        if(source.tailCount>=MAX_EC06_DOC_TAIL)
+          throw Error("Google Doc archive reached safe tail boundary under fence");
         if(source.receipts.has(intent.txId))throw Error("Docs projected same invoice twice");
         const log:IndexedDocLog={
           schema:"EC06_INDEX_DOC_DELTA_V1",
