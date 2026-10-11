@@ -1,5 +1,3 @@
-import {wrapDenoAtomicEconomyKv} from
-  "../src/economic_deno_kv_adapter.ts";
 import {indexedEc06Keys} from "../src/economic_indexed_wholesale_kv.ts";
 import {makeIndexedQueueRegistration,indexedQueueShardForTx,
   listIndexedQueuePage} from "../src/economic_indexed_outbox_queue.ts";
@@ -54,7 +52,7 @@ async function seed(txId="tx.fixture.queue_drain_001"){
       }).commit();
     if(!committed.ok)throw Error("Atomic primary staging fixture commit failed");
     const api=new FakeGoogle(j);
-    return {db,kv:wrapDenoAtomicEconomyKv(db),api,txId,
+    return {db,api,txId,
       shard:indexedQueueShardForTx(txId)};
   }catch(e){db.close();throw e}
 }
@@ -109,10 +107,10 @@ async function refuses(fn:()=>Promise<unknown>){
   if(!rejected)throw Error("Unsafe queue drain was accepted");
 }
 Deno.test("bounded drain reconciles both Google targets once, verifies independent receipts, CAS-prunes only queue",async()=>{
-  const {db,kv,api,txId,shard}=await seed();
+  const {db,api,txId,shard}=await seed();
   try {
     const r=await runIndexedProjectionQueuePageStaging({
-      db,kv,adapter:api,scopeId:scope,shard,limit:1,
+      db,adapter:api,scopeId:scope,shard,limit:1,
     });
     if(r.status!=="DRAINED"||r.completed.length!==1||
        r.completed[0].txId!==txId||
@@ -121,7 +119,7 @@ Deno.test("bounded drain reconciles both Google targets once, verifies independe
        api.writes.get("LIVE_TRANSACTION_ARCHIVE")!==1)
       throw Error("Queue drain lost a target, duplicated write or refused verified ACK");
     const again=await runIndexedProjectionQueuePageStaging({
-      db,kv,adapter:api,scopeId:scope,shard,limit:1,
+      db,adapter:api,scopeId:scope,shard,limit:1,
     });
     if(again.completed.length!==0||again.examined!==0||
        (await db.get(indexedEc06Keys.journal(txId) as Deno.KvKey)).value===null||
@@ -131,16 +129,16 @@ Deno.test("bounded drain reconciles both Google targets once, verifies independe
   } finally {db.close()}
 });
 Deno.test("Docs unavailable after Sheet success HALTS without pruning or retry",async()=>{
-  const {db,kv,api,txId,shard}=await seed();
+  const {db,api,txId,shard}=await seed();
   try {
     api.unavailable="LIVE_TRANSACTION_ARCHIVE";
     const r=await runIndexedProjectionQueuePageStaging({
-      db,kv,adapter:api,scopeId:scope,shard,limit:1,
+      db,adapter:api,scopeId:scope,shard,limit:1,
     });
     const page=await listIndexedQueuePage({db,scopeId:scope,shard,limit:1});
     const outbox=(await db.get<{state:string}>(
       indexedEc06Keys.outbox(txId) as Deno.KvKey)).value;
-    if(r.status!=="HALTED"||r.blockedTxId!==txId||
+    if(r.status!=="HALTED"||r.blockedTxId!==txId||r.nextCursor!==null||
        r.completed.length!==0||api.writes.get("TEMP_RUNTIME")!==1||
        api.writes.get("LIVE_TRANSACTION_ARCHIVE")!==0||
        page.entries.length!==1||outbox?.state!=="PENDING_INDEXED_PROJECTION")
@@ -148,7 +146,7 @@ Deno.test("Docs unavailable after Sheet success HALTS without pruning or retry",
   } finally {db.close()}
 });
 Deno.test("forged primary ACK never allows queue GC without two actual Google receipts",async()=>{
-  const {db,kv,api,txId,shard}=await seed();
+  const {db,api,txId,shard}=await seed();
   try {
     const hash=(await makeIndexedDeltaIntent(journal(txId))).journalHash;
     const key=indexedEc06Keys.outbox(txId) as Deno.KvKey;
@@ -159,9 +157,9 @@ Deno.test("forged primary ACK never allows queue GC without two actual Google re
     }).commit();
     if(!ack.ok)throw Error("Cannot seed forged ACK");
     const r=await runIndexedProjectionQueuePageStaging({
-      db,kv,adapter:api,scopeId:scope,shard,limit:1,
+      db,adapter:api,scopeId:scope,shard,limit:1,
     });
-    if(r.status!=="HALTED"||r.blockedTxId!==txId||
+    if(r.status!=="HALTED"||r.blockedTxId!==txId||r.nextCursor!==null||
        (await listIndexedQueuePage({db,scopeId:scope,shard,limit:1}))
          .entries.length!==1||
        api.writes.get("TEMP_RUNTIME")!==0)
@@ -169,10 +167,10 @@ Deno.test("forged primary ACK never allows queue GC without two actual Google re
   } finally{db.close()}
 });
 Deno.test("drain rejects oversized pages before any Google call",async()=>{
-  const {db,kv,api,shard}=await seed();
+  const {db,api,shard}=await seed();
   try {
     await refuses(()=>runIndexedProjectionQueuePageStaging({
-      db,kv,adapter:api,scopeId:scope,shard,limit:9,
+      db,adapter:api,scopeId:scope,shard,limit:9,
     }));
     if(api.writes.get("TEMP_RUNTIME")!==0)throw Error("Oversized drain wrote Google");
   }finally{db.close()}
