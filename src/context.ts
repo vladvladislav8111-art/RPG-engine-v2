@@ -857,6 +857,7 @@ export async function getTurnContext(input: TurnContextRequest) {
         pendingChoices: (structured.PENDING_CHOICES as Array<Record<string, unknown>> | undefined) ?? [],
         recentChatByActor: actorRecentChat,
         actorIdsLoaded: recentChatLoaded ? resolvedActorIds : [],
+        worldAgenda: worldActionDocket.items,
         sourceOnlyOfferBoard: hasAny(tagSet, ["ECONOMY", "WORK", "JOB", "BOARD", "TRADE"])
           ? availableCurrentOpportunities({
               clock: parseLiveClock(base["CONTROL!A1:D12"] ?? []),
