@@ -32,6 +32,7 @@ export function buildTurnBrief(input: {
   recentChatByActor?: Readonly<Record<string, readonly SourceRow[]>>;
   actorIdsLoaded?: readonly string[];
   sourceOnlyOfferBoard?: unknown;
+  worldAgenda?: readonly {processId?:string;nextReviewAt?:string|null;reviewStatus?:string}[];
 }) {
   const tags = new Set(input.tags.map((t) => t.toUpperCase()));
   const messageActors = new Set(input.actorIdsLoaded ?? []);
@@ -55,6 +56,10 @@ export function buildTurnBrief(input: {
         lastLoggedMessageId: last ? field(last, "Message ID") : null,
         lastCachedAt: cachedAt,
         cacheMayBeStale: lastActualAt != null && cachedAt !== lastActualAt,
+        lastMessageDirection: last ? field(last, "Direction") : null,
+        lastMessageDelivery: last ? field(last, "Delivery") : null,
+        unansweredOutgoing: !!last && field(last, "Direction") === "OUT",
+        replyGuaranteed: false,
         // No claimed incoming messages, read receipts or replies when history wasn't loaded.
       };
     });
@@ -103,6 +108,15 @@ export function buildTurnBrief(input: {
     checks,
     systemInbox:{contacts,pendingChoices},
     reminders:[
+      ...(input.worldAgenda ?? []).filter((process) =>
+        ["DUE", "OVERDUE"].includes(String(process.reviewStatus ?? "").toUpperCase())
+      ).map((process) => ({
+        id:"reminder." + process.processId,
+        kind:"WORLD_PROCESS_REVIEW",
+        status:process.reviewStatus ?? "DUE",
+        nextReviewAt:process.nextReviewAt ?? null,
+        note:"Review causal owner actions and staffed work; a due clock does not prove a completed event.",
+      })),
       ...pendingChoices.map((c) => ({
         id:"reminder."+c.choiceId,
         kind:"PLAYER_MILESTONE_CHOICE",
