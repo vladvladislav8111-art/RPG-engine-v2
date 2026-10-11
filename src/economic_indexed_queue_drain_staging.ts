@@ -13,7 +13,7 @@
  * retry. Any continuation needs independent incident review. This file is
  * NOT imported by main.ts and does not deploy or open KV/Google itself.
  */
-import type {AtomicKvStore} from "./economic_kv_atomic.ts";
+import {wrapDenoAtomicEconomyKv} from "./economic_deno_kv_adapter.ts";
 import {
   reconcileIndexedDeltaStaging,type IndexedDeltaIntent,
   type IndexedDeltaTargetAdapter,type IndexedTargetReceipt,
@@ -65,17 +65,20 @@ async function verifyBothGoogleReceipts(input:{
   }
 }
 /**
- * The DB must be the SAME primary Deno KV backing the supplied kv adapter.
+ * The handler creates its KV adapter from the supplied primary DB, so the
+ * discovery queue, finance journal, reconciliation and pruning cannot point
+ * at different KV stores.
  * Never run this function against CURRENT/production Google assets.
  *
  * Cursor is only a discovery token for the caller; there is deliberately no
  * implicit loop over remaining pages or automatic retry of blocked writes.
  */
 export async function runIndexedProjectionQueuePageStaging(input:{
-  db:Deno.Kv;kv:AtomicKvStore;adapter:IndexedDeltaTargetAdapter;
+  db:Deno.Kv;adapter:IndexedDeltaTargetAdapter;
   scopeId:string;shard:number;limit:number;cursor?:string;
 }):Promise<IndexedDrainPageResult>{
-  const {db,kv,adapter,scopeId,shard,limit,cursor}=input;
+  const {db,adapter,scopeId,shard,limit,cursor}=input;
+  const kv=wrapDenoAtomicEconomyKv(db);
   if(!Number.isInteger(limit)||limit<1||limit>8)
     throw Error("A projection worker may inspect at most eight TXs in one call");
   const page=await listIndexedQueuePage({db,scopeId,shard,limit,
@@ -96,7 +99,7 @@ export async function runIndexedProjectionQueuePageStaging(input:{
       // Fail closed on ANY ambiguous write, fencing error, forged proof,
       // source drift or conflicting cleanup. No attempt at another TX.
       return {status:"HALTED",scopeId,shard,examined:page.entries.length,
-        completed,nextCursor:page.nextCursor,
+        completed,nextCursor:null,
         blockedTxId:entry.txId,incident:"SOURCE_OR_GOOGLE_STATE_UNCERTAIN"};
     }
   }
