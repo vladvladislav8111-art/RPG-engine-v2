@@ -5,7 +5,7 @@ import type {VerifiedContact,NpcLifeRecord,LifeReviewInput,SocialInteraction,Per
 const a='npc.selarin.pool_2003', b='npc.max.earth';
 const contact=(day:number,k:VerifiedContact['kind']='conversation',i=1):VerifiedContact=>({eventId:`evt.${day}.${i}`,actorId:a,day,kind:k,sourceRef:`tx.${day}.${i}`,committed:true,reciprocal:true,significance:'meaningful'});
 const promote=(xs:VerifiedContact[],overrides={})=>reviewKeyPromotion({actorId:a,currentTier:'RECURRING',contactEvidence:xs,knownStableNpcIds:[a,b],canonicalIdentityRef:'canon.vesha',alreadyPromoted:false,...overrides});
-const yes=<T>(o:T|{ok:false;code:string}):T=>{assert.equal((o as {ok:boolean}).ok,true,JSON.stringify(o));return o as T;};
+const yes=<T extends {ok:boolean}>(o:T):Extract<T,{ok:true}>=>{assert.equal(o.ok,true,JSON.stringify(o));return o as Extract<T,{ok:true}>;};
 const no=(o:{ok:boolean;code?:string},code:string)=>{assert.equal(o.ok,false);assert.equal(o.code,code);};
 const actor=(overrides:Partial<NpcLifeRecord>={}):NpcLifeRecord=>({actorId:a,tier:'RECURRING',locationId:'loc.shop',stableIdentityRef:'npc.vesha.canon',currentGoal:'Manage real bookstore',currentGoalSource:'npc.current.vesha',lastLifeTick:100,lastDialogueAt:100,obligations:[],projects:[],relationships:[],...overrides});
 const li=(overrides:Partial<LifeReviewInput>={}):LifeReviewInput=>({window:{start:100,end:180},actors:[actor()],evidence:[],options:[],...overrides});
