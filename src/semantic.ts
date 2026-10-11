@@ -2058,6 +2058,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     generalXp: generalXpOutcomes as Array<{oldLevel:number;newLevel:number;crossedLevels?:number[]}>,
     learning: learningOutcomes as Array<{oldLevel:number;newLevel:number;crossedLevels?:number[];
       competenceId?:string;specialization?:{specialization?:string;oldStars?:number;stars?:number}|null}>,
+    releasedChoices: choiceResolutionOutcomes as Array<{choiceId:string;progression:{oldLevel:number;newLevel:number;crossedLevels?:number[]}|null}>,
   });
 
   const sessionRow = Array(headers(sessionRows).length).fill("");
