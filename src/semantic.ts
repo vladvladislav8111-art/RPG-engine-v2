@@ -37,6 +37,7 @@ import { validateChatEventShape, validateRelationshipEventShape } from "./social
 import { worldContinuityReview } from "./world_continuity.ts";
 import { reviewWorldProcesses } from "./world_process.ts";
 import { validateWorkDemand } from "./work_demand.ts";
+import { proposeSystemLevelEvents } from "./system_notifications.ts";
 import { validateRumorTransmission } from "./world_information.ts";
 import { validateMajorWorldEvent } from "./world_events.ts";
 import { auditMaterialTransformation } from "./physical_integrity.ts";
@@ -1916,6 +1917,15 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   patchControl("save_id", input.saveTo);
   patchControl("state", "ACTIVE_COMMITTED");
 
+  // Derived only from measured XP results of THIS semantic transaction.
+  // Persist with the SESSION_LOG history and surface after commit success.
+  const systemNotifications = proposeSystemLevelEvents({
+    txId: input.txId,
+    generalXp: generalXpOutcomes as Array<{oldLevel:number;newLevel:number;crossedLevels?:number[]}>,
+    learning: learningOutcomes as Array<{oldLevel:number;newLevel:number;crossedLevels?:number[];
+      competenceId?:string;specialization?:{specialization?:string;oldStars?:number;stars?:number}|null}>,
+  });
+
   const sessionRow = Array(headers(sessionRows).length).fill("");
   setByHeader(sessionRows, sessionRow, "Save ID", input.saveTo);
   setByHeader(sessionRows, sessionRow, "Turn ID", input.turnId);
@@ -1929,8 +1939,8 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   const gmWorldAdvances = semantic.session.worldAdvances;
   const worldAdvanceLog = gmWorldAdvances && typeof gmWorldAdvances === "object" &&
       !Array.isArray(gmWorldAdvances)
-    ? { ...(gmWorldAdvances as Record<string, unknown>), engineContinuity: worldAutomationOutcomes }
-    : { gmWorldAdvances: gmWorldAdvances ?? {}, engineContinuity: worldAutomationOutcomes };
+    ? { ...(gmWorldAdvances as Record<string, unknown>), engineContinuity: worldAutomationOutcomes, systemNotifications }
+    : { gmWorldAdvances: gmWorldAdvances ?? {}, engineContinuity: worldAutomationOutcomes, systemNotifications };
   setByHeader(sessionRows, sessionRow, "World advances JSON", JSON.stringify(worldAdvanceLog));
   setByHeader(sessionRows, sessionRow, "Notes", semantic.session.notes ?? "");
   setByHeader(sessionRows, sessionRow, "Committed at", new Date().toISOString());
@@ -1968,6 +1978,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       docAppends: (input.docAppends ?? []).map((d) => ({ ...d, txMarker: `[TX:${input.txId}]` })),
     },
     outcomes: {
+      systemNotifications,
       exertion: exertionOutcomes,
       rest: restOutcomes,
       injury: injuryOutcomes,
