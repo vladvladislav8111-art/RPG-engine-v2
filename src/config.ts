@@ -24,6 +24,8 @@ export const config = {
   allowRawCommits: (rawEnv("ALLOW_RAW_COMMITS") ?? "false").toLowerCase() === "true",
   enableKv: (rawEnv("ENABLE_KV") ?? (runtime === "deno" ? "true" : "false")).toLowerCase() === "true",
   worldSimV3Enabled: (rawEnv("WORLD_SIM_V3_ENABLED") ?? "true").toLowerCase() === "true",
+  // Off until the owner-approved ACK tab exists in the one authoritative TEMP workbook.
+  systemNotificationAckEnabled: (rawEnv("RPG_SYSTEM_NOTIFICATION_ACK_ENABLED") ?? "false").toLowerCase() === "true",
   google: {
     email: env("GOOGLE_SERVICE_ACCOUNT_EMAIL"),
     privateKey: env("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY").replace(/\\n/g, "\n"),
