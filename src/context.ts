@@ -463,6 +463,12 @@ export async function getTurnContext(input: TurnContextRequest) {
     clocks: worldClocksFromSparseRanges(continuityRanges),
     factionSeeds: clockAgendaSeeds,
   });
+  // One bounded computation shared by client integration and packet display.
+  const prospectiveWorldTickPlan = input.plannedElapsedSeconds != null ||
+    hasAny(tagSet, ["WORLD","WAIT","REST","SLEEP","TRAVEL","WORK","CRAFT","NPC_LIFE"])
+    ? planIndependentWorldTick({saveId,worldDay:Number(worldDay),worldTime:String(worldTime),
+        elapsedSeconds:input.plannedElapsedSeconds??0,sparse:continuityRanges})
+    : null;
 
   const rawNpcCurrent = explicitActorRequest
     ? rowsToObjects(actorIndexScan?.npcReferenceRows ?? [])
@@ -878,14 +884,10 @@ export async function getTurnContext(input: TurnContextRequest) {
         memoryDepth:memoryRoute.depth,
         missingSources:memoryRoute.missingSources,
         plannedElapsedSeconds:input.plannedElapsedSeconds??0,
-        keyNpcDue:input.plannedElapsedSeconds != null
-          ? planIndependentWorldTick({saveId,worldDay:Number(worldDay),worldTime:String(worldTime),
-              elapsedSeconds:input.plannedElapsedSeconds,sparse:continuityRanges}).keyNpcDueCount
-          : worldContinuity.keyNpcDue.filter(x=>x.reason!=="ACTIVITY_RULE_MISSING").length,
-        worldProcessDue:input.plannedElapsedSeconds != null
-          ? planIndependentWorldTick({saveId,worldDay:Number(worldDay),worldTime:String(worldTime),
-              elapsedSeconds:input.plannedElapsedSeconds,sparse:continuityRanges}).processDueCount
-          : worldContinuity.activeClocksOverdue.length,
+        keyNpcDue:prospectiveWorldTickPlan?.keyNpcDueCount ??
+          worldContinuity.keyNpcDue.filter(x=>x.reason!=="ACTIVITY_RULE_MISSING").length,
+        worldProcessDue:prospectiveWorldTickPlan?.processDueCount ??
+          worldContinuity.activeClocksOverdue.length,
         npcContextReady:npcContextGate.readyForSubstantiveReply,
       }),
       memoryRoute:{
@@ -902,9 +904,7 @@ export async function getTurnContext(input: TurnContextRequest) {
           npcContextGate.readyForSubstantiveReply,
         autoSourceRouting:true,
       },
-      worldTickPlan: input.plannedElapsedSeconds != null || hasAny(tagSet, ["WORLD","WAIT","REST","SLEEP","TRAVEL","WORK","CRAFT","NPC_LIFE"])
-        ? planIndependentWorldTick({saveId,worldDay:Number(worldDay),worldTime:String(worldTime),
-          elapsedSeconds:input.plannedElapsedSeconds??0,sparse:continuityRanges}) : null,
+      worldTickPlan:prospectiveWorldTickPlan,
       worldSimulationV3: { enabled: config.worldSimV3Enabled, mode: "READ_ONLY_PROPOSALS", maxBatchJobs: 12, achievementCandidates: ACHIEVEMENT_CATALOG_COUNTS.achievements, titleCandidates: ACHIEVEMENT_CATALOG_COUNTS.titles, committed: false },
       systemNotificationCenter: wantsSystemInbox ? buildSystemNotificationCenter({
         pendingChoices: (structured.PENDING_CHOICES as Array<Record<string, unknown>> | undefined) ?? [],
