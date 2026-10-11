@@ -19,7 +19,7 @@ type Target="TEMP_RUNTIME"|"LIVE_TRANSACTION_ARCHIVE";
 export type GoogleHttpJson = (url:string,init?:RequestInit)=>Promise<unknown>;
 export type ExclusiveProjectionWriterFence = {
   /** Must be enforced by a privileged internal owner; never user-supplied. */
-  assertExclusiveWriter(target:Target,scopeId:string):Promise<void>;
+  assertExclusiveWriter(target:Target,scopeId:string,physicalResourceId:string):Promise<void>;
 };
 const STAGING_RANGE="EC06_STAGE!A1";
 const DOC_LINE="EC06_DOC_IMAGE_V1 ";
@@ -139,7 +139,8 @@ export function makeIsolatedGoogleEconomicHttpTransport(input:{
          image.revision===expectedRevision){
         throw Error("Invalid EC06 Google staged replacement intent");
       }
-      await writerFence.assertExclusiveWriter(target,scopeId);
+      await writerFence.assertExclusiveWriter(target,scopeId,
+          target==="TEMP_RUNTIME"?stagingSpreadsheetId:stagingDocumentId);
       if(target==="TEMP_RUNTIME"){
         const before=await readSheet();
         if(before.revision!==expectedRevision)
@@ -155,7 +156,8 @@ export function makeIsolatedGoogleEconomicHttpTransport(input:{
         }) as {updatedCells?:number};
         if(updated.updatedCells!==1)
           throw Error("Google Sheets staged image update not confirmed");
-        await writerFence.assertExclusiveWriter(target,scopeId);
+        await writerFence.assertExclusiveWriter(target,scopeId,
+          target==="TEMP_RUNTIME"?stagingSpreadsheetId:stagingDocumentId);
         const after=await readSheet();
         if(JSON.stringify(after)!==JSON.stringify(image))
           throw Error("Sheets staged readback diverged, do not ACK projection");
@@ -172,7 +174,8 @@ export function makeIsolatedGoogleEconomicHttpTransport(input:{
             writeControl:{requiredRevisionId:before.revisionId},
           }),
         });
-        await writerFence.assertExclusiveWriter(target,scopeId);
+        await writerFence.assertExclusiveWriter(target,scopeId,
+          target==="TEMP_RUNTIME"?stagingSpreadsheetId:stagingDocumentId);
         const after=await readDocs();
         if(JSON.stringify(after.image)!==JSON.stringify(image))
           throw Error("Docs staged readback diverged, do not ACK projection");
