@@ -31,7 +31,7 @@ export type TurnContextRequest = {
   actorIds?: string[];
   actorRefs?: string[];
   recentChatLimit?: number;
-  /** Read-only proposed world time; never commits a tick. */
+  /** Prospective time only; the context read never advances the world. */
   plannedElapsedSeconds?: number;
   requireNpcContextGate?: boolean;
   lookups?: SheetLookup[];
@@ -78,6 +78,12 @@ export type SemanticGeneralXpEvent = {
   contribution?: number;
   complexityBonus?: number;
   thresholdFraction?: number;
+};
+
+export type SemanticChoiceOptionsMaterialization = {
+  choiceId: string;
+  /** Only verified, active permanent-canon options, never V3 DESIGN_CANDIDATE. */
+  options: import("./milestone_choices.ts").MilestoneChoiceOption[];
 };
 
 export type SemanticChoiceResolution = {
@@ -318,6 +324,12 @@ export type SemanticWorldProcessEvent = {
   visibility?: string;
 };
 
+export type SemanticNotificationAckEvent = {
+  notificationId: string;
+  sourceRef: string;
+  status: "SEEN" | "DISMISSED";
+};
+
 export type SemanticChatEvent = {
   messageId: string;
   channelId: string;
@@ -429,6 +441,7 @@ export type SemanticCommitPlan = {
   materialTransformations?: SemanticMaterialTransformation[];
   physicalPassportEvents?: import("./physical_passport.ts").PhysicalPassport[];
   survival?: SemanticSurvival;
+  choiceOptionMaterializations?: SemanticChoiceOptionsMaterialization[];
   choiceResolutions?: SemanticChoiceResolution[];
   exertionEvents?: SemanticExertionEvent[];
   restEvents?: SemanticRestEvent[];
@@ -441,6 +454,9 @@ export type SemanticCommitPlan = {
   socialMemoryEvents?: SemanticSocialMemoryEvent[];
   threadEvents?: SemanticThreadEvent[];
   chatEvents?: SemanticChatEvent[];
+  notificationAckEvents?: SemanticNotificationAckEvent[];
+  /** Explicit source-based decision; never selects a milestone or generates XP. */
+  progressionReview?: import("./turn_progression_coverage.ts").ProgressionReview;
   offscreenNpcEvents?: SemanticOffscreenNpcEvent[];
   worldProcessEvents?: SemanticWorldProcessEvent[];
   workDemandEvents?: SemanticWorkDemandEvent[];
