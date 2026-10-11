@@ -13,25 +13,28 @@ export type GoogleProjectionLock = {
   schema:"EC06_GOOGLE_LOCK_V1";
   scopeId:string;
   target:Target;
+  resourceId:string;
   token:string;
   state:"HELD"|"RELEASED";
   epoch:number;
   lastVerifiedProjectionRef?:string;
 };
-function lockKey(scopeId:string,target:Target):KvKey {
-  return ["rpg-v2","ec06","google-unique-writer",scopeId,target];
+function lockKey(target:Target,resourceId:string):KvKey {
+  return ["rpg-v2","ec06","google-unique-writer",target,resourceId];
 }
 export async function acquireGoogleProjectionFence(input:{
-  kv:AtomicKvStore;scopeId:string;target:Target;
+  kv:AtomicKvStore;scopeId:string;target:Target;resourceId:string;
 }):Promise<{
   fence:ExclusiveProjectionWriterFence;
   token:string;
   releaseAfterIndependentVerification:(verify:()=>Promise<string>)=>Promise<void>;
 }> {
-  const {kv,scopeId,target}=input;
+  const {kv,scopeId,target,resourceId}=input;
   if(!/^[a-z0-9]+(?:[._-][a-z0-9]+)+$/i.test(scopeId))
     throw Error("Google projection scope must be an exact canonical namespace");
-  const key=lockKey(scopeId,target);
+  if(!resourceId||resourceId.length>256)
+    throw Error("Exact Google physical target ID required");
+  const key=lockKey(target,resourceId);
   const prev=await kv.get<GoogleProjectionLock>(key);
   if(prev.value && (prev.value.schema!=="EC06_GOOGLE_LOCK_V1"||
      prev.value.scopeId!==scopeId||prev.value.target!==target||
@@ -40,7 +43,7 @@ export async function acquireGoogleProjectionFence(input:{
   }
   const token=crypto.randomUUID();
   const next:GoogleProjectionLock={
-    schema:"EC06_GOOGLE_LOCK_V1",scopeId,target,token,
+    schema:"EC06_GOOGLE_LOCK_V1",scopeId,target,resourceId,token,
     state:"HELD",epoch:(prev.value?.epoch??0)+1,
   };
   const claimed=await kv.atomic()
@@ -48,10 +51,12 @@ export async function acquireGoogleProjectionFence(input:{
     .set(key,next).commit();
   if(!claimed.ok)throw Error("Concurrent projection lock acquisition lost CAS");
   const fence:ExclusiveProjectionWriterFence={
-    async assertExclusiveWriter(t,s){
-      if(t!==target||s!==scopeId)throw Error("Wrong projected target for acquired writer");
+    async assertExclusiveWriter(t,s,physicalResourceId){
+      if(t!==target||s!==scopeId||physicalResourceId!==resourceId)
+        throw Error("Wrong logical scope or physical Google file for acquired writer");
       const current=await kv.get<GoogleProjectionLock>(key);
       if(current.value?.schema!=="EC06_GOOGLE_LOCK_V1"||
+         current.value?.resourceId!==resourceId||
          current.value?.token!==token||current.value.state!=="HELD"||
          current.value.epoch!==next.epoch){
         throw Error("Google projection lock revoked: halt all external writes");
@@ -61,7 +66,7 @@ export async function acquireGoogleProjectionFence(input:{
   return {
     fence,token,
     async releaseAfterIndependentVerification(verify){
-      await fence.assertExclusiveWriter(target,scopeId);
+      await fence.assertExclusiveWriter(target,scopeId,resourceId);
       // Proof MUST be checked against real independently read Google target,
       // not a caller-submitted receipt string or a fake success response.
       const verifiedProofRef=await verify();
