@@ -83,10 +83,16 @@ export function auditProvenNpcLiquidity(input:{
   }
   const byAccount=new Map<string,number>();
   for(const b of opening.values())byAccount.set(b.accountId,b.copper);
+  // A CURRENT balance at the committed save ALREADY includes every earlier
+  // receipt. Reapplying a past payout from opportunities or a log doubles
+  // the money. Future post-snapshot transfers belong to transactional KV,
+  // not to this CURRENT opening audit.
+  if(completedFlows.length)errors.push("CANNOT_REAPPLY_FLOWS_TO_CURRENT_SNAPSHOT");
   const eventIds=new Set<string>();
   const flows=[...completedFlows].sort((a,b)=>a.sequence-b.sequence||
     a.eventId.localeCompare(b.eventId));
   for(const f of flows){
+    // Validate bad replay evidence but do not allow it to increase liquidity.
     if(!id(f.eventId)||eventIds.has(f.eventId)||!committedEventIds.has(f.eventId)||
        !id(f.sourceRef)||!trusted.has(f.sourceRef)||
        !Number.isSafeInteger(f.sequence)||f.sequence<0||
