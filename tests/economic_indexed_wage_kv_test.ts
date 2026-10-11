@@ -213,3 +213,20 @@ Deno.test("wage outcome needs independent completion or cancellation, not GM int
       throw Error("Denied wages changed reserved money");
   }finally{db.close()}
 });
+
+
+Deno.test("work completion cannot masquerade as cancellation or unrelated generic proof",async()=>{
+  const {db,kv}=await seeded();
+  try{
+    await reject(()=>wage(kv,{...reserve(),
+      sourceEvidenceRef:"proof.fixture.work_completed"}),"completion proof used as job acceptance");
+    await wage(kv,reserve());
+    await reject(()=>wage(kv,{...pay(),
+      sourceEvidenceRef:"proof.fixture.work_cancelled"}),"cancellation certificate used as completion");
+    await reject(()=>wage(kv,{...release(),
+      sourceEvidenceRef:"proof.fixture.work_completed"}),"completion certificate used as cancellation");
+    const escrow=(await kv.get<IndexedWageEscrow>(indexedWageKeys.escrow(escort))).value;
+    if(escrow?.state!=="RESERVED"||escrow.reservedCopper!==30)
+      throw Error("False proof changed held wages");
+  }finally{db.close()}
+});
