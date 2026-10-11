@@ -1,13 +1,14 @@
-/**
- * LIVE ACCESS TO SOURCE SAVE-ID ONLY; all game simulation remains read-only.
- * Single bounded CONTROL read for a batch of up to 12 independent calculations.
- */
+/** One authoritative CONTROL read per batch; optional bounded live offer read. */
 import {config} from '../config.ts';
 import {sheetsBatchGet} from '../google.ts';
 import {dispatchWorldV3Batch,type WorldV3BatchRequest} from './runtime_facade.ts';
+import {attachAuthoritativeWorldSources,parseLiveClock} from './source_bridge.ts';
 export async function simulateWorldV3BatchLive(req:WorldV3BatchRequest){
- const source=await sheetsBatchGet(config.files.TEMP_RUNTIME,['CONTROL!B2']);
- const actual=source['CONTROL!B2']?.[0]?.[0];
- if(typeof actual!=='string'||!actual.trim())throw Error('WORLD_V3_SOURCE_SAVE_MISSING');
- return dispatchWorldV3Batch(req,actual);
+ const liveBoard=Array.isArray(req.jobs)&&req.jobs.some(j=>j.operation==='offer_board'&&j.payload?.boardMode==='CURRENT_SOURCE_ONLY');
+ const ranges=['CONTROL!A1:D15',...(liveBoard?['OPPORTUNITIES_CURRENT!A1:W500']:[])];
+ const source=await sheetsBatchGet(config.files.TEMP_RUNTIME,ranges);
+ const clock=parseLiveClock(source['CONTROL!A1:D15']??[]);
+ const result=dispatchWorldV3Batch(req,clock.saveId);
+ return attachAuthoritativeWorldSources({request:req,result,clock,
+   opportunityRows:liveBoard?source['OPPORTUNITIES_CURRENT!A1:W500']??[]:undefined});
 }
