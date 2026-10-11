@@ -455,6 +455,8 @@ export type SemanticCommitPlan = {
   threadEvents?: SemanticThreadEvent[];
   chatEvents?: SemanticChatEvent[];
   notificationAckEvents?: SemanticNotificationAckEvent[];
+  /** Explicit source-based decision; never selects a milestone or generates XP. */
+  progressionReview?: import("./turn_progression_coverage.ts").ProgressionReview;
   offscreenNpcEvents?: SemanticOffscreenNpcEvent[];
   worldProcessEvents?: SemanticWorldProcessEvent[];
   workDemandEvents?: SemanticWorkDemandEvent[];
