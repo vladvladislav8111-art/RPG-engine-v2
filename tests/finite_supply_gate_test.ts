@@ -191,7 +191,7 @@ Deno.test("source needs measured permitted finite stock and original owner", () 
 Deno.test("renewable source annual harvest cannot exceed demonstrated replenishment", () => {
   const renewable: ResourceSourceCandidate = {
     ...source, kind: "REGENERATIVE_SOURCE",
-    annualRegenerationKg: 100,
+    annualRegenerationKg: 120,
   };
   const plan = preflight([extraction], [renewable]);
   if (plan.sources[0].remainingAnnualQuotaKg !== 0) {
