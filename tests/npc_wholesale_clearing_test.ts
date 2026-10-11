@@ -143,11 +143,11 @@ Deno.test("goods may not be sold twice and separately proved receipts may not be
     }),
     "one shipment receipt covers two distinct deals");
   denied(()=>run([{...orders[0],quantity:11}]),"material shortage");
-  denied(()=>run([{...orders[0],quantity:20}],
+  denied(()=>run([{...orders[0],quantity:11}],
     {...snapshot,lots:[{...snapshot.lots[0],quantity:20},...snapshot.lots.slice(1)]},
     auth,{...clearing,confirmedOrdersById:new Map([[
-      orders[0].orderId,{...orders[0],quantity:20}
-    ]])}),"not an error; larger parcel requires split metadata");
+      orders[0].orderId,{...orders[0],quantity:11}
+    ]])}),"partial physical parcel requires unique output item ID");
 });
 
 Deno.test("no NPC can sell personal or borrowed stock; no buyer infinite credit",()=>{
