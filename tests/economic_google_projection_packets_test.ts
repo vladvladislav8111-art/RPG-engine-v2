@@ -170,7 +170,7 @@ Deno.test("journal hash and actual value readback reject forged/stale target rec
     if(await adapter.isIndependentVerifiedReceipt(correct,journal))
       throw Error("Tampered financial projection accepted despite source delta");
     // Correct receipt cannot project B from a false A state.
-    const jCopy=structuredClone(j);
+    const jCopy=structuredClone(journal);
     jCopy.afterRevision="revision.fixture.counterfeit";
     if(await adapter.isIndependentVerifiedReceipt(correct,jCopy))
       throw Error("Revision-edited immutable journal accepted");
