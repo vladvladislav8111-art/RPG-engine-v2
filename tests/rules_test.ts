@@ -47,3 +47,9 @@ Deno.test("competence milestone locks overflow into deferred XP", () => {
   assertEquals(r.deferredXp, 40);
   assertEquals(r.milestoneLevels, [3]);
 });
+
+Deno.test("zero work and zero novelty grant no nominal minimum competence XP", () => {
+  assertEquals(computeCompetenceAward({band:"useful", productiveMinutes:0}),0);
+  assertEquals(computeCompetenceAward({band:"useful", productiveMinutes:60, modifiers:{repetition:0}}),0);
+  assertEquals(computeCompetenceAward({band:"breakthrough", productiveMinutes:60, modifiers:{novelty:0}}),0);
+});
