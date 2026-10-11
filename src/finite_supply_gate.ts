@@ -69,6 +69,11 @@ export type SupplyAuthority = {
   canonicalMaterialIds: ReadonlySet<string>;
   currentCustodianIds: ReadonlySet<string>;
   canonicalRouteIds: ReadonlySet<string>;
+  // Read from immutable, independently validated permanent recipes.
+  canonicalRecipes: ReadonlyMap<string, {
+    inputMaterialIds: readonly string[];
+    outputMaterialIds: readonly string[];
+  }>;
   verifiedEvidenceRefs: ReadonlySet<string>;
   existingSourceIds: ReadonlySet<string>;
   existingBatchIds: ReadonlySet<string>;
@@ -231,9 +236,13 @@ export function validateFiniteSupplyPreflight(input: {
       }
       extracted.set(source.draftSourceId, next);
     } else if (op.kind === "PROCESS") {
+      const recipe = authority.canonicalRecipes.get(op.conversionEvidenceRef ?? "");
       if (!inputs.length || op.sourceId || op.withdrawnKg !== undefined ||
           op.routeId || op.transferEvidenceRef ||
           !validEvidence(op.conversionEvidenceRef, authority.verifiedEvidenceRefs) ||
+          !recipe || !recipe.inputMaterialIds.length || !recipe.outputMaterialIds.length ||
+          inputs.some((b) => !recipe.inputMaterialIds.includes(b.materialCanonId)) ||
+          op.outputs.some((b) => !recipe.outputMaterialIds.includes(b.materialCanonId)) ||
           inputs.some((b) => b.custodianId !== op.operatorCustodianId) ||
           inputs.some((b) => b.locationId !== inputs[0].locationId) ||
           op.outputs.some((b) => b.custodianId !== op.operatorCustodianId ||
