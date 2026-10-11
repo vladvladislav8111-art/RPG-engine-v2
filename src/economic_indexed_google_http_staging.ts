@@ -206,6 +206,15 @@ export function makeIsolatedIndexedGoogleHttpAdapter(input:{
     });
   }
   return {
+    async preflightProjection(intent){
+      assertRows(intent);
+      const document=await readDoc();
+      // The current TX may already have an archived durable receipt after a
+      // prior lost response; that does not require another append.
+      if(document.tailCount>=MAX_EC06_DOC_TAIL &&
+         !document.receipts.has(intent.txId))
+        throw Error("Google Doc full: first verify and compact the oldest 16 committed TXs");
+    },
     async readReceipt(target,scope,txId){
       assertScope(scope);
       if(!receiptMap.has(txId))throw Error("Indexed receipt not in approved slot plan");
