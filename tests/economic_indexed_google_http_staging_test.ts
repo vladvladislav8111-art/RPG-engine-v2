@@ -342,7 +342,16 @@ async function committedQueuedReserveFixture() {
       throw Error("Actual indexed wage reserve did not commit once");
     const persisted=(await db.get<IndexedWageJournal>(
       indexedEc06Keys.journal(tx) as Deno.KvKey)).value;
-    if(!persisted||JSON.stringify(persisted)!==JSON.stringify(journal))
+    if(!persisted||persisted.schema!==journal.schema||
+       persisted.txId!==tx||persisted.scopeId!==scope||
+       persisted.kind!=="RESERVE"||persisted.copper!==30||
+       persisted.accounts.length!==1||
+       persisted.accounts[0].before.availableCopper!==70||
+       persisted.accounts[0].after.availableCopper!==40||
+       persisted.accounts[0].after.heldCopper!==30||
+       persisted.escrow.before!==null||
+       persisted.escrow.after.state!=="RESERVED"||
+       persisted.escrow.after.amountCopper!==30)
       throw Error("Primary canonical journal differs from projected wage intent");
     // The real wage function must have written the pointer in the very same CAS.
     const shard=indexedQueueShardForTx(tx);
