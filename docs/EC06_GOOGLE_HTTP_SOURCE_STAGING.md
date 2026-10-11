@@ -25,3 +25,10 @@ Tests exercise the double-read source, unchanged-save external edits, duplicate 
 ## Next steps before enabling NPC↔NPC settlements
 
 Authorize/provision isolated staging resources. Implement an actual KV-backed exclusive writer fence and durable ambiguous-write recovery for Google projection targets. Verify on those files that crashes cannot duplicate projection or payment. Separately establish real NPC source funds and custody, approve the one-time writer cutover, then integrate stacked PRs and run regression+load tests. Only the user authorizes a manual Deno deployment.
+
+
+## Explicit exclusive writer in isolated Deno KV (this PR)
+
+src/economic_google_kv_exclusive_fence.ts implements acquisition using ONE real KV atomic CAS for an exclusive scope/target lock and cryptographically random holder token. It is a cooperative lock for our own authorized workers, not a Google-native lock. Two workers cannot claim one target simultaneously. Each write path verifies ownership before and after Google calls. A crashed or uncertain projection intentionally leaves the lock HELD indefinitely: NO TTL, automatic steal or optimistic replay is permitted. Only the owning worker can release the lock after a trusted independent projection readback callback has confirmed a durable source receipt. In production such callbacks must be internal and authenticated, never caller-provided. Lost owner/ambiguous outcome requires separate reviewed operator recovery; no force-unlock endpoint exists.
+
+Tests with actual isolated Deno.openKv(":memory:") prove one winning CAS claimant, loser rejection, lock continuing after uncertain Google readback, later valid verified release, stale owner rejected and independent target locks. This does not prevent a manually edited Sheet or third-party writer that bypasses the fence. Therefore all older independently writable economic fields must be frozen before enabling the primary store or this projector.
