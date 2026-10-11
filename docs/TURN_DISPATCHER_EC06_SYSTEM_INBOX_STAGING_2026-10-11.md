@@ -101,3 +101,28 @@ Pure `proposeSourceFundedJobs` passes source-backed individual demands through e
 6. Preserve exact existing RPG Runtime Bridge Site/Plugin URL, bearer server secret and tools. Confirm original committed save unchanged on infrastructure-only release.
 
 This PR must not be merged simply because its mock CI is green; the combined EC-06 cutover is a materially different transaction-storage release.
+
+## Phase C — independent time, Life V4, memory router, precommit audit
+
+The user explicitly declined an additional automatic situation-summary feature; no new player-facing scene recap was created. The engine instead adds narrow GM-only control packets, entirely within existing Bridge tools and data.
+
+**Independent world clock:** `get_turn_context` accepts optional `plannedElapsedSeconds` (0–604800), where prospective time is computed using the same `advanceClock` mechanic as the semantic writer. `worldTickPlan` identifies due active clocks, KEY NPC resolutions, and 24h RECURRING reviews from the already-loaded `CONTINUITY_SPARSE_RANGES`. This is a `READ_ONLY_PROPOSALS` preview, not an elapsed-world-time write. V3 `npc_decision.lifeV4` can be used for bounded decision proposals before the actual GM semantic event. The semantic writer already rejects time passage missing required due world clocks or KEY NPC events, and advances current offer deadlines/weather; no fabricated work or finished crafts. RECURRING triggers are advisory. For elapsed time over 7 days, page source-aware review instead of pretending a single fine-grained update can cover all events.
+
+**Source-anchored NPC independent lives:** each materialized actor packet now has private `independentLifePlan`: recorded goals, active activity-rule gate, known fact count, existing directed peers, social obligations and due threads, linked processes, missing source signals, and Life V4 review mode. This never makes NPCs wait for Shura, guarantee messages, fabricate beliefs or complete jobs. NPC promotion requires the established social milestone review and semantic commit.
+
+**Automatic memory depth signals:** every `get_turn_context` includes `memoryRoute.depth = FAST | TARGETED_DEEP`, with engine notification on which and why. It escalates on named NPC or active System contact, past `LOGS`, canonical rules, payments/EC-06, or consequential risk; includes `missingSources` and `actualSourceReads`. A log query without a topic signals that targeted document/row lookup is still required; it does not blindly sweep archives. The ordinary NPC request no longer automatically triggers the expensive full local district atlas, although the bounded actor life/social/knowledge read remains. TEMP committed data, actual canon, real journals, and GM PREGEN retain that strict hierarchy.
+
+**Fast writer integrity audit:** `auditPreparedTurn` operates in O(n) on existing semantic writer rows before issuing a write manifest; no additional cloud reads. It checks time/session continuity, finite nonnegative core resources, duplicate pending choice keys, milestone options, unique positive inventory custody if touched, and coverage of due KEY actors/world processes. Failure rejects prepare and therefore commit. It does not magically prove historical NPC finances or physical authenticity. `outcomes.integrityAudit` supplies a concise result for debugging and release validation.
+
+**Progression coverage:** `semantic.progressionReview` may provide `AWARD` or `SOURCE_BASED_ZERO`, a concrete source-based reason and source IDs if AWARD. The writer reports `outcomes.progressionCoverage`; positive XP still comes solely from genuine mechanical events. Because the existing Site does not yet populate this optional field, `RPG_TURN_PROGRESSION_REVIEW_STRICT=false` is the backwards-compatible staging default. Only flip to true after updating the existing Bridge's semantic dispatch and validating real actor/NPC action flows; in strict mode a gameplay turn without a source-based assessment fails rather than silently forgetting XP. This does not reward repetitive, unproductive actions.
+
+**Source-only work market:** pure `planWorkCompetition` checks finite available slots, previous unique applicant receipts, employer decisions and source revisions without inventing competing employment or paying anyone. This is a preflight and retains `committed:false`. `proposeSourceFundedJobs` still requires actual funded demand and escrow. All new paid `semantic.workDemandEvents` are **fail-closed in PR #49 even if `RPG_EC06_FUNDED_OFFERS_WRITER_READY=true` is mistakenly set**, because an authenticated per-offer balance/escrow proof and atomic financial writer have not yet been implemented. The flag alone is never an authorization.
+
+### Regression and deployment conditions (Phase C)
+
+- Verify `deno check` entrypoint and complete regression suite on the final PR SHA; test the new memory escalation, prospective world time, NPC personal threads, cash/slot and custody protections and progression coverage.
+- Preview context with no tags (FAST), with actual NPC actor (TARGETED_DEEP), with `LOGS` missing a narrow query, and with `plannedElapsedSeconds`; benchmark read plan vs previous full local NPC loads.
+- Dry-run on **synthetic** isolated save for queued KEY NPC decisions and real world clocks. Zero-time developer chat must not age the world.
+- Observe existing Site and Deno identities, Bearer authentication, and seven tool schemas; do not create a replacement plugin or backend.
+- Leave the main branch, existing production runtime and current committed gameplay save untouched until the full cutover is authorized and gate tests succeed.
+
