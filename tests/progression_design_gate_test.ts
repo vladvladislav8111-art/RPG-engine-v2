@@ -32,7 +32,7 @@ const choice: PlayerClassChoiceEvidence = {
   demonstratedSpecializationIds:new Set([spec]),
   knownCompetenceIds:new Set([root,secRoot]),
   actualVisibleOfferIds:new Set([classId]),
-  committedPlayerDecisionRefs:new Set(["player.choice.class_cargo_01"]),
+  verifiedCurrentPlayerIntentRefs:new Set(["player.choice.class_cargo_01"]),
 };
 const published=new Set([classId]);
 const first=()=>previewCanonicalClassChoice({
@@ -75,7 +75,7 @@ Deno.test("first class requires explicit real offer, decision, level five and on
     requirement:req,player:{...choice,actualVisibleOfferIds:new Set()},publishedCanonicalClassIds:published,
   }),"no offer");
   rejects(()=>previewCanonicalClassChoice({
-    requirement:req,player:{...choice,committedPlayerDecisionRefs:new Set()},publishedCanonicalClassIds:published,
+    requirement:req,player:{...choice,verifiedCurrentPlayerIntentRefs:new Set()},publishedCanonicalClassIds:published,
   }),"invented user permission");
   rejects(()=>previewCanonicalClassChoice({
     requirement:req,player:choice,publishedCanonicalClassIds:new Set(),
