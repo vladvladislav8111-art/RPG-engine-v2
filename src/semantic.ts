@@ -33,7 +33,7 @@ import { hash32 } from "./rng.ts";
 import { computeSurvivalChange, survivalStaminaModifiers, type SurvivalActivity } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
 import { resolveSelarinWeatherRecords, sheetObjects } from "./weather.ts";
-import { validateChatEventShape, validateRelationshipEventShape } from "./social_context.ts";
+import { validateChatEventShape, validateRelationshipEventShape, parseInworldMoment } from "./social_context.ts";
 import { worldContinuityReview } from "./world_continuity.ts";
 import { reviewWorldProcesses } from "./world_process.ts";
 import { validateWorkDemand } from "./work_demand.ts";
@@ -197,7 +197,10 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   if ((semantic.relationshipEvents?.length ?? 0) > 0) touched.add("NPC_RELATIONSHIPS_CURRENT");
   if ((semantic.socialMemoryEvents?.length ?? 0) > 0) touched.add("SOCIAL_MEMORY_CURRENT");
   if ((semantic.threadEvents?.length ?? 0) > 0) touched.add("OPEN_THREADS_CURRENT");
-  if ((semantic.chatEvents?.length ?? 0) > 0) touched.add("SYSTEM_CHAT_LOG");
+  if ((semantic.chatEvents?.length ?? 0) > 0) {
+    touched.add("SYSTEM_CHAT_LOG");
+    touched.add("SYSTEM_CONTACTS_CURRENT");
+  }
   if ((semantic.injuryEvents ?? []).some((e) => e.simulationOnly !== true)) touched.add("BODY_INJURIES_CURRENT");
   for (const item of semantic.rowUpserts ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowUpdates ?? []) touched.add(item.table as RuntimeTableName);
@@ -1844,6 +1847,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   }
 
   const chatRows = sheets[TABLES.SYSTEM_CHAT_LOG.range] ?? [];
+  const contactsRows = sheets[TABLES.SYSTEM_CONTACTS_CURRENT.range] ?? [];
   const chatOutcomes: unknown[] = [];
   for (const event of semantic.chatEvents ?? []) {
     validateChatEventShape(event);
@@ -1870,6 +1874,29 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     setByHeader(chatRows, row, "Read status", event.readStatus ?? "UNREAD");
     setByHeader(chatRows, row, "Notes", event.notes ?? "");
     appendRow("SYSTEM_CHAT_LOG", chatRows, row);
+    // The existing contact summary was stale despite a real later chat log.
+    // Advance the cached timestamp ONLY for a new recorded message on an
+    // already accepted private channel, never create channels or messages.
+    const contactIndex = findDataRow(contactsRows, "Contact ID", event.channelId);
+    if (contactIndex >= 0) {
+      const contact = cloneRow(contactsRows, contactIndex);
+      const owner = String(contact[headerIndex(contactsRows, "Owner Actor ID")] ?? "");
+      const peer = String(contact[headerIndex(contactsRows, "Peer Actor ID")] ?? "");
+      const isPair = (event.senderId === owner && event.receiverId === peer) ||
+        (event.senderId === peer && event.receiverId === owner);
+      if (!isPair) throw new Error("System chat channel participant mismatch: " + event.channelId);
+      const status = String(contact[headerIndex(contactsRows, "Status")] ?? "").toUpperCase();
+      if (status !== "ACTIVE") throw new Error("System contact inactive: " + event.channelId);
+      const oldWhen = String(contact[headerIndex(contactsRows, "Last message at")] ?? "");
+      const nextWhen = event.timestamp ?? resolvedInworldEnd;
+      const oldMoment = parseInworldMoment(oldWhen);
+      const nextMoment = parseInworldMoment(nextWhen);
+      if (nextMoment === null) throw new Error("Unparseable System message timestamp");
+      if (oldMoment === null || nextMoment >= oldMoment) {
+        setByHeader(contactsRows, contact, "Last message at", nextWhen);
+        writeRow("SYSTEM_CONTACTS_CURRENT", contactsRows, contactIndex, contact);
+      }
+    }
     chatOutcomes.push({ messageId: event.messageId, alreadyPresent: false });
   }
 
