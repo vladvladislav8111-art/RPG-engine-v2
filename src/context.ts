@@ -12,6 +12,7 @@ import { buildWorldActionDocket } from "./world_scheduler.ts";
 import { ACHIEVEMENT_CATALOG_COUNTS } from "./world_sim_v3/achievement_catalog.ts";
 import { resolveSceneActorIds } from "./scene_routing.ts";
 import { buildNpcBehavioralContext } from "./npc_behavior.ts";
+import { buildTurnBrief, contactActorIdsForRequest } from "./turn_dispatcher.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
@@ -248,7 +249,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   // The current scene actors are derived routing hints, bounded to the latest
   // authoritative CONTROL scene/location. The cache cannot override the save.
   const sceneRouting = await sheetsBatchGet(config.files.TEMP_RUNTIME, [
-    "CONTROL!A1:D12", "ACTIVE_CONTEXT!A1:F15",
+    "CONTROL!A1:D12", "ACTIVE_CONTEXT!A1:F15", "SYSTEM_CONTACTS_CURRENT!A1:J200",
   ]);
   const routingControlRows = sceneRouting["CONTROL!A1:D12"] ?? [];
   const routedSceneActorIds = resolveSceneActorIds(
@@ -256,7 +257,11 @@ export async function getTurnContext(input: TurnContextRequest) {
   );
   const routeSaveId = String(findControl(routingControlRows, "save_id") ?? "");
   const tagSet = new Set((input.tags ?? []).map((t) => t.toUpperCase()));
-  const requestedActorIds = [...new Set([...(input.actorIds ?? []), ...routedSceneActorIds])];
+  const sourceContacts = rowsToObjects(sceneRouting["SYSTEM_CONTACTS_CURRENT!A1:J200"] ?? []);
+  const requestedActorIds = [...new Set([
+    ...(input.actorIds ?? []), ...routedSceneActorIds,
+    ...contactActorIdsForRequest(input.tags ?? [], sourceContacts),
+  ])];
   const actorRefs = input.actorRefs ?? [];
   const explicitActorRequest = requestedActorIds.length > 0 || actorRefs.length > 0;
   const requireNpcContextGate = input.requireNpcContextGate ?? explicitActorRequest;
@@ -298,6 +303,8 @@ export async function getTurnContext(input: TurnContextRequest) {
     if (!structuredNames.includes(name)) structuredNames.push(name);
   };
 
+  // Never hide an unlocked System choice just because the next chat used no SKILL tag.
+  addStructured("PENDING_CHOICES");
   if (hasAny(tagSet, ["SKILL", "WORK", "LANGUAGE", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY", "TRAINING", "SPECIALIZATION", "DEXTERITY", "HANDS"])) {
     addStructured("SPECIALIZATIONS");
     addStructured("MILESTONES");
@@ -842,6 +849,14 @@ export async function getTurnContext(input: TurnContextRequest) {
       worldContinuity,
       worldActionDocket,
       worldSimulationV3: { enabled: config.worldSimV3Enabled, mode: "READ_ONLY_PROPOSALS", maxBatchJobs: 12, achievementCandidates: ACHIEVEMENT_CATALOG_COUNTS.achievements, titleCandidates: ACHIEVEMENT_CATALOG_COUNTS.titles, committed: false },
+      gmTurnBrief: buildTurnBrief({
+        turnClass: input.turnClass,
+        tags: input.tags ?? [],
+        contacts: sourceContacts,
+        pendingChoices: (structured.PENDING_CHOICES as Array<Record<string, unknown>> | undefined) ?? [],
+        recentChatByActor: actorRecentChat,
+        actorIdsLoaded: recentChatLoaded ? resolvedActorIds : [],
+      }),
       survival: {
         satiety: { current: satiety, max: Number((resourceDetails["Satiety"] as any)?.max ?? 100), band: survivalBand(satiety) },
         hydration: { current: hydration, max: Number((resourceDetails["Hydration"] as any)?.max ?? 100), band: survivalBand(hydration) },
@@ -888,6 +903,7 @@ export async function getTurnContext(input: TurnContextRequest) {
       readPlan: [
         "TEMP:CORE",
         "TEMP:SCENE_ROUTING",
+        "TEMP:SYSTEM_CONTACTS_CURRENT:ACTIVE",
         "TEMP:WORLD_CONTINUITY_SPARSE",
         ...(needsCompetences ? ["TEMP:COMPETENCES"] : []),
         ...(actorIndexScan?.readPlan ?? []),
