@@ -24,7 +24,7 @@ export type MarketLot = {
   quantity: number;
   custodianAccountId: string;
   physicalLocationId: string;
-  sellingRight: "AUTHORIZED_RETAIL" | "PRIVATE" | "BAILMENT" | "CONSIGNMENT_UNAPPROVED";
+  sellingRight: "AUTHORIZED_RETAIL" | "AUTHORIZED_WHOLESALE" | "PRIVATE" | "BAILMENT" | "CONSIGNMENT_UNAPPROVED";
 };
 export type EconomicSnapshot = {
   revision: string;
@@ -154,7 +154,7 @@ export function planFiniteEconomicSettlement(input: {
     if(!validId(l.itemId)||lots.has(l.itemId)||!validId(l.templateId)||
       !positive(l.quantity)||!accounts.has(l.custodianAccountId)||
       !a.canonicalLocationIds.has(l.physicalLocationId)||
-      !["AUTHORIZED_RETAIL","PRIVATE","BAILMENT","CONSIGNMENT_UNAPPROVED"].includes(l.sellingRight)){
+      !["AUTHORIZED_RETAIL","AUTHORIZED_WHOLESALE","PRIVATE","BAILMENT","CONSIGNMENT_UNAPPROVED"].includes(l.sellingRight)){
       throw Error("Item custody must have unique ID, physical location and known legal status");
     }
     lots.set(l.itemId,{...l});
@@ -212,7 +212,7 @@ export function planFiniteEconomicSettlement(input: {
     } else if(op.kind==="SELL_GOODS"){
       const l=lots.get(op.itemId);
       if(!l||!positive(op.quantity)||!positive(op.priceCopper)||
-        l.quantity<op.quantity||l.sellingRight!=="AUTHORIZED_RETAIL"||
+        l.quantity<op.quantity||!["AUTHORIZED_RETAIL","AUTHORIZED_WHOLESALE"].includes(l.sellingRight)||
         l.custodianAccountId!==op.sellerAccountId||
         l.physicalLocationId!==op.sellerLocationId||
         op.buyerAccountId===op.sellerAccountId||
