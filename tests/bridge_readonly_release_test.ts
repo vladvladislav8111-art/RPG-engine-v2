@@ -28,7 +28,7 @@ const sparse={
  "NPC_CURRENT!A1:D500":[["NPC ID","Name","x","Importance"],["npc.example.key","person","","KEY"]],
  "NPC_CURRENT!M1:M500":[["Last updated"],["Day67 09:00"]],
  "NPC_ACTIVITY_RULES!A1:C200":[["NPC ID","x","State"],["npc.example.key","","ACTIVE"]],
- "NPC_ACTIVITY_RULES!G1:G200":[["Minimum elapsed"],["30"]],
+ "NPC_ACTIVITY_RULES!G1:G200":[["Minimum elapsed"],[">= 30m"]],
  "NPC_ACTIVITY_RULES!K1:K200":[["Last activity tick"],["Day67 09:00"]],
  "WORLD_CLOCKS!A1:C500":[["Process ID","Name","State"],["process.example","Example","ACTIVE"]],
  "WORLD_CLOCKS!D1:G500":[["Location","Current activity","Next milestone/window","Visibility"],["loc.example","Work","Review","private"]],
