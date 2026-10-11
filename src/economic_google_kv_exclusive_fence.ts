@@ -18,18 +18,25 @@ export type GoogleProjectionLock = {
   state:"HELD"|"RELEASED";
   epoch:number;
   lastVerifiedProjectionRef?:string;
+  /** Only indexed staging commits supply an immutable in-flight source. */
+  pendingIndexedTxId?:string;
+  pendingIndexedJournalHash?:string;
 };
 function lockKey(target:Target,resourceId:string):KvKey {
   return ["rpg-v2","ec06","google-unique-writer",target,resourceId];
 }
 export async function acquireGoogleProjectionFence(input:{
   kv:AtomicKvStore;scopeId:string;target:Target;resourceId:string;
+  indexedIntent?:{txId:string;journalHash:string};
 }):Promise<{
   fence:ExclusiveProjectionWriterFence;
   token:string;
   releaseAfterIndependentVerification:(verify:()=>Promise<string>)=>Promise<void>;
 }> {
-  const {kv,scopeId,target,resourceId}=input;
+  const {kv,scopeId,target,resourceId,indexedIntent}=input;
+  if(indexedIntent&&(!/^[a-z][a-z0-9._-]{2,179}$/i.test(indexedIntent.txId)||
+    !/^[0-9a-f]{64}$/i.test(indexedIntent.journalHash)))
+    throw Error("Only exact indexed primary journal hash can bind a held lock");
   if(!/^[a-z0-9]+(?:[._-][a-z0-9]+)+$/i.test(scopeId))
     throw Error("Google projection scope must be an exact canonical namespace");
   if(!resourceId||resourceId.length>256)
@@ -45,6 +52,10 @@ export async function acquireGoogleProjectionFence(input:{
   const next:GoogleProjectionLock={
     schema:"EC06_GOOGLE_LOCK_V1",scopeId,target,resourceId,token,
     state:"HELD",epoch:(prev.value?.epoch??0)+1,
+    ...(indexedIntent?{
+      pendingIndexedTxId:indexedIntent.txId,
+      pendingIndexedJournalHash:indexedIntent.journalHash,
+    }:{}),
   };
   const claimed=await kv.atomic()
     .check({key,versionstamp:prev.versionstamp})

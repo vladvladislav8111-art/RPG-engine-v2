@@ -225,6 +225,7 @@ export function makeIsolatedIndexedGoogleHttpAdapter(input:{
       const physicalId=target==="TEMP_RUNTIME"?sheetId:docId;
       const lock=await acquireGoogleProjectionFence({
         kv,scopeId,target,resourceId:physicalId,
+        indexedIntent:{txId:intent.txId,journalHash:intent.journalHash},
       });
       // NO finally release: ambiguous failure must block another writer
       // until a separately authorized receipt-based incident resolution.
