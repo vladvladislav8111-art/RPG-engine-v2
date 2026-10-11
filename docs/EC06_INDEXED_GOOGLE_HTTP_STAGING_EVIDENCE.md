@@ -51,3 +51,6 @@ Journal hash values were calculated from **synthetic fixtures** only. This exerc
 3. Implement explicit operator-reviewed recovery of HELD physical projection locks after an ambiguous Google HTTP outcome. No automatic TTL/steal.
 4. Replace fixed preallocated row/receipt limits and linear Docs scan with a scalable authorized slot registry and paged/archived indexed transaction receipts, plus bounded outbox worker and load tests for high independent NPC↔NPC turnover.
 5. Complete integrated combined PR testing and owner-authorized release/deploy. No live game write or turn in this package.
+
+## Post-test safety hardening
+The isolated Google HTTP adapter now rejects **every** configured `config.files` production/authoritative document or spreadsheet ID, not merely TEMP_RUNTIME and LIVE_TRANSACTION_ARCHIVE. This includes GM PREGEN, permanent inventory, NPC knowledge, maps and current canon. Added regressions for attempted GM PREGEN and LIVE_PLAYER_INVENTORY staging writes. Only genuinely separate, owner-selected test assets may be supplied; no automatic promotion of those assets to production is possible.
