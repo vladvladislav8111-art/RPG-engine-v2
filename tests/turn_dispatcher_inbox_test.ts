@@ -33,3 +33,12 @@ Deno.test("Notification proposals only report real level crossings",()=>{
  const n=proposeSystemLevelEvents({txId:"tx.no_level",generalXp:[{oldLevel:2,newLevel:2,crossedLevels:[]}],learning:[]});
  assertEquals(n.length,0);
 });
+
+Deno.test("Deferred-XP choice level-ups have stable System event receipts",()=>{
+ const receipts=proposeSystemLevelEvents({txId:"tx.release.1",generalXp:[],learning:[],releasedChoices:[
+  {choiceId:"choice.competence.crafting.practical_creation.lv3",progression:{oldLevel:3,newLevel:4,crossedLevels:[4]}}
+ ]});
+ assertEquals(receipts.map(x=>x.kind),["COMPETENCE_LEVEL_UP"]);
+ assertEquals(receipts[0].level,4);
+ assertEquals(receipts[0].sourceTx,"tx.release.1");
+});
