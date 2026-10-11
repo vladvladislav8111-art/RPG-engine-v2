@@ -39,6 +39,7 @@ import { reviewWorldProcesses } from "./world_process.ts";
 import { validateWorkDemand } from "./work_demand.ts";
 import { proposeSystemLevelEvents } from "./system_notifications.ts";
 import { buildSystemNotificationCenter, validateNotificationAck } from "./system_notification_center.ts";
+import { validateMilestoneOptions, resolveMilestoneOption } from "./milestone_choices.ts";
 import { validateRumorTransmission } from "./world_information.ts";
 import { validateMajorWorldEvent } from "./world_events.ts";
 import { auditMaterialTransformation } from "./physical_integrity.ts";
@@ -180,7 +181,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     "PROGRESSION_EVENTS",
     "SESSION_LOG",
   ]);
-  if ((semantic.choiceResolutions?.length ?? 0) > 0) touched.add("MILESTONES");
+  if ((semantic.choiceResolutions?.length ?? 0 || (semantic.choiceOptionMaterializations?.length ?? 0)) > 0) touched.add("MILESTONES");
   if ((semantic.specializationUnlockEvents?.length ?? 0) > 0) {
     touched.add("NPC_CURRENT");
     touched.add("ACTIVE_CONTEXT");
@@ -1388,6 +1389,31 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   const learningOutcomes: unknown[] = [];
   const pendingChoices: unknown[] = [];
   const choiceResolutionOutcomes: unknown[] = [];
+  const choicePublicationOutcomes: unknown[] = [];
+  const milestoneRows = sheets[TABLES.MILESTONES.range] ?? [];
+  const selectedThisTurn=new Set((semantic.choiceResolutions??[]).map(r=>r.choiceId));
+  for(const publication of semantic.choiceOptionMaterializations??[]){
+    if(selectedThisTurn.has(publication.choiceId)){
+      throw new Error("Milestone options must be presented before a separate player-selected resolution");
+    }
+    const i=findDataRow(pendingRows,"Choice ID",publication.choiceId);
+    if(i<0)throw new Error("Unknown milestone choice "+publication.choiceId);
+    const row=cloneRow(pendingRows,i);
+    const status=String(row[headerIndex(pendingRows,"Status")]??"");
+    if(status!=="PENDING_GENERATION")throw new Error("Milestone options already generated");
+    const parentId=String(row[headerIndex(pendingRows,"Parent ID")]??"");
+    const knownIds=new Set(milestoneRows.slice(1)
+      .map(x=>String(x[headerIndex(milestoneRows,"Milestone ID")]??"")).filter(Boolean));
+    const validated=validateMilestoneOptions({
+      choiceId:publication.choiceId,parentId,options:publication.options,
+      existingMilestoneIds:knownIds,
+    });
+    setByHeader(pendingRows,row,"Status","AWAITING_CHOICE");
+    setByHeader(pendingRows,row,"Options JSON",JSON.stringify(validated));
+    setByHeader(pendingRows,row,"Notes","Options source-backed in canon; Shura has not selected a milestone");
+    writeRow("PENDING_CHOICES",pendingRows,i,row);
+    choicePublicationOutcomes.push({choiceId:publication.choiceId,options:validated.map(x=>({id:x.id,name:x.name}))});
+  }
 
   for (let resolutionIndex = 0; resolutionIndex < (semantic.choiceResolutions ?? []).length; resolutionIndex++) {
     const resolution = semantic.choiceResolutions![resolutionIndex];
@@ -1395,8 +1421,26 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     if (choiceIndex < 0) throw new Error(`pending choice not found: ${resolution.choiceId}`);
     const choiceRow = cloneRow(pendingRows, choiceIndex);
     const status = String(choiceRow[headerIndex(pendingRows, "Status")] ?? "");
-    if (!status.startsWith("PENDING")) throw new Error(`choice is not pending: ${resolution.choiceId} status=${status}`);
     const parentId = String(choiceRow[headerIndex(pendingRows, "Parent ID")] ?? "");
+    const selected=resolveMilestoneOption({
+      status,optionsJson:String(choiceRow[headerIndex(pendingRows,"Options JSON")]??"[]"),
+      selectedOption:resolution.selectedOption,parentId,
+    });
+    if(findDataRow(milestoneRows,"Milestone ID",selected.id)>=0)
+      throw new Error("Milestone is already earned: "+selected.id);
+    const milestoneRow=Array(headers(milestoneRows).length).fill("");
+    setByHeader(milestoneRows,milestoneRow,"Milestone ID",selected.id);
+    setByHeader(milestoneRows,milestoneRow,"Parent competence",parentId);
+    setByHeader(milestoneRows,milestoneRow,"Name",selected.name);
+    setByHeader(milestoneRows,milestoneRow,"Type",selected.type);
+    setByHeader(milestoneRows,milestoneRow,"Trigger",selected.trigger);
+    setByHeader(milestoneRows,milestoneRow,"Effect",selected.effect);
+    setByHeader(milestoneRows,milestoneRow,"Limits",selected.limits);
+    setByHeader(milestoneRows,milestoneRow,"Status","ACTIVE");
+    setByHeader(milestoneRows,milestoneRow,"Unlocked at",resolvedInworldEnd);
+    setByHeader(milestoneRows,milestoneRow,"Scaling state",selected.scalingState+" | canon="+selected.sourceRef);
+    setByHeader(milestoneRows,milestoneRow,"Last TX",input.txId);
+    appendRow("MILESTONES",milestoneRows,milestoneRow);
     const competenceIndex = findDataRow(competenceRows, "Competence ID", parentId);
     if (competenceIndex < 0) throw new Error(`choice parent competence missing: ${parentId}`);
     const competenceRow = cloneRow(competenceRows, competenceIndex);
@@ -2076,6 +2120,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       survival: survivalOutcomes,
       generalXp: generalXpOutcomes,
       choiceResolutions: choiceResolutionOutcomes,
+      choiceOptionPublications:choicePublicationOutcomes,
       learning: learningOutcomes,
       specializationUnlocks: specializationUnlockOutcomes,
       adaptation: adaptationOutcomes,
