@@ -1,3 +1,5 @@
+import { summarizeNpcLifeContext } from "./npc_life_v4/context.ts";
+
 type NpcRecord = Record<string, unknown>;
 
 const str = (x: unknown) => String(x ?? "").trim();
@@ -14,6 +16,7 @@ export function buildNpcBehavioralContext(input: {
   openThreads: NpcRecord[];
   recentChat: NpcRecord[];
   activeWorldClocks: NpcRecord[];
+  activityRule?: NpcRecord | null;
 }) {
   const { actorId, current } = input;
   if (!current || str(current["NPC ID"]) !== actorId) {
@@ -77,6 +80,24 @@ export function buildNpcBehavioralContext(input: {
     knownFacts,
     lastContact,
     workPressures,
+    npcLifeV4: summarizeNpcLifeContext({
+      actorId,
+      importance: current["Importance"],
+      currentGoal: current["Current goal/activity"],
+      identityAnchors: current["Identity anchors"],
+      competenceAnchors: current["Competence anchors"],
+      currentLocation: current["Current/last-known location"],
+      lastUpdated: current["Last updated"],
+      linkedClocks: input.activeWorldClocks.length,
+      knownFacts: knownFacts.length,
+      socialMemories: memoryAnchors.length,
+      openThreads: commitments.length,
+      relationshipRows: directedRelations.length,
+      activityRulePresent: input.activityRule != null,
+      activeProjectCount: input.activeWorldClocks.filter((r) =>
+        String(r["State"] ?? "").toUpperCase().startsWith("ACTIVE")
+      ).length,
+    }),
     deliberationRules: [
       "NPC decides independently from their own goal, time, priorities and character; player cannot compel agreement.",
       "NPC learns ONLY from knownFacts, directly observed events and source-backed hearsay; do not reveal GM private truth.",
