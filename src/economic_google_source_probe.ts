@@ -7,6 +7,8 @@
  * not an approved cutover or externally authenticated bank statement.
  */
 import type { SourceMoney, SourceItem } from "./economic_cutover_audit.ts";
+import { config } from "./config.ts";
+import { sheetsBatchGet } from "./google.ts";
 
 export type EconomicGoogleReadBatch = (
   spreadsheetId:string,ranges:readonly string[],
@@ -141,4 +143,20 @@ export async function probeCurrentEconomicGoogleSources(input:{
     sourceAuthority:"GOOGLE_SHEETS_CURRENT_READ_ONLY",
     observationsAreIndependentProof:false,
   };
+}
+
+
+/**
+ * Server-side read-only probe of the ACTUAL configured TEMP_RUNTIME.
+ * Existing Sheets API authentication is reused. No migration, no escrow
+ * creation, no economy writes, no commit, no world-time advancement.
+ */
+export async function probeConfiguredEconomicCurrentReadOnly(
+  expectedCommittedSaveId:string,
+):Promise<LiveEconomicSourceObservation> {
+  return await probeCurrentEconomicGoogleSources({
+    spreadsheetId:config.files.TEMP_RUNTIME,
+    expectedCommittedSaveId,
+    readBatch:(id,ranges)=>sheetsBatchGet(id,[...ranges]),
+  });
 }
