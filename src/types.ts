@@ -78,6 +78,12 @@ export type SemanticGeneralXpEvent = {
   thresholdFraction?: number;
 };
 
+export type SemanticChoiceOptionsMaterialization = {
+  choiceId: string;
+  /** Only verified, active permanent-canon options, never V3 DESIGN_CANDIDATE. */
+  options: import("./milestone_choices.ts").MilestoneChoiceOption[];
+};
+
 export type SemanticChoiceResolution = {
   choiceId: string;
   selectedOption: string;
@@ -433,6 +439,7 @@ export type SemanticCommitPlan = {
   materialTransformations?: SemanticMaterialTransformation[];
   physicalPassportEvents?: import("./physical_passport.ts").PhysicalPassport[];
   survival?: SemanticSurvival;
+  choiceOptionMaterializations?: SemanticChoiceOptionsMaterialization[];
   choiceResolutions?: SemanticChoiceResolution[];
   exertionEvents?: SemanticExertionEvent[];
   restEvents?: SemanticRestEvent[];
