@@ -30,7 +30,7 @@ async function prepared(){
       demandId:"demand.fixture."+n,amountCopper:1,
       reservedCopper:1,state:"RESERVED",
       originalContractRef:"proof.fixture.contract_"+n,
-    };
+    } as const;
     const before={accountId:acct,availableCopper:101-n,heldCopper:n-1};
     const after={accountId:acct,availableCopper:100-n,heldCopper:n};
     const journal:IndexedWageJournal={
@@ -149,7 +149,7 @@ Deno.test("forged source journal SHA, unknown Doc, released lock all quarantine 
     });
     if(x.classification!=="QUARANTINE_UNKNOWN_OR_DIVERGENT")
       throw Error("Forged primary TX journal escaped quarantine");
-    frozen(x,1);
+    frozen(x,0);
     const state=(await f.db.get<{state:string}>(lockKey as Deno.KvKey)).value;
     if(!same(state?.state,"HELD"))throw Error("Dossier modified a HELD lock");
   }finally{f.db.close()}
