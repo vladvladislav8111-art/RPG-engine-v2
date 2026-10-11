@@ -181,7 +181,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     "PROGRESSION_EVENTS",
     "SESSION_LOG",
   ]);
-  if ((semantic.choiceResolutions?.length ?? 0 || (semantic.choiceOptionMaterializations?.length ?? 0)) > 0) touched.add("MILESTONES");
+  if ((semantic.choiceResolutions?.length ?? 0) > 0 || (semantic.choiceOptionMaterializations?.length ?? 0) > 0) touched.add("MILESTONES");
   if ((semantic.specializationUnlockEvents?.length ?? 0) > 0) {
     touched.add("NPC_CURRENT");
     touched.add("ACTIVE_CONTEXT");
