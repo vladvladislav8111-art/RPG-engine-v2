@@ -38,6 +38,7 @@ import { worldContinuityReview } from "./world_continuity.ts";
 import { reviewWorldProcesses } from "./world_process.ts";
 import { validateWorkDemand } from "./work_demand.ts";
 import { proposeSystemLevelEvents } from "./system_notifications.ts";
+import { buildSystemNotificationCenter, validateNotificationAck } from "./system_notification_center.ts";
 import { validateRumorTransmission } from "./world_information.ts";
 import { validateMajorWorldEvent } from "./world_events.ts";
 import { auditMaterialTransformation } from "./physical_integrity.ts";
@@ -197,9 +198,13 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   if ((semantic.relationshipEvents?.length ?? 0) > 0) touched.add("NPC_RELATIONSHIPS_CURRENT");
   if ((semantic.socialMemoryEvents?.length ?? 0) > 0) touched.add("SOCIAL_MEMORY_CURRENT");
   if ((semantic.threadEvents?.length ?? 0) > 0) touched.add("OPEN_THREADS_CURRENT");
-  if ((semantic.chatEvents?.length ?? 0) > 0) {
+  if ((semantic.chatEvents?.length ?? 0) > 0 || (semantic.notificationAckEvents?.length ?? 0) > 0) {
     touched.add("SYSTEM_CHAT_LOG");
     touched.add("SYSTEM_CONTACTS_CURRENT");
+  }
+  if ((semantic.notificationAckEvents?.length ?? 0) > 0) {
+    if (!config.systemNotificationAckEnabled) throw new Error("System notification ACK schema is not activated");
+    touched.add("SYSTEM_NOTIFICATION_ACK_CURRENT");
   }
   if ((semantic.injuryEvents ?? []).some((e) => e.simulationOnly !== true)) touched.add("BODY_INJURIES_CURRENT");
   for (const item of semantic.rowUpserts ?? []) touched.add(item.table as RuntimeTableName);
@@ -233,6 +238,9 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
 
   const ranges = [...touched].map((t) => TABLES[t].range);
   const sheets = await sheetsBatchGet(config.files.TEMP_RUNTIME, ranges);
+  const notificationAchievementRows = (semantic.notificationAckEvents?.length ?? 0) > 0
+    ? (await sheetsBatchGet(config.files.TEMP_RUNTIME, ["ACTOR_ACHIEVEMENTS!A1:I1000"]))["ACTOR_ACHIEVEMENTS!A1:I1000"] ?? []
+    : [];
   const gmTemplates = [
     ...(((semantic.inventoryEvents?.length ?? 0) > 0 || (semantic.materialTransformations?.length ?? 0) > 0 || (semantic.physicalPassportEvents?.length ?? 0) > 0) ? [PREGEN_TABLES.COMMON_OBJECT_TEMPLATES] : []),
     ...((semantic.workDemandEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_JOB_TEMPLATES] : []),
@@ -1900,6 +1908,61 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     chatOutcomes.push({ messageId: event.messageId, alreadyPresent: false });
   }
 
+  // Acknowledgements are independent, source-proven receipts in an explicitly
+  // migrated single TEMP workbook tab. They NEVER edit original notifications.
+  const notificationAckOutcomes: unknown[] = [];
+  if ((semantic.notificationAckEvents?.length ?? 0) > 0) {
+    const ackRows = sheets[TABLES.SYSTEM_NOTIFICATION_ACK_CURRENT.range] ?? [];
+    if (headers(ackRows).join("|") !==
+      "Notification ID|Actor ID|Source Ref|Status|Marked at|TX ID|Version") {
+      throw new Error("SYSTEM_NOTIFICATION_ACK_CURRENT migration/header mismatch");
+    }
+    const asRecords = (rows: unknown[][]): Record<string, unknown>[] => rows.slice(1)
+      .filter(row => row.some(cell => String(cell ?? "").trim() !== ""))
+      .map(row => Object.fromEntries(headers(rows).map((key,index) => [key,row[index] ?? ""])));
+    const issued = buildSystemNotificationCenter({
+      pendingChoices: asRecords(pendingRows),
+      progressEvents: asRecords(progressionRows),
+      achievements: asRecords(notificationAchievementRows),
+      contacts: asRecords(contactsRows),
+      chatEvents: asRecords(chatRows),
+      ackReceipts: asRecords(ackRows),
+      currentDay: resolvedDay,
+      maxItems: 60,
+    });
+    for (const event of semantic.notificationAckEvents ?? []) {
+      validateNotificationAck({
+        notificationId:event.notificationId,
+        sourceRef:event.sourceRef,
+        status:event.status,
+        actorId:"player.shura",
+        issued:issued.notices,
+      });
+      const i=findDataRow(ackRows,"Notification ID",event.notificationId);
+      if(i>=0){
+        const old=cloneRow(ackRows,i);
+        if(String(old[headerIndex(ackRows,"Actor ID")] ?? "")!=="player.shura" ||
+          String(old[headerIndex(ackRows,"Source Ref")] ?? "")!==event.sourceRef)
+          throw new Error("Notification ACK ownership or source collision");
+        if(String(old[headerIndex(ackRows,"Status")] ?? "")===event.status){
+          notificationAckOutcomes.push({notificationId:event.notificationId,idempotent:true});
+          continue;
+        }
+        throw new Error("Notification ACK cannot be changed or replayed with a different state");
+      }
+      const row=Array(headers(ackRows).length).fill("");
+      setByHeader(ackRows,row,"Notification ID",event.notificationId);
+      setByHeader(ackRows,row,"Actor ID","player.shura");
+      setByHeader(ackRows,row,"Source Ref",event.sourceRef);
+      setByHeader(ackRows,row,"Status",event.status);
+      setByHeader(ackRows,row,"Marked at",resolvedInworldEnd);
+      setByHeader(ackRows,row,"TX ID",input.txId);
+      setByHeader(ackRows,row,"Version",1);
+      appendRow("SYSTEM_NOTIFICATION_ACK_CURRENT",ackRows,row);
+      notificationAckOutcomes.push({notificationId:event.notificationId,status:event.status});
+    }
+  }
+
   const genericRows = new Map<StructuredRuntimeTable, unknown[][]>();
   for (const item of [...(semantic.rowUpserts ?? []), ...(semantic.rowUpdates ?? []), ...(semantic.rowDeletes ?? [])]) {
     ensureGenericTable(item.table);
@@ -2006,6 +2069,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     },
     outcomes: {
       systemNotifications,
+      notificationAcknowledgements: notificationAckOutcomes,
       exertion: exertionOutcomes,
       rest: restOutcomes,
       injury: injuryOutcomes,
