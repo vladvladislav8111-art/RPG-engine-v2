@@ -15,7 +15,7 @@ export function wrapDenoAtomicEconomyKv(kv:Deno.Kv):AtomicKvStore {
     async get<T>(key:KvKey):Promise<KvEntry<T>> {
       const row=await kv.get<T>(key as Deno.KvKey);
       return {
-        key:row.key,
+        key,
         value:row.value??null,
         versionstamp:row.versionstamp,
       };
