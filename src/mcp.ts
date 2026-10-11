@@ -239,6 +239,11 @@ const semanticSchema = z.object({
     simulationOnly: z.boolean().optional(),
     reason: z.string().optional(),
   })).optional(),
+  progressionReview: z.object({
+    outcome: z.enum(["AWARD", "SOURCE_BASED_ZERO"]),
+    reason: z.string().min(20),
+    sourceRefs: z.array(z.string().min(1)).max(24).optional(),
+  }).optional(),
   generalXpEvents: z.array(z.object({
     sourceType: z.enum(["combat", "objective", "discovery", "survival", "breakthrough", "other"]),
     reason: z.string(),
