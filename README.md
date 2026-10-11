@@ -1,5 +1,7 @@
 # RPG V2 — Runtime Gateway
 
+> **PRODUCTION STATUS — 2026-10-11 AUDIT:** The active RPG Runtime Bridge uses Deno Deploy at https://rpg-engine-v2.vladvladislav8111.deno.net, NOT Netlify. Structured TEMP RUNTIME is the sole current-state authority. World Simulation V3 is deployed and exposed via the existing Bridge as `simulate_world_v3`, strictly `READ_ONLY_PROPOSALS` with max 12 jobs per call. The engine does not independently commit these simulation proposals; the GM uses source-grounded semantic `prepare_turn`/`commit_turn`. The 90 achievements and 27 titles remain **draft candidates, not earned awards**. EC-06 NPC economy remains staging-only and must never be activated without independently proved financial/quiescence gates. Use [current source and recovery router](docs/RPG_V2_ENGINE_SOURCE_ROUTER_2026-10-11.md). Legacy sections below document superseded historical implementations.
+
 Deterministic service layer for the persistent RPG V2 campaign.
 
 ## V2.2 fast path

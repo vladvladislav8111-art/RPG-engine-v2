@@ -1,3 +1,5 @@
+> **ARCHIVED DEPLOYMENT PLAN — NOT ACTIVE PRODUCTION.** This file documents the historical 2026-10-08 Netlify migration. The authoritative live service is now Deno Deploy. Never deploy EC-06 from this historic document, never use its `ENABLE_KV=false` instruction for the current Deno build, and do not use `textrp.netlify.app` as a current RPG endpoint. See [current router](docs/RPG_V2_ENGINE_SOURCE_ROUTER_2026-10-11.md).
+
 # Netlify production runtime
 
 Production target: Netlify Functions on Node.js 24, using the V2.8 portable/bounded runtime core.
