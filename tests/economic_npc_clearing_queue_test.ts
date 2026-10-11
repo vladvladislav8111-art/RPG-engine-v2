@@ -11,7 +11,7 @@ const one=(i:number):NpcWholesaleOrder=>({
   sourceProcessId:"process.fixture.actual_trade",
   handoffLocationId:"loc.fixture.trade_drop",
   quantity:2,totalPriceCopper:7,
-  dueGameMinute:now-30+Math.floor(i/10),
+  dueGameMinute:now-50+Math.floor(i/10),
   buyerAcceptanceRef:"proof.fixture.accept_"+String(i),
   sellerRightRef:"proof.fixture.right_"+String(i),
   deliveredReceiptRef:"proof.fixture.delivered_"+String(i),
