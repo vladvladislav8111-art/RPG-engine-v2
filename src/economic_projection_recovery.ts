@@ -29,7 +29,7 @@ export interface VerifiedEconomicProjectionAdapter {
   /** After application, read a real durable exact-TX receipt from the target. */
   readReceipt(target:Target,scopeId:string,txId:string):Promise<ProjectionVerification|null>;
   /** Must be determined by actual readback evidence, not caller text. */
-  isIndependentVerifiedReceipt(receipt:ProjectionVerification):Promise<boolean>;
+  isIndependentVerifiedReceipt(receipt:ProjectionVerification,journal:ImmutableEconomicTxJournal):Promise<boolean>;
 }
 
 function checkReceipt(journal:ImmutableEconomicTxJournal,r:ProjectionVerification,target:Target){
@@ -84,7 +84,7 @@ export async function reconcileEconomicProjectionStaging(input:{
     }
     if(!r)throw Error("Projection did not leave a durable verifiable receipt for "+target);
     checkReceipt(journal,r,target);
-    if(!(await adapter.isIndependentVerifiedReceipt(r))){
+    if(!(await adapter.isIndependentVerifiedReceipt(r,journal))){
       throw Error("Projection lacks independent source-verifiable receipt: "+target);
     }
     receipts.push(r);
