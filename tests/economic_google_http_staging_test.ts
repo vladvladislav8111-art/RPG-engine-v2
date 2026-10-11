@@ -168,5 +168,5 @@ Deno.test("Google Docs outage does not partially append state, retry remains pos
     target:"LIVE_TRANSACTION_ARCHIVE",scopeId:scope,
     expectedRevision:"revision.fixture.start",image:docNext,
   });
-  if(api.docWrites!==1)throw Error("Docs retry did not append exactly once");
+  if(Number(api.docWrites)!==1)throw Error("Docs retry did not append exactly once");
 });
