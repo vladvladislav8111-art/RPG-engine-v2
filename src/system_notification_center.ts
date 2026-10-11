@@ -27,7 +27,7 @@ export function validateNotificationAck(input: {
   if(input.actorId!=="player.shura") throw Error("ACK_NOT_PLAYER");
   const target=input.issued.find(n=>n.id===input.notificationId&&n.sourceRef===input.sourceRef);
   if(!target)throw Error("ACK_SOURCE_NOT_CONFIRMED");
-  if(input.status==="DISMISSED" && target.playerActionRequired)
+  if(input.status==="DISMISSED" && (target.playerActionRequired || target.persistent))
     throw Error("PLAYER_CHOICE_CANNOT_BE_DISMISSED");
   return target;
 }
