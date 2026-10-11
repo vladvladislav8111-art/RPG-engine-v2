@@ -164,7 +164,7 @@ Deno.test("independent unrelated vendors can settle concurrently without one dis
 });
 
 Deno.test("two invoices draw same buyer money: one CAS must reject overspend",async()=>{
-  const {db,kv}=await initialized(25,20);
+  const {db,kv}=await initialized(1,20);
   try{
     const o1={...order,quantity:1,splitItemId:undefined};
     const o2={...o1,orderId:"order.fixture.second_sale",
