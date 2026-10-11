@@ -13,6 +13,7 @@ import { ACHIEVEMENT_CATALOG_COUNTS } from "./world_sim_v3/achievement_catalog.t
 import { resolveSceneActorIds } from "./scene_routing.ts";
 import { buildNpcBehavioralContext } from "./npc_behavior.ts";
 import { buildTurnBrief, contactActorIdsForRequest } from "./turn_dispatcher.ts";
+import { availableCurrentOpportunities, parseLiveClock } from "./world_sim_v3/source_bridge.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
@@ -317,7 +318,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   if (hasAny(tagSet, ["CRAFT", "MATERIAL", "MATERIAL_PASSPORT", "PHYSICAL", "ENGINEERING"])) {
     addStructured("PHYSICAL_PASSPORTS_CURRENT");
   }
-  if (hasAny(tagSet, ["SERVICES", "SOCIAL", "ECONOMY", "LANGUAGE", "WORK"])) {
+  if (hasAny(tagSet, ["SERVICES", "SOCIAL", "ECONOMY", "LANGUAGE", "WORK", "JOB", "BOARD", "TRADE"])) {
     addStructured("SERVICES_CURRENT");
     addStructured("OPPORTUNITIES_CURRENT");
   }
@@ -856,6 +857,13 @@ export async function getTurnContext(input: TurnContextRequest) {
         pendingChoices: (structured.PENDING_CHOICES as Array<Record<string, unknown>> | undefined) ?? [],
         recentChatByActor: actorRecentChat,
         actorIdsLoaded: recentChatLoaded ? resolvedActorIds : [],
+        sourceOnlyOfferBoard: hasAny(tagSet, ["ECONOMY", "WORK", "JOB", "BOARD", "TRADE"])
+          ? availableCurrentOpportunities({
+              clock: parseLiveClock(base["CONTROL!A1:D12"] ?? []),
+              rows: base[TABLES.OPPORTUNITIES_CURRENT.range] ?? [],
+              maxResults: 12,
+            })
+          : null,
       }),
       survival: {
         satiety: { current: satiety, max: Number((resourceDetails["Satiety"] as any)?.max ?? 100), band: survivalBand(satiety) },
