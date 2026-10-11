@@ -40,7 +40,7 @@ import { validateWorkDemand } from "./work_demand.ts";
 import { validateRumorTransmission } from "./world_information.ts";
 import { validateMajorWorldEvent } from "./world_events.ts";
 import { auditMaterialTransformation } from "./physical_integrity.ts";
-import { parseCanonicalSpecializations, validateSpecializationAcquisition } from "./specialization_catalog.ts";
+import { parseCanonicalSpecializations, runtimeDomainForCompetence, validateSpecializationAcquisition } from "./specialization_catalog.ts";
 import { materialRefsInCanon, permanentMaterialLocksInCanon, passportToSheetRecord, validatePhysicalPassport } from "./physical_passport.ts";
 import type {
   CommitRequest,
@@ -1505,7 +1505,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     setByHeader(specRows, newRow, "Specialization", entry.runtimeName);
     setByHeader(specRows, newRow, "Stars", 0);
     setByHeader(specRows, newRow, "Visible band", "introductory practice");
-    setByHeader(specRows, newRow, "Domain", "body");
+    setByHeader(specRows, newRow, "Domain", runtimeDomainForCompetence(entry.competenceId));
     setByHeader(specRows, newRow, "Internal progress", 0);
     setByHeader(specRows, newRow, "Next star threshold", nextStarThreshold(0) ?? 20);
     setByHeader(specRows, newRow, "Growth reasons",
