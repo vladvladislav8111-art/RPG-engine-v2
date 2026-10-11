@@ -294,6 +294,11 @@ const semanticSchema = z.object({
     tags: z.array(z.string()).optional(),
     notes: z.string().optional(),
   })).optional(),
+  notificationAckEvents: z.array(z.object({
+    notificationId: z.string().min(1).max(260),
+    sourceRef: z.string().min(1).max(260),
+    status: z.enum(["SEEN", "DISMISSED"]),
+  })).max(60).optional(),
   chatEvents: z.array(z.object({
     messageId: z.string().min(1),
     channelId: z.string().min(1),
