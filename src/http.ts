@@ -5,6 +5,8 @@ import { sheetsBatchGet } from "./google.ts";
 import { HUD_UI_VERSION } from "./hud.ts";
 import { diagnoseMcp, handleMcp } from "./mcp.ts";
 import { intBetween } from "./rng.ts";
+import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
+import type { WorldV3BatchRequest } from "./world_sim_v3/runtime_facade.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import type { CommitRequest, TurnContextRequest } from "./types.ts";
 
@@ -134,6 +136,13 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
 
     if (!authorized(req)) return json({ error: "unauthorized" }, 401);
 
+    if (pathname === "/simulate/world-v3" && req.method === "POST") {
+      if (!config.worldSimV3Enabled) return json({ ok: false, error: "world_sim_v3_disabled" }, 503);
+      const size = Number(req.headers.get("content-length") ?? "0");
+      if (Number.isFinite(size) && size > 64000) return json({ ok: false, error: "world_sim_v3_request_too_large" }, 413);
+      return json(await simulateWorldV3BatchLive(await body<WorldV3BatchRequest>(req)));
+    }
+
     if (pathname === "/health" && req.method === "GET") {
       const state = await sheetsBatchGet(config.files.TEMP_RUNTIME, [
         "CONTROL!B2",
@@ -148,6 +157,7 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
         hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
         rawCommitsEnabled: config.allowRawCommits,
+        worldSimulationV3: config.worldSimV3Enabled ? "READ_ONLY_PROPOSALS" : "DISABLED",
         saveId: state["CONTROL!B2"]?.[0]?.[0] ?? null,
         worldTime: state["CONTROL!B5"]?.[0]?.[0] ?? null,
         locationId: state["CONTROL!B6"]?.[0]?.[0] ?? null,
