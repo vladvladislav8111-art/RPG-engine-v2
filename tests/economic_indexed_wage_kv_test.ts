@@ -25,8 +25,9 @@ const authority=():IndexedWageAuthority=>({
     "proof.fixture.work_completed","proof.fixture.work_cancelled",
   ]),
   actualAcceptedContracts:new Map([[demand,contract]]),
-  verifiedCompletedDemandIds:new Set([demand]),
-  verifiedCancelledDemandIds:new Set([demand]),
+  acceptedReservationProofByDemand:new Map([[demand,"proof.fixture.accepted_shift"]]),
+  verifiedCompletedProofByDemand:new Map([[demand,"proof.fixture.work_completed"]]),
+  verifiedCancelledProofByDemand:new Map([[demand,"proof.fixture.work_cancelled"]]),
 });
 const reserve=(txId="tx.fixture.reserve_wage_1")=>({
   kind:"RESERVE" as const,txId,escrowId:escort,contract,
@@ -173,6 +174,9 @@ Deno.test("two distinct wage demands drawing same last copper cannot both reserv
       contract:otherContract,sourceEvidenceRef:"proof.fixture.accepted_shift"};
     const a={...authority(),actualAcceptedContracts:new Map([
       [demand,contract],[otherContract.demandId,otherContract],
+    ]),acceptedReservationProofByDemand:new Map([
+      [demand,"proof.fixture.accepted_shift"],
+      [otherContract.demandId,"proof.fixture.accepted_shift"],
     ])};
     const results=await Promise.allSettled([wage(kv,reserve(),a),wage(kv,other,a)]);
     if(results.filter(x=>x.status==="fulfilled").length!==1)
@@ -201,9 +205,9 @@ Deno.test("wage outcome needs independent completion or cancellation, not GM int
   try{
     await wage(kv,reserve());
     await reject(()=>wage(kv,pay(),{...authority(),
-      verifiedCompletedDemandIds:new Set()}),"no completed job evidence");
+      verifiedCompletedProofByDemand:new Map()}),"no completed job evidence");
     await reject(()=>wage(kv,release(),{...authority(),
-      verifiedCancelledDemandIds:new Set()}),"no actual cancellation");
+      verifiedCancelledProofByDemand:new Map()}),"no actual cancellation");
     const pending=(await kv.get<IndexedWageEscrow>(indexedWageKeys.escrow(escort))).value;
     if(pending?.reservedCopper!==30||pending.state!=="RESERVED")
       throw Error("Denied wages changed reserved money");
