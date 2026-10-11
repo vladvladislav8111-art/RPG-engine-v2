@@ -32,7 +32,7 @@ function journal(txId:string):IndexedWageJournal{
 }
 function receipt(intent:IndexedDeltaIntent,target:DeltaTarget):IndexedTargetReceipt{
   return {schema:"EC06_INDEXED_TARGET_RECEIPT_V1",target,
-    scopeId:scope,txId:intent.txId,journalHash:intent.journalHash,
+    txId:intent.txId,scopeId:scope,journalHash:intent.journalHash,
     rowIds:intent.mutations.map(m=>k(m.kind,m.id))};
 }
 async function seed(txId="tx.fixture.queue_drain_001"){
