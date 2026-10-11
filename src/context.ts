@@ -16,6 +16,7 @@ import { buildTurnBrief, contactActorIdsForRequest } from "./turn_dispatcher.ts"
 import { chooseMemoryRoute } from "./context_memory_router.ts";
 import { planIndependentWorldTick } from "./world_tick_dispatcher.ts";
 import { buildNpcAutonomyPlan } from "./npc_autonomy_planner.ts";
+import { bridgeTurnIntegrationPlan } from "./bridge_integration.ts";
 import { buildSystemNotificationCenter } from "./system_notification_center.ts";
 import { availableCurrentOpportunities, parseLiveClock } from "./world_sim_v3/source_bridge.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
@@ -872,6 +873,21 @@ export async function getTurnContext(input: TurnContextRequest) {
       resourceDetails,
       worldContinuity,
       worldActionDocket,
+      bridgeIntegration:bridgeTurnIntegrationPlan({
+        saveId,turnClass:input.turnClass,
+        memoryDepth:memoryRoute.depth,
+        missingSources:memoryRoute.missingSources,
+        plannedElapsedSeconds:input.plannedElapsedSeconds??0,
+        keyNpcDue:input.plannedElapsedSeconds != null
+          ? planIndependentWorldTick({saveId,worldDay:Number(worldDay),worldTime:String(worldTime),
+              elapsedSeconds:input.plannedElapsedSeconds,sparse:continuityRanges}).keyNpcDueCount
+          : worldContinuity.keyNpcDue.filter(x=>x.reason!=="ACTIVITY_RULE_MISSING").length,
+        worldProcessDue:input.plannedElapsedSeconds != null
+          ? planIndependentWorldTick({saveId,worldDay:Number(worldDay),worldTime:String(worldTime),
+              elapsedSeconds:input.plannedElapsedSeconds,sparse:continuityRanges}).processDueCount
+          : worldContinuity.activeClocksOverdue.length,
+        npcContextReady:npcContextGate.readyForSubstantiveReply,
+      }),
       memoryRoute:{
         ...memoryRoute,
         actualSourceReads:{
