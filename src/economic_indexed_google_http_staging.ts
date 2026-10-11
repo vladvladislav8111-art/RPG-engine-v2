@@ -131,9 +131,12 @@ export function makeIsolatedIndexedGoogleHttpAdapter(input:{
   const {stagingSpreadsheetId:sheetId,stagingDocumentId:docId,
     rowsSheetId,receiptsSheetId,scopeId,slots,kv}=input;
   const http=input.httpJson??authenticatedEconomicGoogleJson;
+  // Reject EVERY configured canonical/current asset, not just the two
+  // obvious economy targets: a mistaken file ID must never alter GM PREGEN,
+  // NPC canon, maps, inventory or a different live document.
+  const protectedFiles=new Set(Object.values(config.files));
   if(!sheetId||!docId||!scopeId||sheetId===docId||
-     sheetId===config.files.TEMP_RUNTIME||
-     docId===config.files.LIVE_TRANSACTION_ARCHIVE||
+     protectedFiles.has(sheetId)||protectedFiles.has(docId)||
      !Number.isSafeInteger(rowsSheetId)||rowsSheetId<0||
      !Number.isSafeInteger(receiptsSheetId)||receiptsSheetId<0||
      rowsSheetId===receiptsSheetId)
