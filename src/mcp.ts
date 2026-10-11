@@ -68,6 +68,7 @@ const turnContextSchema = z.object({
   actorIds: z.array(z.string()).max(20).optional(),
   actorRefs: z.array(z.string().min(1)).max(20).optional(),
   recentChatLimit: z.number().int().min(0).max(20).optional(),
+  plannedElapsedSeconds: z.number().int().min(0).max(604800).optional(),
   requireNpcContextGate: z.boolean().optional(),
   lookups: z.array(z.object({
     source: z.enum(["TEMP_RUNTIME", "GM_PREGEN"]),
