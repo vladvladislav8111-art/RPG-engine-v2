@@ -14,6 +14,7 @@ import {
   type EconomicOperation, type EconomicSnapshot,
   type EconomicSettlementAuthority, type SettlementManifest,
 } from "./economic_atomic_plan.ts";
+import { buildImmutableEconomicTxJournal, type ImmutableEconomicTxJournal } from "./economic_projection_journal.ts";
 
 export type KvKey = readonly (string | number | bigint | boolean | Uint8Array)[];
 export type KvEntry<T> = { key: KvKey; value: T | null; versionstamp: string | null };
@@ -51,6 +52,7 @@ export type EconomicProjectionOutbox = {
   /** Do not store current account values in GM PREGEN or canon files. */
   expectedProjectionTargets: readonly ["TEMP_RUNTIME", "LIVE_TRANSACTION_ARCHIVE"];
   projectedProofRef?: string;
+  journalTxId: string;
 };
 export type StoreResult = {
   kind: "COMMITTED" | "IDEMPOTENT_REPLAY";
@@ -67,6 +69,7 @@ export const ec06Keys = {
   tx:(scopeId:string,txId:string):KvKey=>[...prefix(scopeId),"tx",txId],
   event:(scopeId:string,eventId:string):KvKey=>[...prefix(scopeId),"event",eventId],
   outbox:(scopeId:string,txId:string):KvKey=>[...prefix(scopeId),"outbox",txId],
+  journal:(scopeId:string,txId:string):KvKey=>[...prefix(scopeId),"journal",txId],
 };
 
 function fingerprint(expectedRevision:string,events:readonly EconomicOperation[]):string {
@@ -110,7 +113,11 @@ export async function commitEconomicKvStaging(
       throw Error("TX ID replay has different economic intent");
     }
     const outbox=await kv.get<EconomicProjectionOutbox>(ec06Keys.outbox(scopeId,txId));
-    if(!outbox.value)throw Error("Committed TX receipt missing matching outbox: integrity fault");
+    if(!outbox.value||outbox.value.journalTxId!==txId)
+      throw Error("Committed TX missing matching outbox journal reference");
+    const journal=await kv.get<ImmutableEconomicTxJournal>(ec06Keys.journal(scopeId,txId));
+    if(!journal.value||journal.value.afterRevision!==previously.value.afterRevision)
+      throw Error("Committed TX missing immutable historical journal");
     return {kind:"IDEMPOTENT_REPLAY",receipt:previously.value,outbox:outbox.value};
   }
   const ledgerKey=ec06Keys.ledger(scopeId);
@@ -151,7 +158,11 @@ export async function commitEconomicKvStaging(
     beforeRevision:live.revision,afterRevision:nextRevision,
     eventIds:[...preview.processedEventIds],
   };
+  const immutableJournal:ImmutableEconomicTxJournal=buildImmutableEconomicTxJournal({
+    scopeId,txId,before:live,result:preview,afterRevision:nextRevision,
+  });
   const outbox:EconomicProjectionOutbox={
+    journalTxId:txId,
     txId,scopeId,state:"PENDING_PROJECTION",primaryRevision:nextRevision,
     eventIds:[...preview.processedEventIds],
     expectedProjectionTargets:["TEMP_RUNTIME","LIVE_TRANSACTION_ARCHIVE"],
@@ -163,9 +174,11 @@ export async function commitEconomicKvStaging(
   let op=kv.atomic()
     .check({key:ledgerKey,versionstamp:source.versionstamp})
     .check({key:txKey,versionstamp:null})
+    .check({key:ec06Keys.journal(scopeId,txId),versionstamp:null})
     .set(ledgerKey,after)
     .set(txKey,receipt)
-    .set(ec06Keys.outbox(scopeId,txId),outbox);
+    .set(ec06Keys.outbox(scopeId,txId),outbox)
+    .set(ec06Keys.journal(scopeId,txId),immutableJournal);
   for(const e of events) {
     op=op.check({key:ec06Keys.event(scopeId,e.eventId),versionstamp:null})
       .set(ec06Keys.event(scopeId,e.eventId),{txId});
@@ -192,7 +205,7 @@ export async function ackEconomicProjection(
   if(!receipt.value)throw Error("No primary committed transaction receipt");
   const key=ec06Keys.outbox(scopeId,txId);
   const row=await kv.get<EconomicProjectionOutbox>(key);
-  if(!row.value||!row.versionstamp||
+  if(!row.value||!row.versionstamp||row.value.journalTxId!==txId||
       row.value.primaryRevision!==receipt.value.afterRevision)
     throw Error("Missing/inconsistent durable outbox");
   if(row.value.state==="PROJECTED") {
