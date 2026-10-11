@@ -9,6 +9,7 @@
 import type {EconomicAccount} from "./economic_atomic_plan.ts";
 import type {AtomicKvStore,KvKey} from "./economic_kv_atomic.ts";
 import {indexedEc06Keys,type IndexedSeal,type IndexedHome} from "./economic_indexed_wholesale_kv.ts";
+import {makeIndexedQueueRegistration} from "./economic_indexed_outbox_queue.ts";
 export type IndexedWageContract={
   demandId:string;employerAccountId:string;workerAccountId:string;
   agreedCopper:number;sourceContractRef:string;dueGameMinute:number;
@@ -219,7 +220,9 @@ export async function commitIndexedWageStaging(kv:AtomicKvStore,input:{
     schema:"EC06_INDEX_OUTBOX_V1",txId:e.txId,scopeId,
     state:"PENDING_INDEXED_PROJECTION",journalKey,
   };
+  const queue=makeIndexedQueueRegistration(scopeId,e.txId,journalKey);
   let op=kv.atomic()
+    .check({key:queue.key,versionstamp:null})
     .check({key:sealEntry.key,versionstamp:sealEntry.versionstamp})
     .check({key:employerHome.key,versionstamp:employerHome.versionstamp})
     .check({key:workerHome.key,versionstamp:workerHome.versionstamp})
@@ -234,7 +237,8 @@ export async function commitIndexedWageStaging(kv:AtomicKvStore,input:{
     .set(indexedWageKeys.escrow(e.escrowId),escrowAfter)
     .set(txKey,receipt)
     .set(journalKey,j)
-    .set(outboxKey,outbox);
+    .set(outboxKey,outbox)
+    .set(queue.key,queue.value);
   // Demand receipt is immutable: wages cannot be re-promised under another
   // escrow after payment or cancellation.
   if(e.kind==="RESERVE")
