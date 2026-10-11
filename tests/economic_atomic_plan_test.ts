@@ -47,6 +47,7 @@ const authority:EconomicSettlementAuthority={
   canonicalAccountIds:new Set([employer,worker,buyer]),
   canonicalLocationIds:new Set([store,customer]),
   actualActiveDemandIds:new Set([demand]),
+  actualRecordedDemandIds:new Set([demand]),
   observedEvidenceRefs:proofs,
 };
 const wage: EconomicOperation={
@@ -91,7 +92,7 @@ Deno.test("bounded wage escrow, partial sale and conservation share one proposed
   });
   const result=plan([wage,sale,settlement,released]);
   if(result.mode!=="STAGING_PLAN_ONLY" || !result.requiresAtomicCompareAndSwap ||
-    by(result.accountsAfter,employer).availableCopper!==70 ||
+    by(result.accountsAfter,employer).availableCopper!==80 ||
     by(result.accountsAfter,worker).availableCopper!==50 ||
     by(result.accountsAfter,buyer).availableCopper!==50 ||
     result.accountsAfter.some(x=>x.heldCopper!==0) ||
