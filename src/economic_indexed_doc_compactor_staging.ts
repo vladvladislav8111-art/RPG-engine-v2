@@ -129,6 +129,8 @@ export async function compactOneIndexedDocWindowStaging(input:{
   const first=await get();
   if(first.window.deltas.length!==MAX_EC06_DOC_TAIL)
     throw Error("Doc checkpoint requested before the bounded window is full");
+  // Reject known invalid source BEFORE claiming a long-lived physical lock.
+  await validateImmutableSource({db,adapter,scopeId,docId,window:first.window});
   const kv=wrapDenoAtomicEconomyKv(db);
   const lock=await acquireGoogleProjectionFence({
     kv,scopeId,target:"LIVE_TRANSACTION_ARCHIVE",resourceId:docId,
