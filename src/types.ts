@@ -316,6 +316,12 @@ export type SemanticWorldProcessEvent = {
   visibility?: string;
 };
 
+export type SemanticNotificationAckEvent = {
+  notificationId: string;
+  sourceRef: string;
+  status: "SEEN" | "DISMISSED";
+};
+
 export type SemanticChatEvent = {
   messageId: string;
   channelId: string;
@@ -439,6 +445,7 @@ export type SemanticCommitPlan = {
   socialMemoryEvents?: SemanticSocialMemoryEvent[];
   threadEvents?: SemanticThreadEvent[];
   chatEvents?: SemanticChatEvent[];
+  notificationAckEvents?: SemanticNotificationAckEvent[];
   offscreenNpcEvents?: SemanticOffscreenNpcEvent[];
   worldProcessEvents?: SemanticWorldProcessEvent[];
   workDemandEvents?: SemanticWorkDemandEvent[];
