@@ -57,9 +57,13 @@ const wood = source.materialCanonId;
 const authority: SupplyAuthority = {
   canonicalRegionIds: new Set([source.regionId]),
   canonicalLocationIds: new Set([route.fromLocationId, route.toLocationId]),
-  canonicalMaterialIds: new Set([wood, "material.ilyria.wood_plank"]),
+  canonicalMaterialIds: new Set([wood, "material.ilyria.wood_plank", "material.ilyria.copper"]),
   currentCustodianIds: new Set([keeper, buyer]),
   canonicalRouteIds: new Set([route.routeId]),
+  canonicalRecipes: new Map([["canon.ilyria.sawmill_recipe", {
+    inputMaterialIds: [wood],
+    outputMaterialIds: ["material.ilyria.wood_plank"],
+  }]]),
   verifiedEvidenceRefs: evidence,
   existingSourceIds: new Set(),
   existingBatchIds: new Set(),
@@ -232,6 +236,18 @@ Deno.test("no duplicate sources, input spending, free outputs or negative waste"
   rejects(() => preflight([extraction, sawmill], [source], [route], {
     ...authority, existingBatchIds: new Set([sawmill.outputs[0].batchId]),
   }), "collision with already committed inventory");
+});
+
+Deno.test("processes cannot fabricate an unrelated canonical material with generic evidence", () => {
+  rejects(() => preflight([extraction, {...sawmill,
+    outputs: [{...sawmill.outputs[0],materialCanonId: "material.ilyria.copper"}]}]),
+    "wood does not refine into copper merely because copper exists");
+  rejects(() => preflight([extraction, {...sawmill,
+    conversionEvidenceRef: "canon.ilyria.harvest_permit"}]),
+    "real non-recipe permit cannot validate a material transformation");
+  rejects(() => preflight([extraction, sawmill], [source], [route], {
+    ...authority, canonicalRecipes: new Map(),
+  }), "missing canonical recipe");
 });
 
 Deno.test("route and custody must be sourced and cannot teleport or duplicate goods", () => {
