@@ -13,6 +13,7 @@ export function proposeSystemLevelEvents(input: {
   txId:string;
   generalXp:readonly LevelOutcome[];
   learning:readonly LevelOutcome[];
+  releasedChoices?:readonly {choiceId:string;progression:LevelOutcome|null}[];
 }) {
   const result: Array<{
     id:string;kind:string;sourceTx:string;level:number;subject:string;
@@ -45,6 +46,17 @@ export function proposeSystemLevelEvents(input: {
           message:`Специализация ${spec.specialization??""}: ${star}★`,
           requiresCommittedWriter:true});
       }
+    }
+  });
+  input.releasedChoices?.forEach((release,index)=>{
+    const p=release.progression;if(!p)return;
+    for(const level of p.crossedLevels??[]){
+      if(level<=p.oldLevel||level>p.newLevel)continue;
+      result.push({id:`system.event.${input.txId}.released.${index+1}.lv${level}`,
+        kind:"COMPETENCE_LEVEL_UP",sourceTx:input.txId,level,
+        subject:release.choiceId,
+        message:`После выбора вехи повышен уровень компетенции: ${level}`,
+        requiresCommittedWriter:true});
     }
   });
   return result;
