@@ -71,7 +71,7 @@ export type PlayerClassChoiceEvidence = {
   demonstratedSpecializationIds: ReadonlySet<string>;
   knownCompetenceIds: ReadonlySet<string>;
   actualVisibleOfferIds: ReadonlySet<string>;
-  committedPlayerDecisionRefs: ReadonlySet<string>;
+  verifiedCurrentPlayerIntentRefs: ReadonlySet<string>;
 };
 
 /**
@@ -91,7 +91,7 @@ export function previewCanonicalClassChoice(input: {
       !input.publishedCanonicalClassIds.has(req.classId) ||
       p.declaredClassId !== req.classId ||
       !p.actualVisibleOfferIds.has(req.classId) ||
-      !p.committedPlayerDecisionRefs.has(p.explicitDecisionRef) ||
+      !p.verifiedCurrentPlayerIntentRefs.has(p.explicitDecisionRef) ||
       p.explicitDecisionRef.trim().length < 10) {
     throw new Error("Class requires permanent canon, actual current offer and explicit player selection");
   }
