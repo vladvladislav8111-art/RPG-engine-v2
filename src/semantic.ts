@@ -140,6 +140,7 @@ const GENERIC_TABLES = new Set<StructuredRuntimeTable>([
   "OPPORTUNITIES_CURRENT",
   "PROJECTS_CURRENT",
   "NPC_CURRENT",
+  "NPC_ACTIVITY_RULES", // V4 source-gated per-NPC activity materialization (semantic writer only)
   "NPC_KNOWLEDGE",
   "PLAYER_LANGUAGE",
   "PLAYER_LEXICON",
