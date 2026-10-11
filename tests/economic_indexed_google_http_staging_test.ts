@@ -269,6 +269,12 @@ Deno.test("source staging adapter refuses live Sheets/Docs, unplanned item and c
     try{build(sheetId,config.files.LIVE_TRANSACTION_ARCHIVE,rowPlan)}catch{invalid=true}
     if(!invalid)throw Error("Staging writes to real transaction archive");
     invalid=false;
+    try{build(config.files.GM_PREGEN,docId,rowPlan)}catch{invalid=true}
+    if(!invalid)throw Error("Staging writes to GM PREGEN asset");
+    invalid=false;
+    try{build(sheetId,config.files.LIVE_PLAYER_INVENTORY,rowPlan)}catch{invalid=true}
+    if(!invalid)throw Error("Staging writes to permanent player inventory canon");
+    invalid=false;
     try{build(sheetId,docId,{...rowPlan,
       rows:[...rowPlan.rows,{kind:"lot",id:"item.fixture.unregistered",row:2}]})}
     catch{invalid=true}
