@@ -77,6 +77,7 @@ export type EconomicSettlementAuthority = {
   canonicalAccountIds: ReadonlySet<string>;
   canonicalLocationIds: ReadonlySet<string>;
   actualActiveDemandIds: ReadonlySet<string>;
+  actualRecordedDemandIds: ReadonlySet<string>;
   observedEvidenceRefs: ReadonlySet<string>;
 };
 export type SettlementManifest = {
@@ -134,7 +135,7 @@ export function planFiniteEconomicSettlement(input: {
     if(!validId(e.escrowId)||escrows.has(e.escrowId)||
       !accounts.has(e.payerAccountId)||!accounts.has(e.workerAccountId)||
       e.payerAccountId===e.workerAccountId||!positive(e.reservedCopper)||
-      !a.actualActiveDemandIds.has(e.sourceDemandId)) {
+      !a.actualRecordedDemandIds.has(e.sourceDemandId)) {
       throw Error("Existing wages must have one evidenced employer, worker and pending obligation");
     }
     escrows.set(e.escrowId,{...e});
