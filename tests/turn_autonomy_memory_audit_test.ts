@@ -4,6 +4,7 @@ import {planIndependentWorldTick} from "../src/world_tick_dispatcher.ts";
 import {auditPreparedTurn} from "../src/turn_fast_integrity_audit.ts";
 import {validateTurnCoverage} from "../src/turn_progression_coverage.ts";
 import {planWorkCompetition} from "../src/source_work_competition.ts";
+import {buildNpcAutonomyPlan} from "../src/npc_autonomy_planner.ts";
 
 Deno.test("Memory router signals fast vs targeted actor/log/canon reads",()=>{
  const fast=chooseMemoryRoute({turnClass:"MICRO",tags:[]});
@@ -80,4 +81,24 @@ Deno.test("Competing worker cannot consume phantom or duplicate offer slots",()=
  assertEquals(plan.committed,false);
  assertEquals(planWorkCompetition({...base,attestedClaims:[claim,{...claim,claimId:"claim.two"}]}).ok,false);
  assertEquals(planWorkCompetition({...base,existingClaimIds:new Set(["claim.one"])}).ok,false);
+});
+
+Deno.test("KEY NPC life plan respects known obligations and does not invent dialogue",()=>{
+ const plan=buildNpcAutonomyPlan({actorId:"npc.irina.earth",worldDay:67,worldTime:"13:00:00",
+ current:{"Importance":"KEY","Identity anchors":"Real established personality",
+ "Current goal/activity":"Independent practical study","Current/last-known location":"loc.known"},
+ activityRule:{"State":"ACTIVE","Last activity tick":"Day67 12:00"},
+ knownFacts:[{"Fact ID":"knowledge.1"}],directedRelationships:[
+ {"Actor ID":"npc.irina.earth","Toward ID":"npc.max.earth","Trust":"uncertain"}],
+ socialMemory:[],openThreads:[
+ {"Thread ID":"thread.commitment","Status":"OPEN","Waiting on":"npc.irina.earth",
+ "Topic":"Existing commitment","Trigger/due":"Day67 12:30:00"}],
+ activeWorldClocks:[{"Process ID":"process.existing","State":"ACTIVE"}],
+ });
+ assertEquals(plan.reviewMode,"DETAILED_LIFEV4");
+ assertEquals(plan.dueOpenThreadIds,["thread.commitment"]);
+ assertEquals(plan.guaranteedReply,false);
+ assertEquals(plan.committed,false);
+ assert(plan.readyForAutonomousProposal);
+ assert(plan.distinctKnownPeers.includes("npc.max.earth"));
 });
