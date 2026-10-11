@@ -24,6 +24,12 @@ export const config = {
   allowRawCommits: (rawEnv("ALLOW_RAW_COMMITS") ?? "false").toLowerCase() === "true",
   enableKv: (rawEnv("ENABLE_KV") ?? (runtime === "deno" ? "true" : "false")).toLowerCase() === "true",
   worldSimV3Enabled: (rawEnv("WORLD_SIM_V3_ENABLED") ?? "true").toLowerCase() === "true",
+  // Off until the owner-approved ACK tab exists in the one authoritative TEMP workbook.
+  systemNotificationAckEnabled: (rawEnv("RPG_SYSTEM_NOTIFICATION_ACK_ENABLED") ?? "false").toLowerCase() === "true",
+  // Enable after the existing Bridge is updated to supply source-backed zero/award reviews.
+  turnProgressionReviewStrict: (rawEnv("RPG_TURN_PROGRESSION_REVIEW_STRICT") ?? "false").toLowerCase() === "true",
+  // An EC-06 funded writer is NOT active merely because V3 can propose an offer.
+  ec06FundedOffersWriterReady: (rawEnv("RPG_EC06_FUNDED_OFFERS_WRITER_READY") ?? "false").toLowerCase() === "true",
   google: {
     email: env("GOOGLE_SERVICE_ACCOUNT_EMAIL"),
     privateKey: env("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY").replace(/\\n/g, "\n"),

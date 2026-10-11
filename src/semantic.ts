@@ -33,10 +33,15 @@ import { hash32 } from "./rng.ts";
 import { computeSurvivalChange, survivalStaminaModifiers, type SurvivalActivity } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
 import { resolveSelarinWeatherRecords, sheetObjects } from "./weather.ts";
-import { validateChatEventShape, validateRelationshipEventShape } from "./social_context.ts";
+import { validateChatEventShape, validateRelationshipEventShape, parseInworldMoment } from "./social_context.ts";
 import { worldContinuityReview } from "./world_continuity.ts";
 import { reviewWorldProcesses } from "./world_process.ts";
 import { validateWorkDemand } from "./work_demand.ts";
+import { proposeSystemLevelEvents } from "./system_notifications.ts";
+import { buildSystemNotificationCenter, validateNotificationAck } from "./system_notification_center.ts";
+import { validateMilestoneOptions, resolveMilestoneOption } from "./milestone_choices.ts";
+import { auditPreparedTurn } from "./turn_fast_integrity_audit.ts";
+import { validateTurnCoverage } from "./turn_progression_coverage.ts";
 import { validateRumorTransmission } from "./world_information.ts";
 import { validateMajorWorldEvent } from "./world_events.ts";
 import { auditMaterialTransformation } from "./physical_integrity.ts";
@@ -168,6 +173,22 @@ function keyHeaderFor(table: StructuredRuntimeTable): string {
 export async function prepareSemanticCommit(input: CommitRequest & { semantic: SemanticCommitPlan }) {
   const started = performance.now();
   const semantic = input.semantic;
+  const turnProgressionCoverage = validateTurnCoverage({
+    elapsedSeconds:semantic.elapsedSeconds??0,turnClass:undefined,
+    review:semantic.progressionReview,
+    generalEvents:semantic.generalXpEvents??[],learningEvents:semantic.learningEvents??[],
+    adaptationEvents:semantic.adaptationEvents??[],
+    strict:config.turnProgressionReviewStrict,
+  });
+  // A paid offer cannot be created from an NPC salary without a live financial writer.
+  // This is deliberately more restrictive than source-only V3 proposals.
+  if ((semantic.workDemandEvents?.length??0)>0) {
+    if (!config.ec06FundedOffersWriterReady)
+      throw Error("EC06_FUNDED_OFFERS_WRITER_NOT_ATTESTED");
+    // The config flag does not attest specific accounts, escrow or protected
+    // KV transaction. Explicit source proof must be implemented before cutover.
+    throw Error("EC06_PER_OFFER_LEDGER_ESCROW_ATTESTATION_NOT_YET_IMPLEMENTED");
+  }
   const touched = new Set<RuntimeTableName>([
     "CONTROL",
     "PLAYER_RESOURCES",
@@ -178,7 +199,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     "PROGRESSION_EVENTS",
     "SESSION_LOG",
   ]);
-  if ((semantic.choiceResolutions?.length ?? 0) > 0) touched.add("MILESTONES");
+  if ((semantic.choiceResolutions?.length ?? 0) > 0 || (semantic.choiceOptionMaterializations?.length ?? 0) > 0) touched.add("MILESTONES");
   if ((semantic.specializationUnlockEvents?.length ?? 0) > 0) {
     touched.add("NPC_CURRENT");
     touched.add("ACTIVE_CONTEXT");
@@ -196,7 +217,14 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   if ((semantic.relationshipEvents?.length ?? 0) > 0) touched.add("NPC_RELATIONSHIPS_CURRENT");
   if ((semantic.socialMemoryEvents?.length ?? 0) > 0) touched.add("SOCIAL_MEMORY_CURRENT");
   if ((semantic.threadEvents?.length ?? 0) > 0) touched.add("OPEN_THREADS_CURRENT");
-  if ((semantic.chatEvents?.length ?? 0) > 0) touched.add("SYSTEM_CHAT_LOG");
+  if ((semantic.chatEvents?.length ?? 0) > 0 || (semantic.notificationAckEvents?.length ?? 0) > 0) {
+    touched.add("SYSTEM_CHAT_LOG");
+    touched.add("SYSTEM_CONTACTS_CURRENT");
+  }
+  if ((semantic.notificationAckEvents?.length ?? 0) > 0) {
+    if (!config.systemNotificationAckEnabled) throw new Error("System notification ACK schema is not activated");
+    touched.add("SYSTEM_NOTIFICATION_ACK_CURRENT");
+  }
   if ((semantic.injuryEvents ?? []).some((e) => e.simulationOnly !== true)) touched.add("BODY_INJURIES_CURRENT");
   for (const item of semantic.rowUpserts ?? []) touched.add(item.table as RuntimeTableName);
   for (const item of semantic.rowUpdates ?? []) touched.add(item.table as RuntimeTableName);
@@ -229,6 +257,9 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
 
   const ranges = [...touched].map((t) => TABLES[t].range);
   const sheets = await sheetsBatchGet(config.files.TEMP_RUNTIME, ranges);
+  const notificationAchievementRows = (semantic.notificationAckEvents?.length ?? 0) > 0
+    ? (await sheetsBatchGet(config.files.TEMP_RUNTIME, ["ACTOR_ACHIEVEMENTS!A1:I1000"]))["ACTOR_ACHIEVEMENTS!A1:I1000"] ?? []
+    : [];
   const gmTemplates = [
     ...(((semantic.inventoryEvents?.length ?? 0) > 0 || (semantic.materialTransformations?.length ?? 0) > 0 || (semantic.physicalPassportEvents?.length ?? 0) > 0) ? [PREGEN_TABLES.COMMON_OBJECT_TEMPLATES] : []),
     ...((semantic.workDemandEvents?.length ?? 0) > 0 ? [PREGEN_TABLES.SELARIN_JOB_TEMPLATES] : []),
@@ -442,6 +473,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     const provided = new Map(events.map((event) => [event.actorId, event]));
     if (provided.size !== events.length) throw new Error("duplicate offscreenNpcEvents actorId");
     const due = review.keyNpcDue.filter((a) => a.reason !== "ACTIVITY_RULE_MISSING");
+    worldAutomationOutcomes.keyNpcRequired = due.map(x=>x.actorId);
     for (const item of due) {
       if (!provided.has(item.actorId)) {
         throw new Error(`key NPC offscreen advance required before committing time: ${item.actorId} (${item.ageMinutes ?? "unknown"} minutes). Provide semantic.offscreenNpcEvents with causal summary.`);
@@ -1376,6 +1408,31 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   const learningOutcomes: unknown[] = [];
   const pendingChoices: unknown[] = [];
   const choiceResolutionOutcomes: unknown[] = [];
+  const choicePublicationOutcomes: unknown[] = [];
+  const milestoneRows = sheets[TABLES.MILESTONES.range] ?? [];
+  const selectedThisTurn=new Set((semantic.choiceResolutions??[]).map(r=>r.choiceId));
+  for(const publication of semantic.choiceOptionMaterializations??[]){
+    if(selectedThisTurn.has(publication.choiceId)){
+      throw new Error("Milestone options must be presented before a separate player-selected resolution");
+    }
+    const i=findDataRow(pendingRows,"Choice ID",publication.choiceId);
+    if(i<0)throw new Error("Unknown milestone choice "+publication.choiceId);
+    const row=cloneRow(pendingRows,i);
+    const status=String(row[headerIndex(pendingRows,"Status")]??"");
+    if(status!=="PENDING_GENERATION")throw new Error("Milestone options already generated");
+    const parentId=String(row[headerIndex(pendingRows,"Parent ID")]??"");
+    const knownIds=new Set(milestoneRows.slice(1)
+      .map(x=>String(x[headerIndex(milestoneRows,"Milestone ID")]??"")).filter(Boolean));
+    const validated=validateMilestoneOptions({
+      choiceId:publication.choiceId,parentId,options:publication.options,
+      existingMilestoneIds:knownIds,
+    });
+    setByHeader(pendingRows,row,"Status","AWAITING_CHOICE");
+    setByHeader(pendingRows,row,"Options JSON",JSON.stringify(validated));
+    setByHeader(pendingRows,row,"Notes","Options source-backed in canon; Shura has not selected a milestone");
+    writeRow("PENDING_CHOICES",pendingRows,i,row);
+    choicePublicationOutcomes.push({choiceId:publication.choiceId,options:validated.map(x=>({id:x.id,name:x.name}))});
+  }
 
   for (let resolutionIndex = 0; resolutionIndex < (semantic.choiceResolutions ?? []).length; resolutionIndex++) {
     const resolution = semantic.choiceResolutions![resolutionIndex];
@@ -1383,8 +1440,26 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     if (choiceIndex < 0) throw new Error(`pending choice not found: ${resolution.choiceId}`);
     const choiceRow = cloneRow(pendingRows, choiceIndex);
     const status = String(choiceRow[headerIndex(pendingRows, "Status")] ?? "");
-    if (!status.startsWith("PENDING")) throw new Error(`choice is not pending: ${resolution.choiceId} status=${status}`);
     const parentId = String(choiceRow[headerIndex(pendingRows, "Parent ID")] ?? "");
+    const selected=resolveMilestoneOption({
+      status,optionsJson:String(choiceRow[headerIndex(pendingRows,"Options JSON")]??"[]"),
+      selectedOption:resolution.selectedOption,parentId,
+    });
+    if(findDataRow(milestoneRows,"Milestone ID",selected.id)>=0)
+      throw new Error("Milestone is already earned: "+selected.id);
+    const milestoneRow=Array(headers(milestoneRows).length).fill("");
+    setByHeader(milestoneRows,milestoneRow,"Milestone ID",selected.id);
+    setByHeader(milestoneRows,milestoneRow,"Parent competence",parentId);
+    setByHeader(milestoneRows,milestoneRow,"Name",selected.name);
+    setByHeader(milestoneRows,milestoneRow,"Type",selected.type);
+    setByHeader(milestoneRows,milestoneRow,"Trigger",selected.trigger);
+    setByHeader(milestoneRows,milestoneRow,"Effect",selected.effect);
+    setByHeader(milestoneRows,milestoneRow,"Limits",selected.limits);
+    setByHeader(milestoneRows,milestoneRow,"Status","ACTIVE");
+    setByHeader(milestoneRows,milestoneRow,"Unlocked at",resolvedInworldEnd);
+    setByHeader(milestoneRows,milestoneRow,"Scaling state",selected.scalingState+" | canon="+selected.sourceRef);
+    setByHeader(milestoneRows,milestoneRow,"Last TX",input.txId);
+    appendRow("MILESTONES",milestoneRows,milestoneRow);
     const competenceIndex = findDataRow(competenceRows, "Competence ID", parentId);
     if (competenceIndex < 0) throw new Error(`choice parent competence missing: ${parentId}`);
     const competenceRow = cloneRow(competenceRows, competenceIndex);
@@ -1843,6 +1918,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   }
 
   const chatRows = sheets[TABLES.SYSTEM_CHAT_LOG.range] ?? [];
+  const contactsRows = sheets[TABLES.SYSTEM_CONTACTS_CURRENT.range] ?? [];
   const chatOutcomes: unknown[] = [];
   for (const event of semantic.chatEvents ?? []) {
     validateChatEventShape(event);
@@ -1869,7 +1945,85 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     setByHeader(chatRows, row, "Read status", event.readStatus ?? "UNREAD");
     setByHeader(chatRows, row, "Notes", event.notes ?? "");
     appendRow("SYSTEM_CHAT_LOG", chatRows, row);
+    // The existing contact summary was stale despite a real later chat log.
+    // Advance the cached timestamp ONLY for a new recorded message on an
+    // already accepted private channel, never create channels or messages.
+    const contactIndex = findDataRow(contactsRows, "Contact ID", event.channelId);
+    if (contactIndex >= 0) {
+      const contact = cloneRow(contactsRows, contactIndex);
+      const owner = String(contact[headerIndex(contactsRows, "Owner Actor ID")] ?? "");
+      const peer = String(contact[headerIndex(contactsRows, "Peer Actor ID")] ?? "");
+      const isPair = (event.senderId === owner && event.receiverId === peer) ||
+        (event.senderId === peer && event.receiverId === owner);
+      if (!isPair) throw new Error("System chat channel participant mismatch: " + event.channelId);
+      const status = String(contact[headerIndex(contactsRows, "Status")] ?? "").toUpperCase();
+      if (status !== "ACTIVE") throw new Error("System contact inactive: " + event.channelId);
+      const oldWhen = String(contact[headerIndex(contactsRows, "Last message at")] ?? "");
+      const nextWhen = event.timestamp ?? resolvedInworldEnd;
+      const oldMoment = parseInworldMoment(oldWhen);
+      const nextMoment = parseInworldMoment(nextWhen);
+      if (nextMoment === null) throw new Error("Unparseable System message timestamp");
+      if (oldMoment === null || nextMoment >= oldMoment) {
+        setByHeader(contactsRows, contact, "Last message at", nextWhen);
+        writeRow("SYSTEM_CONTACTS_CURRENT", contactsRows, contactIndex, contact);
+      }
+    }
     chatOutcomes.push({ messageId: event.messageId, alreadyPresent: false });
+  }
+
+  // Acknowledgements are independent, source-proven receipts in an explicitly
+  // migrated single TEMP workbook tab. They NEVER edit original notifications.
+  const notificationAckOutcomes: unknown[] = [];
+  if ((semantic.notificationAckEvents?.length ?? 0) > 0) {
+    const ackRows = sheets[TABLES.SYSTEM_NOTIFICATION_ACK_CURRENT.range] ?? [];
+    if (headers(ackRows).join("|") !==
+      "Notification ID|Actor ID|Source Ref|Status|Marked at|TX ID|Version") {
+      throw new Error("SYSTEM_NOTIFICATION_ACK_CURRENT migration/header mismatch");
+    }
+    const asRecords = (rows: unknown[][]): Record<string, unknown>[] => rows.slice(1)
+      .filter(row => row.some(cell => String(cell ?? "").trim() !== ""))
+      .map(row => Object.fromEntries(headers(rows).map((key,index) => [key,row[index] ?? ""])));
+    const issued = buildSystemNotificationCenter({
+      pendingChoices: asRecords(pendingRows),
+      progressEvents: asRecords(progressionRows),
+      achievements: asRecords(notificationAchievementRows),
+      contacts: asRecords(contactsRows),
+      chatEvents: asRecords(chatRows),
+      ackReceipts: asRecords(ackRows),
+      currentDay: resolvedDay,
+      maxItems: 60,
+    });
+    for (const event of semantic.notificationAckEvents ?? []) {
+      validateNotificationAck({
+        notificationId:event.notificationId,
+        sourceRef:event.sourceRef,
+        status:event.status,
+        actorId:"player.shura",
+        issued:issued.notices,
+      });
+      const i=findDataRow(ackRows,"Notification ID",event.notificationId);
+      if(i>=0){
+        const old=cloneRow(ackRows,i);
+        if(String(old[headerIndex(ackRows,"Actor ID")] ?? "")!=="player.shura" ||
+          String(old[headerIndex(ackRows,"Source Ref")] ?? "")!==event.sourceRef)
+          throw new Error("Notification ACK ownership or source collision");
+        if(String(old[headerIndex(ackRows,"Status")] ?? "")===event.status){
+          notificationAckOutcomes.push({notificationId:event.notificationId,idempotent:true});
+          continue;
+        }
+        throw new Error("Notification ACK cannot be changed or replayed with a different state");
+      }
+      const row=Array(headers(ackRows).length).fill("");
+      setByHeader(ackRows,row,"Notification ID",event.notificationId);
+      setByHeader(ackRows,row,"Actor ID","player.shura");
+      setByHeader(ackRows,row,"Source Ref",event.sourceRef);
+      setByHeader(ackRows,row,"Status",event.status);
+      setByHeader(ackRows,row,"Marked at",resolvedInworldEnd);
+      setByHeader(ackRows,row,"TX ID",input.txId);
+      setByHeader(ackRows,row,"Version",1);
+      appendRow("SYSTEM_NOTIFICATION_ACK_CURRENT",ackRows,row);
+      notificationAckOutcomes.push({notificationId:event.notificationId,status:event.status});
+    }
   }
 
   const genericRows = new Map<StructuredRuntimeTable, unknown[][]>();
@@ -1916,6 +2070,16 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   patchControl("save_id", input.saveTo);
   patchControl("state", "ACTIVE_COMMITTED");
 
+  // Derived only from measured XP results of THIS semantic transaction.
+  // Persist with the SESSION_LOG history and surface after commit success.
+  const systemNotifications = proposeSystemLevelEvents({
+    txId: input.txId,
+    generalXp: generalXpOutcomes as Array<{oldLevel:number;newLevel:number;crossedLevels?:number[]}>,
+    learning: learningOutcomes as Array<{oldLevel:number;newLevel:number;crossedLevels?:number[];
+      competenceId?:string;specialization?:{specialization?:string;oldStars?:number;stars?:number}|null}>,
+    releasedChoices: choiceResolutionOutcomes as Array<{choiceId:string;progression:{oldLevel:number;newLevel:number;crossedLevels?:number[]}|null}>,
+  });
+
   const sessionRow = Array(headers(sessionRows).length).fill("");
   setByHeader(sessionRows, sessionRow, "Save ID", input.saveTo);
   setByHeader(sessionRows, sessionRow, "Turn ID", input.turnId);
@@ -1929,8 +2093,8 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   const gmWorldAdvances = semantic.session.worldAdvances;
   const worldAdvanceLog = gmWorldAdvances && typeof gmWorldAdvances === "object" &&
       !Array.isArray(gmWorldAdvances)
-    ? { ...(gmWorldAdvances as Record<string, unknown>), engineContinuity: worldAutomationOutcomes }
-    : { gmWorldAdvances: gmWorldAdvances ?? {}, engineContinuity: worldAutomationOutcomes };
+    ? { ...(gmWorldAdvances as Record<string, unknown>), engineContinuity: worldAutomationOutcomes, systemNotifications }
+    : { gmWorldAdvances: gmWorldAdvances ?? {}, engineContinuity: worldAutomationOutcomes, systemNotifications };
   setByHeader(sessionRows, sessionRow, "World advances JSON", JSON.stringify(worldAdvanceLog));
   setByHeader(sessionRows, sessionRow, "Notes", semantic.session.notes ?? "");
   setByHeader(sessionRows, sessionRow, "Committed at", new Date().toISOString());
@@ -1944,6 +2108,26 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   setByHeader(sessionRows, sessionRow, "Source", semantic.session.source ?? "ENGINE_FASTPATH");
   setByHeader(sessionRows, sessionRow, "Version", 1);
   appendRow("SESSION_LOG", sessionRows, sessionRow);
+
+  // Only already-loaded tables: O(n) audit before constructing the writer manifest.
+  // A failure makes prepare/commit refuse the entire proposed turn.
+  const postCommitAudit = auditPreparedTurn({
+    txId:input.txId,oldDay:currentDay,oldTime:currentTime,
+    newDay:resolvedDay,newTime:resolvedTime,
+    elapsedSeconds:semantic.elapsedSeconds??0,
+    sessionStart:semantic.session.inworldStart,
+    sessionEnd:resolvedInworldEnd,
+    resources:resourceRows,pendingChoices:pendingRows,
+    inventory:inventoryRows,
+    inventoryChanged:(semantic.inventoryEvents?.length??0)>0 ||
+      (semantic.materialTransformations?.length??0)>0,
+    requiredProcessIds:(worldAutomationOutcomes.clocksNeedingReview as Array<{processId:string}> ?? [])
+      .map(x=>x.processId),
+    resolvedProcessIds:processAdvances.map((x:any)=>x.processId),
+    requiredNpcIds:(worldAutomationOutcomes.keyNpcRequired as string[]|undefined)??[],
+    resolvedNpcIds:(worldAutomationOutcomes.keyNpcAdvances as Array<{actorId:string}> ?? [])
+      .map(x=>x.actorId),
+  });
 
   const postResources: Record<string, Scalar> = {};
   const rName = headerIndex(resourceRows, "Resource");
@@ -1968,12 +2152,17 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       docAppends: (input.docAppends ?? []).map((d) => ({ ...d, txMarker: `[TX:${input.txId}]` })),
     },
     outcomes: {
+      systemNotifications,
+      integrityAudit:postCommitAudit,
+      progressionCoverage:turnProgressionCoverage,
+      notificationAcknowledgements: notificationAckOutcomes,
       exertion: exertionOutcomes,
       rest: restOutcomes,
       injury: injuryOutcomes,
       survival: survivalOutcomes,
       generalXp: generalXpOutcomes,
       choiceResolutions: choiceResolutionOutcomes,
+      choiceOptionPublications:choicePublicationOutcomes,
       learning: learningOutcomes,
       specializationUnlocks: specializationUnlockOutcomes,
       adaptation: adaptationOutcomes,

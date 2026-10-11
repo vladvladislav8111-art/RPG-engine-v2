@@ -70,6 +70,7 @@ export async function getHudSnapshot() {
     "PLAYER_RESOURCES!A1:E30",
     "PLAYER_CONDITIONS!A1:F40",
     "CHARACTERISTICS!A1:H30",
+    "PENDING_CHOICES!A1:L300",
   ];
   const data = await sheetsBatchGet(config.files.TEMP_RUNTIME, ranges);
   const control = valueMap(data["CONTROL!A1:D12"] ?? [], 0, 1);
@@ -87,7 +88,14 @@ export async function getHudSnapshot() {
   const wounds = conditions["cond.shura.wounds"];
   const water = conditions["cond.shura.water_carried"];
 
+  const pendingRows = data["PENDING_CHOICES!A1:L300"] ?? [];
+  const pendingStatus = pendingRows[0]?.map(v=>String(v??"")) ?? [];
+  const pendingStateColumn = pendingStatus.indexOf("Status");
+  const pendingChoicesCount = pendingStateColumn < 0 ? 0 : pendingRows.slice(1)
+    .filter(row => /^(PENDING|OPEN|AWAITING_CHOICE)/i.test(String(row[pendingStateColumn]??""))).length;
+
   const statuses = [
+    ...(pendingChoicesCount>0 ? [{ label: `Выбор развития: ${pendingChoicesCount}`, severity: "warn" as const }] : []),
     wounds && !/^(0|none)/i.test(wounds.value)
       ? { label: ruStatus(wounds.value), severity: severityFor(wounds.value) }
       : null,
