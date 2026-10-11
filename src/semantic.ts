@@ -40,6 +40,7 @@ import { validateWorkDemand } from "./work_demand.ts";
 import { proposeSystemLevelEvents } from "./system_notifications.ts";
 import { buildSystemNotificationCenter, validateNotificationAck } from "./system_notification_center.ts";
 import { validateMilestoneOptions, resolveMilestoneOption } from "./milestone_choices.ts";
+import { auditPreparedTurn } from "./turn_fast_integrity_audit.ts";
 import { validateRumorTransmission } from "./world_information.ts";
 import { validateMajorWorldEvent } from "./world_events.ts";
 import { auditMaterialTransformation } from "./physical_integrity.ts";
@@ -455,6 +456,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     const provided = new Map(events.map((event) => [event.actorId, event]));
     if (provided.size !== events.length) throw new Error("duplicate offscreenNpcEvents actorId");
     const due = review.keyNpcDue.filter((a) => a.reason !== "ACTIVITY_RULE_MISSING");
+    worldAutomationOutcomes.keyNpcRequired = due.map(x=>x.actorId);
     for (const item of due) {
       if (!provided.has(item.actorId)) {
         throw new Error(`key NPC offscreen advance required before committing time: ${item.actorId} (${item.ageMinutes ?? "unknown"} minutes). Provide semantic.offscreenNpcEvents with causal summary.`);
@@ -2090,6 +2092,26 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   setByHeader(sessionRows, sessionRow, "Version", 1);
   appendRow("SESSION_LOG", sessionRows, sessionRow);
 
+  // Only already-loaded tables: O(n) audit before constructing the writer manifest.
+  // A failure makes prepare/commit refuse the entire proposed turn.
+  const postCommitAudit = auditPreparedTurn({
+    txId:input.txId,oldDay:currentDay,oldTime:currentTime,
+    newDay:resolvedDay,newTime:resolvedTime,
+    elapsedSeconds:semantic.elapsedSeconds??0,
+    sessionStart:semantic.session.inworldStart,
+    sessionEnd:resolvedInworldEnd,
+    resources:resourceRows,pendingChoices:pendingRows,
+    inventory:inventoryRows,
+    inventoryChanged:(semantic.inventoryEvents?.length??0)>0 ||
+      (semantic.materialTransformations?.length??0)>0,
+    requiredProcessIds:(worldAutomationOutcomes.clocksNeedingReview as Array<{processId:string}> ?? [])
+      .map(x=>x.processId),
+    resolvedProcessIds:processAdvances.map((x:any)=>x.processId),
+    requiredNpcIds:(worldAutomationOutcomes.keyNpcRequired as string[]|undefined)??[],
+    resolvedNpcIds:(worldAutomationOutcomes.keyNpcAdvances as Array<{actorId:string}> ?? [])
+      .map(x=>x.actorId),
+  });
+
   const postResources: Record<string, Scalar> = {};
   const rName = headerIndex(resourceRows, "Resource");
   const rValue = headerIndex(resourceRows, "Current");
@@ -2114,6 +2136,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     },
     outcomes: {
       systemNotifications,
+      integrityAudit:postCommitAudit,
       notificationAcknowledgements: notificationAckOutcomes,
       exertion: exertionOutcomes,
       rest: restOutcomes,
