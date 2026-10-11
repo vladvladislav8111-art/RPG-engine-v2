@@ -48,6 +48,7 @@ const authority:EconomicSettlementAuthority={
   canonicalLocationIds:new Set([store,customer]),
   actualActiveDemandIds:new Set([demand]),
   actualRecordedDemandIds:new Set([demand]),
+  alreadyReservedOrSettledDemandIds:new Set(),
   observedEvidenceRefs:proofs,
 };
 const wage: EconomicOperation={
@@ -116,6 +117,10 @@ Deno.test("wages cannot be duplicated, self-paid, unfunded or paid without work"
     "pay without proof of completed work");
   refuses(()=>plan([wage,{...wage,eventId:"event.fixture.second_hold",escrowId:"escrow.fixture.other"}]),
     "two escrow obligations against same source work");
+  refuses(()=>plan([wage,settlement,released,{...wage,eventId:"event.fixture.recreated",escrowId:"escrow.fixture.new_escrow"}]),
+    "settled original job cannot be reserved again in same batch");
+  refuses(()=>plan([wage],snapshot,{...authority,alreadyReservedOrSettledDemandIds:new Set([demand])}),
+    "past paid demand cannot be reserved under a fresh TX");
   refuses(()=>plan([wage,{...released,verifiedCancellationRef:"evidence.fixture.missing_cancel"}]),
     "release unproven cancellation");
 });
