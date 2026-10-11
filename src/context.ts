@@ -15,6 +15,7 @@ import { buildNpcBehavioralContext } from "./npc_behavior.ts";
 import { buildTurnBrief, contactActorIdsForRequest } from "./turn_dispatcher.ts";
 import { chooseMemoryRoute } from "./context_memory_router.ts";
 import { planIndependentWorldTick } from "./world_tick_dispatcher.ts";
+import { buildNpcAutonomyPlan } from "./npc_autonomy_planner.ts";
 import { buildSystemNotificationCenter } from "./system_notification_center.ts";
 import { availableCurrentOpportunities, parseLiveClock } from "./world_sim_v3/source_bridge.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
@@ -782,6 +783,15 @@ export async function getTurnContext(input: TurnContextRequest) {
           }
         : null,
       autonomy: { activityRule, activeWorldClocks, freshness },
+      independentLifePlan: buildNpcAutonomyPlan({
+        actorId:id,worldDay:Number(worldDay),worldTime:String(worldTime),
+        current,activityRule,
+        knownFacts:actorKnowledge.filter((r)=>String(r["NPC ID"]??"")===id),
+        directedRelationships:filterRelationships(relationshipRows,[id]),
+        socialMemory:filterByParticipants(socialMemoryRows,[id]),
+        openThreads:filterByParticipants(openThreadRows,[id]),
+        activeWorldClocks,
+      }),
       behavioralContext: buildNpcBehavioralContext({
         actorId: id,
         current,
