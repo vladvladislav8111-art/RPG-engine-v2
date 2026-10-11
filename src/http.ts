@@ -1,5 +1,6 @@
 import { commitTurn, prepareCommit } from "./commit.ts";
 import { config } from "./config.ts";
+import { bridgeFeatureStatus } from "./bridge_integration.ts";
 import { getTurnContext } from "./context.ts";
 import { sheetsBatchGet } from "./google.ts";
 import { HUD_UI_VERSION } from "./hud.ts";
@@ -44,6 +45,7 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
         runtime: config.runtime,
         status: "ready",
         engineVersion: RULESET_VERSION,
+        bridgeIntegration:bridgeFeatureStatus(),
         hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
         rawCommitsEnabled: config.allowRawCommits,

@@ -31,6 +31,8 @@ export type TurnContextRequest = {
   actorIds?: string[];
   actorRefs?: string[];
   recentChatLimit?: number;
+  /** Read-only proposed world time; never commits a tick. */
+  plannedElapsedSeconds?: number;
   requireNpcContextGate?: boolean;
   lookups?: SheetLookup[];
   docQueries?: DocQuery[];

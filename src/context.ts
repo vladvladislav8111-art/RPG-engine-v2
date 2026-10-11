@@ -12,6 +12,10 @@ import { buildWorldActionDocket } from "./world_scheduler.ts";
 import { ACHIEVEMENT_CATALOG_COUNTS } from "./world_sim_v3/achievement_catalog.ts";
 import { resolveSceneActorIds } from "./scene_routing.ts";
 import { buildNpcBehavioralContext } from "./npc_behavior.ts";
+import { chooseMemoryRoute } from "./context_memory_router.ts";
+import { planIndependentWorldTick } from "./world_tick_dispatcher.ts";
+import { buildNpcAutonomyPlan } from "./npc_autonomy_planner.ts";
+import { bridgeTurnIntegrationPlan } from "./bridge_integration.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
@@ -258,6 +262,9 @@ export async function getTurnContext(input: TurnContextRequest) {
   const tagSet = new Set((input.tags ?? []).map((t) => t.toUpperCase()));
   const requestedActorIds = [...new Set([...(input.actorIds ?? []), ...routedSceneActorIds])];
   const actorRefs = input.actorRefs ?? [];
+  const memoryRoute = chooseMemoryRoute({turnClass:input.turnClass,tags:input.tags??[],
+    actorIds:requestedActorIds,actorRefs,
+    docQueriesCount:input.docQueries?.length??0,lookupsCount:input.lookups?.length??0});
   const explicitActorRequest = requestedActorIds.length > 0 || actorRefs.length > 0;
   const requireNpcContextGate = input.requireNpcContextGate ?? explicitActorRequest;
   const recentChatLimit = Math.max(0, Math.min(20, Math.floor(input.recentChatLimit ?? 8)));
@@ -440,6 +447,10 @@ export async function getTurnContext(input: TurnContextRequest) {
     clocks: worldClocksFromSparseRanges(continuityRanges),
     factionSeeds: clockAgendaSeeds,
   });
+  const prospectiveWorldTickPlan = input.plannedElapsedSeconds != null ||
+    hasAny(tagSet, ["WORLD","WAIT","REST","SLEEP","TRAVEL","WORK","CRAFT","NPC_LIFE"])
+    ? planIndependentWorldTick({saveId,worldDay:Number(worldDay),worldTime:String(worldTime),
+       elapsedSeconds:input.plannedElapsedSeconds??0,sparse:continuityRanges}) : null;
 
   const rawNpcCurrent = explicitActorRequest
     ? rowsToObjects(actorIndexScan?.npcReferenceRows ?? [])
@@ -761,6 +772,13 @@ export async function getTurnContext(input: TurnContextRequest) {
           }
         : null,
       autonomy: { activityRule, activeWorldClocks, freshness },
+      independentLifePlan: buildNpcAutonomyPlan({
+        actorId:id,worldDay:Number(worldDay),worldTime:String(worldTime),current,activityRule,
+        knownFacts:actorKnowledge.filter(r=>String(r["NPC ID"]??"")===id),
+        directedRelationships:filterRelationships(relationshipRows,[id]),
+        socialMemory:filterByParticipants(socialMemoryRows,[id]),
+        openThreads:filterByParticipants(openThreadRows,[id]),activeWorldClocks,
+      }),
       behavioralContext: buildNpcBehavioralContext({
         actorId: id,
         current,
@@ -841,6 +859,30 @@ export async function getTurnContext(input: TurnContextRequest) {
       resourceDetails,
       worldContinuity,
       worldActionDocket,
+      bridgeIntegration:bridgeTurnIntegrationPlan({
+        saveId,turnClass:input.turnClass,
+        memoryDepth:memoryRoute.depth,missingSources:memoryRoute.missingSources,
+        plannedElapsedSeconds:input.plannedElapsedSeconds??0,
+        keyNpcDue:prospectiveWorldTickPlan?.keyNpcDueCount ??
+          worldContinuity.keyNpcDue.filter(x=>x.reason!=="ACTIVITY_RULE_MISSING").length,
+        worldProcessDue:prospectiveWorldTickPlan?.processDueCount ??
+          worldContinuity.activeClocksOverdue.length,
+        npcContextReady:npcContextGate.readyForSubstantiveReply,
+      }),
+      memoryRoute:{
+        ...memoryRoute,
+        actualSourceReads:{
+          actorBounded:boundedActorLoad!=null,
+          actorCount:resolvedActorIds.length,
+          archivedActorLookups:archiveReadPlan.length,
+          canonRegistryRequests:pregenRequests.length,
+          targetedDocQueries:docQueries.length,
+          targetedSheetLookups:lookups.length,
+        },
+        deepNpcContextReady:npcContextGate.readyForSubstantiveReply,
+        autoSourceRouting:true,
+      },
+      worldTickPlan:prospectiveWorldTickPlan,
       worldSimulationV3: { enabled: config.worldSimV3Enabled, mode: "READ_ONLY_PROPOSALS", maxBatchJobs: 12, achievementCandidates: ACHIEVEMENT_CATALOG_COUNTS.achievements, titleCandidates: ACHIEVEMENT_CATALOG_COUNTS.titles, committed: false },
       survival: {
         satiety: { current: satiety, max: Number((resourceDetails["Satiety"] as any)?.max ?? 100), band: survivalBand(satiety) },
