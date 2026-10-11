@@ -139,8 +139,8 @@ export function makeIsolatedGoogleEconomicHttpTransport(input:{
          image.revision===expectedRevision){
         throw Error("Invalid EC06 Google staged replacement intent");
       }
-      await writerFence.assertExclusiveWriter(target,scopeId,
-          target==="TEMP_RUNTIME"?stagingSpreadsheetId:stagingDocumentId);
+      const physicalResourceId=target==="TEMP_RUNTIME"?stagingSpreadsheetId:stagingDocumentId;
+      await writerFence.assertExclusiveWriter(target,scopeId,physicalResourceId);
       if(target==="TEMP_RUNTIME"){
         const before=await readSheet();
         if(before.revision!==expectedRevision)
@@ -156,8 +156,7 @@ export function makeIsolatedGoogleEconomicHttpTransport(input:{
         }) as {updatedCells?:number};
         if(updated.updatedCells!==1)
           throw Error("Google Sheets staged image update not confirmed");
-        await writerFence.assertExclusiveWriter(target,scopeId,
-          target==="TEMP_RUNTIME"?stagingSpreadsheetId:stagingDocumentId);
+        await writerFence.assertExclusiveWriter(target,scopeId,physicalResourceId);
         const after=await readSheet();
         if(JSON.stringify(after)!==JSON.stringify(image))
           throw Error("Sheets staged readback diverged, do not ACK projection");
@@ -174,8 +173,7 @@ export function makeIsolatedGoogleEconomicHttpTransport(input:{
             writeControl:{requiredRevisionId:before.revisionId},
           }),
         });
-        await writerFence.assertExclusiveWriter(target,scopeId,
-          target==="TEMP_RUNTIME"?stagingSpreadsheetId:stagingDocumentId);
+        await writerFence.assertExclusiveWriter(target,scopeId,physicalResourceId);
         const after=await readDocs();
         if(JSON.stringify(after.image)!==JSON.stringify(image))
           throw Error("Docs staged readback diverged, do not ACK projection");
