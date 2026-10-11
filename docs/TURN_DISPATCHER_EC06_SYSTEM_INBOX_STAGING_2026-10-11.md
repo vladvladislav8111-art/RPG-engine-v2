@@ -54,3 +54,50 @@ deno task test
 ```
 
 After authorized deployment use `runtime_health` then `get_turn_context` with default tags, then with `tags:["CHAT"]`. Inspect stable active contacts, proper bounded histories, `gmTurnBrief`, still-pending milestone, no generated NPC message and no committed save change due to context reads. A level-up integration test must use a separate synthetic store; live save is not a test harness.
+
+## Phase B — implemented in PR #49 after original staged draft
+
+### Unified System Notification Center
+
+`get_turn_context` with tags `NOTIFICATIONS` / `INBOX` / `SYSTEM_INBOX` / `ALERTS` returns `packet.systemNotificationCenter`. It is a source-derived read-only view combining the current PENDING_CHOICES, PROGRESSION_EVENTS, earned ACTOR_ACHIEVEMENTS, existing active SYSTEM_CONTACTS_CURRENT, actually DELIVERED incoming SYSTEM_CHAT_LOG, and only Shura-identified due order clocks. Stable notice IDs cite an original primary source and do not create their own version of the event. An off-screen System message can appear when the contact is active and the incoming journal message was truly delivered; never infer a reply from stale NPC activity. Historically earned achievements do not appear as newly unread.
+
+Every get_turn_context (including ordinary startup) continues to return the small GM mechanical reminder/pending choice packet. The existing HUD now displays the count of truly pending choices as a small status chip, not as a fabricated award.
+
+Real level-ups emit source-backed `systemNotifications` in the semantic transaction and persistent SESSION_LOG; the existing Site renderer `render_system_event` may present them **after** a confirmed successful commit, using committed save/turn references. A read-only draft is never an achievement/XP notification. If a renderer failed, the level can be reconstructed from PROGRESSION_EVENTS without awarding XP again.
+
+### Optional durable read/dismiss receipts: migration gate
+
+The proposed **one** authoritative receipt-only tab under the same existing TEMP RUNTIME (not a second ledger) is:
+
+```
+SYSTEM_NOTIFICATION_ACK_CURRENT!A1:G1000
+Notification ID | Actor ID | Source Ref | Status | Marked at | TX ID | Version
+```
+
+- This is **not yet a production table**. Do **not** add or edit a live TEMP tab outside a separately approved safe schema migration/writer procedure. The feature defaults to `RPG_SYSTEM_NOTIFICATION_ACK_ENABLED=false`, emits `ackDurabilityReady=false`, and does not lie about persistence until a real tab with exact headers exists.
+- After verified schema migration, a specific user decision to mark one identified notification read can use `semantic.notificationAckEvents: [{notificationId,sourceRef,status:"SEEN"}]` through the standard 0-game-time semantic prepare/commit pipeline. Source proof is checked against original live records; every notification ID has one receipt, and malicious source collisions/forged NPC messages fail.
+- `DISMISSED` is explicitly forbidden for any unresolved choice or player-owned pending order review. `SEEN` does not resolve it. No UI click without explicit player interaction is an ACK.
+- The source remains authoritative; ACK is only a private presentation preference. A notification can reappear if an invalid/missing ACK or a new source occurs.
+
+### Canonical milestone option gate
+
+`semantic.choiceOptionMaterializations` publishes 2–4 options only when each is independently grounded in active permanent canon with exact type, name, trigger, effect, limits and `sourceRef`. Never infer options from DESIGN_CANDIDATE. The writer places verified options into an existing PENDING_CHOICES row and changes status from `PENDING_GENERATION` to `AWAITING_CHOICE`; publication never chooses on behalf of Shura. `semantic.choiceResolutions` may only select a published option in a **later** user-chosen turn. The selected permanent MILESTONES row is committed and the exact deferred competence XP is then released by the current engine. It is forbidden to clear a pending choice simply by submitting a string that was never an option.
+
+The existing Day58 crafting choice still has zero generated options in live save V2-S0795; this PR does NOT manufacture canon choices or release its 199 deferred XP without a source/decision.
+
+### Finite economics and quest work proposals
+
+Pure `preflightFinancialCustody` checks caller-supplied same-revision, source-referenced account balances, unique receipt/escrow identifiers, conservation of copper, finite physical lots, custody and replay/double-sale constraints. It **cannot establish account truth** from a `verified=true` flag supplied by a model: its result always says `CALLER_SNAPSHOT_REQUIRES_EC06_ATTESTATION` and `committed:false`.
+
+Pure `proposeSourceFundedJobs` passes source-backed individual demands through existing V3 `generateOffer` only after evidence for the live employer, nonduplicated physical workload, funded escrow and bounded deadline/slots has been supplied. It returns `READ_ONLY_SOURCE_ATTESTATION_PENDING`, no contract, no wage and no player acceptance. EC-06 primary accounts and writer isolation must independently attest the sources before any semantic new job creation or payment. A fully automatic paid quest generator is **not activated** until that live source gateway exists.
+
+## Release checklist for staged PR #49
+
+1. Confirm all branch CI tests and Deno check on latest head; inspect diff for semantics and HUD compatibility.
+2. Staging or isolated Deno tests: read default context, `NOTIFICATIONS` context, actor messages, pending choice and HUD; no live game writes.
+3. Independently verify canonical option definitions before publishing the existing crafting choice; player selection remains voluntary.
+4. When enabling ACK receipts, migrate the existing TEMP schema under an exclusive writer freeze and test semantic read receipts with synthetic save first; flip feature flag only after verified headers. Never hand-edit the ACK state in Sheets.
+5. EC-06 rollout is SEPARATE and additionally blocked by production KV timeline proof, sourced NPC balances/items, exclusive Google writer/quiescence, credentialed E2E, full cash/custody/receipts and owner-approved cutover. PRs #27–#43 and #44 are not implicitly merged with #49.
+6. Preserve exact existing RPG Runtime Bridge Site/Plugin URL, bearer server secret and tools. Confirm original committed save unchanged on infrastructure-only release.
+
+This PR must not be merged simply because its mock CI is green; the combined EC-06 cutover is a materially different transaction-storage release.
