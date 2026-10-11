@@ -14,6 +14,8 @@ import {
   resolveRest,
 } from "./physiology.ts";
 import { intBetween } from "./rng.ts";
+import { WORLD_V3_OPERATIONS, type WorldV3BatchRequest } from "./world_sim_v3/runtime_facade.ts";
+import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import { resolveRoutineAction } from "./routine.ts";
 
@@ -403,6 +405,7 @@ function buildServer() {
         ok: true,
         engineVersion: RULESET_VERSION,
         architectureVersion: "world-automation-v2",
+        worldSimulationV3: config.worldSimV3Enabled ? "READ_ONLY_PROPOSALS" : "DISABLED",
         hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
         rawCommitsEnabled: config.allowRawCommits,
@@ -645,6 +648,32 @@ function buildServer() {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async (input) => toolJson(resolveInjurySimulation(input)),
+  );
+
+  server.registerTool(
+    "simulate_world_v3",
+    {
+      title: "RPG V3: batch world simulations",
+      description: "READ ONLY. Calculate up to 12 causal proposals in one call on the current save: time, NPC schedules, craft, combat, travel, knowledge, world processes, inventory, source-backed quest offers, progression, titles and SUP. Inputs are GM snapshots, not independently source-attested. NEVER treat this calculation as a game commit.",
+      inputSchema: z.object({
+        expectedSaveId: z.string().min(1),
+        jobs: z.array(z.object({
+          id: z.string().min(1).max(180),
+          operation: z.enum(WORLD_V3_OPERATIONS),
+          payload: z.record(z.string(), z.unknown()),
+        })).min(1).max(12),
+      }),
+      annotations: { readOnlyHint:true, destructiveHint:false, idempotentHint:true, openWorldHint:false },
+    },
+    async (input) => {
+      if (!config.worldSimV3Enabled) return toolJson({ ok:false, code:"WORLD_V3_DISABLED" });
+      try {
+        return toolJson(await simulateWorldV3BatchLive(input as WorldV3BatchRequest));
+      } catch (error) {
+        const stale = error instanceof Error && error.message === "WORLD_V3_STALE_SAVE";
+        return toolJson({ ok:false, code:stale ? "WORLD_V3_STALE_SAVE" : "WORLD_V3_SIMULATION_REJECTED" });
+      }
+    },
   );
 
   server.registerTool(

@@ -9,6 +9,7 @@ import { makeTurnToken } from "./turn_token.ts";
 import { buildSelarinLocalContext } from "./local_context.ts";
 import { CONTINUITY_SPARSE_RANGES, continuityFromSparseRanges, worldClocksFromSparseRanges } from "./world_continuity.ts";
 import { buildWorldActionDocket } from "./world_scheduler.ts";
+import { ACHIEVEMENT_CATALOG_COUNTS } from "./world_sim_v3/achievement_catalog.ts";
 import { resolveSceneActorIds } from "./scene_routing.ts";
 import { buildNpcBehavioralContext } from "./npc_behavior.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
@@ -839,6 +840,7 @@ export async function getTurnContext(input: TurnContextRequest) {
       resourceDetails,
       worldContinuity,
       worldActionDocket,
+      worldSimulationV3: { enabled: config.worldSimV3Enabled, mode: "READ_ONLY_PROPOSALS", maxBatchJobs: 12, achievementCandidates: ACHIEVEMENT_CATALOG_COUNTS.achievements, titleCandidates: ACHIEVEMENT_CATALOG_COUNTS.titles, committed: false },
       survival: {
         satiety: { current: satiety, max: Number((resourceDetails["Satiety"] as any)?.max ?? 100), band: survivalBand(satiety) },
         hydration: { current: hydration, max: Number((resourceDetails["Hydration"] as any)?.max ?? 100), band: survivalBand(hydration) },

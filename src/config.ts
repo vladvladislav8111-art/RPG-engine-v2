@@ -23,6 +23,7 @@ export const config = {
   allowWrites: (rawEnv("ALLOW_WRITES") ?? "false").toLowerCase() === "true",
   allowRawCommits: (rawEnv("ALLOW_RAW_COMMITS") ?? "false").toLowerCase() === "true",
   enableKv: (rawEnv("ENABLE_KV") ?? (runtime === "deno" ? "true" : "false")).toLowerCase() === "true",
+  worldSimV3Enabled: (rawEnv("WORLD_SIM_V3_ENABLED") ?? "true").toLowerCase() === "true",
   google: {
     email: env("GOOGLE_SERVICE_ACCOUNT_EMAIL"),
     privateKey: env("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY").replace(/\\n/g, "\n"),
