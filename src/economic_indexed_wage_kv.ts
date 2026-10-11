@@ -31,8 +31,9 @@ export type IndexedWageAuthority={
   migrationProofRefs:ReadonlySet<string>;
   sourceEvidenceRefs:ReadonlySet<string>;
   actualAcceptedContracts:ReadonlyMap<string,IndexedWageContract>;
-  verifiedCompletedDemandIds:ReadonlySet<string>;
-  verifiedCancelledDemandIds:ReadonlySet<string>;
+  acceptedReservationProofByDemand:ReadonlyMap<string,string>;
+  verifiedCompletedProofByDemand:ReadonlyMap<string,string>;
+  verifiedCancelledProofByDemand:ReadonlyMap<string,string>;
 };
 export type IndexedWageJournal={
   schema:"EC06_INDEX_WAGE_JOURNAL_V1";
@@ -123,6 +124,7 @@ export async function commitIndexedWageStaging(kv:AtomicKvStore,input:{
     if(!accepted||!contractMatches(terms,accepted)||
        !amt(terms.agreedCopper)||!valid(terms.sourceContractRef)||
        !a.sourceEvidenceRefs.has(terms.sourceContractRef)||
+       a.acceptedReservationProofByDemand.get(demandId)!==e.sourceEvidenceRef||
        !valid(terms.employerAccountId)||!valid(terms.workerAccountId)||
        terms.employerAccountId===terms.workerAccountId||
        !Number.isSafeInteger(terms.dueGameMinute)||
@@ -138,8 +140,8 @@ export async function commitIndexedWageStaging(kv:AtomicKvStore,input:{
       !amt(esc.amountCopper)||!amt(e.amountCopper)||
       e.amountCopper!==esc.amountCopper||
       demandEntry.value?.escrowId!==esc.escrowId||
-      (e.kind==="PAY"?!a.verifiedCompletedDemandIds.has(demandId):
-        !a.verifiedCancelledDemandIds.has(demandId))){
+      (e.kind==="PAY"?a.verifiedCompletedProofByDemand.get(demandId)!==e.sourceEvidenceRef:
+        a.verifiedCancelledProofByDemand.get(demandId)!==e.sourceEvidenceRef)){
       throw Error("Cannot pay or release wage without reserved funds and verified outcome");
     }
     terms={
