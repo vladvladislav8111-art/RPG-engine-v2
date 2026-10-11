@@ -31,6 +31,7 @@ export function buildTurnBrief(input: {
   pendingChoices: readonly SourceRow[];
   recentChatByActor?: Readonly<Record<string, readonly SourceRow[]>>;
   actorIdsLoaded?: readonly string[];
+  sourceOnlyOfferBoard?: unknown;
 }) {
   const tags = new Set(input.tags.map((t) => t.toUpperCase()));
   const messageActors = new Set(input.actorIdsLoaded ?? []);
@@ -94,7 +95,8 @@ export function buildTurnBrief(input: {
     schema:"GM_TURN_BRIEF_V1",
     mode:"READ_ONLY_PLAN",
     commitAuthorized:false,
-    autoExecutedOperations:[],
+    autoExecutedOperations:input.sourceOnlyOfferBoard != null ? ["offer_board.CURRENT_SOURCE_ONLY"] : [],
+    sourceOnlyOfferBoard:input.sourceOnlyOfferBoard ?? null,
     gameTimeAdvancedSeconds:0,
     turnClass:input.turnClass,
     modules:[...new Set(modules)],
@@ -115,6 +117,7 @@ export function buildTurnBrief(input: {
       "Committed level changes must be rendered from commit outcomes; proposals are never notifications.",
       "System Link contacts are private one-to-one; offscreen NPCs do not automatically answer.",
       "EC-06 finance stays behind the atomic ledger, source-funding and writer-quiescence gates.",
+      "Offer-board preview is READ_ONLY and does not prove funding or authorize a work contract.",
     ],
   };
 }
