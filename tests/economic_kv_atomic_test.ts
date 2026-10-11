@@ -5,6 +5,7 @@ import {
 import type {
   EconomicSnapshot,EconomicSettlementAuthority,EconomicOperation,
 } from "../src/economic_atomic_plan.ts";
+import { wrapDenoAtomicEconomyKv } from "../src/economic_deno_kv_adapter.ts";
 
 const k=(p:KvKey)=>JSON.stringify(p);
 class FakeAtomicKv implements AtomicKvStore {
@@ -201,4 +202,28 @@ Deno.test("bounded 1..6 event CAS window rejects oversize cross-city batch",asyn
   await rejects(()=>commitEconomicKvStaging(kv,make("tx.fixture.seven",
     Array.from({length:7},(_,i)=>({...purchase,eventId:"event.fixture."+i}))))
     ,"unbounded 1000 event KV atomic write");
+});
+
+
+Deno.test("real in-memory Deno KV adapter enforces economic CAS and receipts",async()=>{
+  // Explicitly create an isolated ephemeral DB; NEVER open live default KV.
+  const db=await Deno.openKv(":memory:");
+  try {
+    const keys=ec06Keys.ledger(scopeId);
+    await db.set(keys as Deno.KvKey,{
+      schema:"EC06_KV_V1",scopeId,snapshot:initial,
+      lastTxId:"tx.fixture.authorized_migration",
+    });
+    const store=wrapDenoAtomicEconomyKv(db);
+    const applied=await commitEconomicKvStaging(store,make("tx.fixture.real_kv",[wage]));
+    if(applied.kind!=="COMMITTED")throw Error("Deno KV failed primary atomic transaction");
+    const reread=await store.get(ec06Keys.ledger(scopeId));
+    if(!reread.value || (await store.get(ec06Keys.outbox(scopeId,"tx.fixture.real_kv"))).value===null)
+      throw Error("Real Deno KV missing durable primary/outbox");
+    const replay=await commitEconomicKvStaging(store,make("tx.fixture.real_kv",[wage]));
+    if(replay.kind!=="IDEMPOTENT_REPLAY")
+      throw Error("Real Deno KV failed idempotent replay");
+  } finally {
+    db.close();
+  }
 });
