@@ -64,7 +64,7 @@ export function buildSystemNotificationCenter(input: {
   };
   for(const p of input.pendingChoices??[]){
     const status=v(p,"Status").toUpperCase();
-    if(!(status.startsWith("PENDING")||status==="OPEN"))continue;
+    if(!(status.startsWith("PENDING")||status==="OPEN"||status==="AWAITING_CHOICE"))continue;
     const id=v(p,"Choice ID");
     if(!id)continue;
     let options=false;try{
