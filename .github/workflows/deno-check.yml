@@ -34,5 +34,7 @@ jobs:
           deno-version: v2.x
       - name: Check runtime entrypoint
         run: deno check main.ts
+      - name: Check isolated Google audit probe entrypoint (no network)
+        run: deno check scripts/ec06_isolated_google_audit_server.ts
       - name: Run regression tests
         run: deno task test
