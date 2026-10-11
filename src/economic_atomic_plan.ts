@@ -78,6 +78,7 @@ export type EconomicSettlementAuthority = {
   canonicalLocationIds: ReadonlySet<string>;
   actualActiveDemandIds: ReadonlySet<string>;
   actualRecordedDemandIds: ReadonlySet<string>;
+  alreadyReservedOrSettledDemandIds: ReadonlySet<string>;
   observedEvidenceRefs: ReadonlySet<string>;
 };
 export type SettlementManifest = {
@@ -159,6 +160,10 @@ export function planFiniteEconomicSettlement(input: {
     lots.set(l.itemId,{...l});
   }
   const initialCash=sumMoney(accounts);
+  // Keep identities retired inside the same candidate transaction: paying a
+  // reservation must not allow it to be recreated again under a fresh event ID.
+  const reservedEscrowIds = new Set(escrows.keys());
+  const reservedDemandIds = new Set([...escrows.values()].map(e=>e.sourceDemandId));
   const eventsProcessed = new Set<string>();
   const checkEvidence=(v: string) => {
     if(!validId(v)||!a.observedEvidenceRefs.has(v))throw Error("Missing actual independent source proof");
@@ -179,13 +184,16 @@ export function planFiniteEconomicSettlement(input: {
     eventsProcessed.add(op.eventId);
     checkEvidence(op.evidenceRef);
     if(op.kind==="RESERVE_WAGE"){
-      if(!validId(op.escrowId)||escrows.has(op.escrowId)||
+      if(!validId(op.escrowId)||reservedEscrowIds.has(op.escrowId)||
         !a.actualActiveDemandIds.has(op.sourceDemandId)||
-        [...escrows.values()].some(e=>e.sourceDemandId===op.sourceDemandId)||
+        a.alreadyReservedOrSettledDemandIds.has(op.sourceDemandId)||
+        reservedDemandIds.has(op.sourceDemandId)||
         op.payerAccountId===op.workerAccountId||
         !accounts.has(op.workerAccountId))throw Error("No unique real employment demand");
       debit(op.payerAccountId,op.amountCopper,"availableCopper");
       credit(op.payerAccountId,op.amountCopper,"heldCopper");
+      reservedEscrowIds.add(op.escrowId);
+      reservedDemandIds.add(op.sourceDemandId);
       escrows.set(op.escrowId,{
         escrowId:op.escrowId,payerAccountId:op.payerAccountId,
         workerAccountId:op.workerAccountId,reservedCopper:op.amountCopper,
