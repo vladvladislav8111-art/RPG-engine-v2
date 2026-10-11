@@ -1,4 +1,4 @@
-import { parseCanonicalSpecializations, validateSpecializationAcquisition } from "../src/specialization_catalog.ts";
+import { parseCanonicalSpecializations, runtimeDomainForCompetence, validateSpecializationAcquisition } from "../src/specialization_catalog.ts";
 Deno.test("canonical paths are gated before first learning", () => {
  const columns=["Canonical asset ID","Competence ID","Runtime name","Observer required","Catalog state"];
  const records=[columns,
@@ -40,4 +40,23 @@ Deno.test("witness, live ownership and draft status block illicit discovery", ()
  rejects(()=>validateSpecializationAcquisition({...input,proposal:{...proposal,catalogId:"spec.body.coordination"}}));
  rejects(()=>validateSpecializationAcquisition({...input,proposal:{...proposal,catalogId:"spec.body.fake"}}));
  rejects(()=>validateSpecializationAcquisition({...input,proposal:{...proposal,trainingEvidence:"a guess"}}));
+});
+
+Deno.test("all seven live competence roots map to their canonical specialization domains", () => {
+  const expected: Record<string,string> = {
+    "competence.body.physical_conditioning":"body",
+    "competence.combat.melee":"combat",
+    "competence.crafting.practical_creation":"crafting",
+    "competence.survival.general":"survival",
+    "competence.knowledge.research":"knowledge",
+    "competence.society.communication":"society",
+    "competence.magic.perception":"magic",
+  };
+  for (const [root, domain] of Object.entries(expected)) {
+    if(runtimeDomainForCompetence(root)!==domain)throw new Error("Wrong domain for "+root);
+  }
+  let denied=false;
+  try { runtimeDomainForCompetence("competence.magic.some_future_unregistered_root"); }
+  catch { denied=true; }
+  if(!denied)throw new Error("Unknown competence silently routed");
 });
