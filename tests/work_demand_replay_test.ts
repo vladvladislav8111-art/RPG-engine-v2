@@ -91,7 +91,7 @@ Deno.test("completed, filled and expired offers do not permanently reserve futur
        ["Offer ID"]!==name)throw new Error("Closed demand never expires");
   if(make(again,[{...old,"Lifecycle State":"FILLED","State":"FILLED"}])
        ["Offer ID"]!==name)throw new Error("Filled offer never resets");
-  if(make(again,[old],65,"08:00")["Offer ID"]!==name){
+  if(make({...again,availableDay:65,expiresDay:66},[old],65,"08:00")["Offer ID"]!==name){
     throw new Error("Expired demand without processed clock row was permanently blocked");
   }
 });
