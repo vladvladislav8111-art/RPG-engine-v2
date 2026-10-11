@@ -31,15 +31,11 @@ type StagingGoogleSnapshot={
   text:string;bodyEndIndex:number;window:Ec06DocWindow;
 };
 function readSnapshot(raw:unknown,scopeId:string):StagingGoogleSnapshot{
-  const doc=raw as {
-    revisionId?:string;tabs?:Array<{
-      tabProperties?:{tabId?:string};
-      documentTab?:{body?:{content?:Array<{
-        startIndex?:number;endIndex?:number;
-        paragraph?:{elements?:Array<{textRun?:{content?:string}}>};
-      }>}}>;
-    }>;
-  }|null;
+  type Node={startIndex?:number;endIndex?:number;
+    paragraph?:{elements?:Array<{textRun?:{content?:string}}>}}};
+  type Tab={tabProperties?:{tabId?:string};
+    documentTab?:{body?:{content?:Node[]}}};
+  const doc=raw as {revisionId?:string;tabs?:Tab[]}|null;
   if(!doc?.revisionId||doc.tabs?.length!==1)
     throw Error("Compaction needs one exact native Google Doc tab and revision");
   const tab=doc.tabs[0],elements=tab.documentTab?.body?.content;
@@ -53,7 +49,7 @@ function readSnapshot(raw:unknown,scopeId:string):StagingGoogleSnapshot{
     for(const e of p.paragraph.elements)text+=e.textRun!.content;
   }
   const last=elements.at(-1)?.endIndex;
-  if(!Number.isSafeInteger(last)||last!<=2||
+  if(typeof last!=="number"||!Number.isSafeInteger(last)||last<=2||
      elements[0]?.startIndex!==1)
     throw Error("Native Google Doc index range is missing/invalid");
   return {revisionId:doc.revisionId,tabId:tab.tabProperties.tabId,
