@@ -180,6 +180,20 @@ const semanticSchema = z.object({
     waterLiters: z.number().nonnegative().optional(),
     heatMultiplier: z.number().nonnegative().optional(),
   }).optional(),
+  choiceOptionMaterializations: z.array(z.object({
+    choiceId: z.string().min(1),
+    options: z.array(z.object({
+      id: z.string().min(1),
+      name: z.string().min(3),
+      type: z.enum(["PASSIVE", "ACTIVE"]),
+      trigger: z.string().min(10),
+      effect: z.string().min(10),
+      limits: z.string().min(10),
+      scalingState: z.string().min(2),
+      sourceRef: z.string().min(8),
+      canonStatus: z.literal("CANON_ACTIVE"),
+    })).min(2).max(4),
+  })).optional(),
   choiceResolutions: z.array(z.object({
     choiceId: z.string().min(1),
     selectedOption: z.string().min(1),
