@@ -7,7 +7,7 @@
  * Workers independently verify source state and use the existing fenced
  * projection reconciler; merely reading this index NEVER authorizes retry.
  */
-import type {AtomicKvStore,KvKey} from "./economic_kv_atomic.ts";
+import type {KvKey} from "./economic_kv_atomic.ts";
 import {indexedEc06Keys} from "./economic_indexed_wholesale_kv.ts";
 import {makeIndexedDeltaIntent,type IndexedJournal,type IndexedDeltaOutbox} from
   "./economic_indexed_delta_projection.ts";
@@ -90,16 +90,16 @@ export async function listIndexedQueuePage(input:{
  * No in-flight Google request can be made safe by deleting this pointer.
  */
 export async function pruneVerifiedIndexedQueuePointer(input:{
-  kv:AtomicKvStore;scopeId:string;txId:string;
+  db:Deno.Kv;scopeId:string;txId:string;
 }):Promise<"PRUNED"> {
-  const {kv,scopeId,txId}=input;
+  const {db,scopeId,txId}=input;
   const registration=makeIndexedQueueRegistration(
     scopeId,txId,indexedEc06Keys.journal(txId));
   const [queue,tx,outbox,journal]=await Promise.all([
-    kv.get<IndexedQueuePointer>(registration.key),
-    kv.get<{txId:string;scopeId:string;schema:string}>(indexedEc06Keys.tx(txId)),
-    kv.get<IndexedDeltaOutbox>(indexedEc06Keys.outbox(txId)),
-    kv.get<IndexedJournal>(indexedEc06Keys.journal(txId)),
+    db.get<IndexedQueuePointer>(registration.key as Deno.KvKey),
+    db.get<{txId:string;scopeId:string;schema:string}>(indexedEc06Keys.tx(txId) as Deno.KvKey),
+    db.get<IndexedDeltaOutbox>(indexedEc06Keys.outbox(txId) as Deno.KvKey),
+    db.get<IndexedJournal>(indexedEc06Keys.journal(txId) as Deno.KvKey),
   ]);
   if(!queue.versionstamp||!queue.value||
      JSON.stringify(queue.value)!==JSON.stringify(registration.value)||
@@ -118,7 +118,7 @@ export async function pruneVerifiedIndexedQueuePointer(input:{
      "proof.ec06.indexed."+txId+"."+intent.journalHash)
     throw Error("Indexed outbox ACK does not match immutable journal hash");
   // No financial or log keys are deleted; CAS rejects parallel reclaim.
-  const ok=await kv.atomic()
+  const ok=await db.atomic()
     .check({key:queue.key,versionstamp:queue.versionstamp})
     .check({key:tx.key,versionstamp:tx.versionstamp})
     .check({key:journal.key,versionstamp:journal.versionstamp})
