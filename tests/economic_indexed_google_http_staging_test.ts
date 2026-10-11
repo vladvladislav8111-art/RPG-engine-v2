@@ -444,3 +444,28 @@ Deno.test("one-shot E2E outage: real committed money survives Google Docs failur
       throw Error("Failure path duplicated reserves or lost primary queued intent");
   } finally {db.close()}
 });
+
+Deno.test("full bounded Doc window stops projection BEFORE first Google Sheet mutation or lock",async()=>{
+  const {db,kv,api,adapter}=await setup();
+  try{
+    for(let i=0;i<16;i++){
+      const eventTx="tx.fixture.prefill_"+String(i).padStart(3,"0");
+      const hash=(i+1).toString(16).padStart(64,"0");
+      const mutation={kind:"account",id:owner,
+        before:{accountId:owner,availableCopper:70-i,heldCopper:0},
+        after:{accountId:owner,availableCopper:69-i,heldCopper:0}};
+      const receipt={schema:"EC06_INDEXED_TARGET_RECEIPT_V1",
+        target:"LIVE_TRANSACTION_ARCHIVE",txId:eventTx,scopeId:scope,
+        journalHash:hash,rowIds:["account/"+owner]};
+      api.docText+="EC06_INDEX_DOC_DELTA_V1 "+JSON.stringify({
+        schema:"EC06_INDEX_DOC_DELTA_V1",scopeId:scope,
+        txId:eventTx,journalHash:hash,mutations:[mutation],receipt,
+      })+"\n";
+    }
+    await rejects(()=>reconcileIndexedDeltaStaging({
+      kv,adapter,scopeId:scope,txId:tx,
+    }),"full Google Doc rejected only after Sheets changed");
+    if(api.sheetBatchCalls!==0||api.docsBatchCalls!==0)
+      throw Error("Full Doc archive let uncheckpointed transaction change Sheets");
+  }finally{db.close()}
+});

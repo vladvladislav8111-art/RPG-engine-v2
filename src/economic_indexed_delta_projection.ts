@@ -28,6 +28,9 @@ export type IndexedTargetReceipt={
   rowIds:readonly string[];
 };
 export interface IndexedDeltaTargetAdapter{
+  /** Optional fail-fast remote capacity check BEFORE touching any target.
+   * It is NOT a CAS or lock; both targets still revalidate under their fence. */
+  preflightProjection?(intent:IndexedDeltaIntent):Promise<void>;
   /** Durable receipt read from THIS actual Google target, not from caller. */
   readReceipt(target:DeltaTarget,scopeId:string,txId:string):
     Promise<IndexedTargetReceipt|null>;
@@ -148,6 +151,9 @@ export async function reconcileIndexedDeltaStaging(input:{
   }
   if(outbox.value.state!=="PENDING_INDEXED_PROJECTION")
     throw Error("Unexpected indexed outbox state");
+  // A full Doc window must be checkpointed BEFORE any new Sheet writes.
+  // This read-only preflight never replaces native per-target fence checks.
+  await adapter.preflightProjection?.(intent);
   for(const target of ["TEMP_RUNTIME","LIVE_TRANSACTION_ARCHIVE"] as const){
     const receipt=expectedReceipt(target,intent);
     const old=await adapter.readReceipt(target,scopeId,txId);
