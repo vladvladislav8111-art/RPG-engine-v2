@@ -218,7 +218,7 @@ Deno.test("no duplicate sources, input spending, free outputs or negative waste"
     "more mass than extracted");
   rejects(() => preflight([{...extraction,wasteKg: -5}]), "negative extracted waste");
   rejects(() => preflight([extraction, {...sawmill,
-    outputs: [{...sawmill.outputs[0],massKg: 90}],wasteKg: 0}]),
+    outputs: [{...sawmill.outputs[0],massKg: 80}],wasteKg: 0}]),
     "unaccounted mass is not allowed");
   rejects(() => preflight([extraction, {...sawmill,
     outputs: [{...sawmill.outputs[0],massKg: 100}],wasteKg: 0}]),
