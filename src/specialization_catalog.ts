@@ -79,3 +79,19 @@ export function validateSpecializationAcquisition(input: {
   }
   return entry;
 }
+
+/** Single canonical runtime domain for each of the seven existing competence roots. */
+export function runtimeDomainForCompetence(competenceId: string): string {
+  const mapping: Record<string, string> = {
+    "competence.body.physical_conditioning": "body",
+    "competence.combat.melee": "combat",
+    "competence.crafting.practical_creation": "crafting",
+    "competence.survival.general": "survival",
+    "competence.knowledge.research": "knowledge",
+    "competence.society.communication": "society",
+    "competence.magic.perception": "magic",
+  };
+  const domain = mapping[competenceId];
+  if (!domain) throw new Error("Unsupported canonical competence domain: " + competenceId);
+  return domain;
+}
