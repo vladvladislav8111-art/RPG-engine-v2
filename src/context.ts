@@ -770,6 +770,7 @@ export async function getTurnContext(input: TurnContextRequest) {
         openThreads: filterByParticipants(openThreadRows, [id]),
         recentChat: actorRecentChat[id] ?? [],
         activeWorldClocks,
+        activityRule,
       }),
     };
     actorContextGate[id] = evaluateNpcContextGate({

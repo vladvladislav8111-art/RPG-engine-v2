@@ -15,6 +15,7 @@ import {planCustodyTransfer} from './inventory.ts';
 import {proposeMaterializedOfferBoard,generateOffer} from './opportunities.ts';
 import {planAchievementAward,planTitleAward,planProgressCycle,planSystemObjectiveReward,planExplicitSupPurchase,applicableTitleEffects} from './progression.ts';
 import {ACHIEVEMENTS_V3,TITLES_V3,ACHIEVEMENT_CATALOG_COUNTS} from './achievement_catalog.ts';
+import {reviewNpcLife,reviewKeyPromotion,proposeDirectedRelationship,proposePersonalityEvolution,chooseNpcAttention,crossCheckContactReceipts} from '../npc_life_v4/index.ts';
 
 export const WORLD_V3_OPERATIONS=[
  'turn','npc_presence','npc_decision','craft_advance','craft_qc','workshop_capacity',
@@ -46,7 +47,26 @@ function execute(job:WorldV3Job):SimOutcome<unknown>{
  switch(job.operation){
  case 'turn': return proposeWorldTurn({...as<Parameters<typeof proposeWorldTurn>[0]>(p),evidence:as<Evidence[]>(p.evidence as Record<string,unknown>)});
  case 'npc_presence':return evaluateNpcPresence(as<Parameters<typeof evaluateNpcPresence>[0]>(p));
- case 'npc_decision':return validateNpcIndependentDecision(p.decision as Parameters<typeof validateNpcIndependentDecision>[0],setOf(p.knownOpportunityIds,'knownOpportunityIds'));
+ case 'npc_decision':{
+   // V4 is opt-in inside the existing 20-operation V3 schema; older decision payloads remain unchanged.
+   if(p.lifeV4!==undefined){
+     if(!rec(p.lifeV4)||!rec(p.lifeV4.input))return deny('NPC_LIFE_V4_INVALID','Expected lifeV4 {kind,input}');
+     const data=p.lifeV4.input as Record<string,unknown>;
+     let result:ReturnType<typeof reviewNpcLife>|ReturnType<typeof reviewKeyPromotion>|ReturnType<typeof proposeDirectedRelationship>|ReturnType<typeof proposePersonalityEvolution>|ReturnType<typeof chooseNpcAttention>|ReturnType<typeof crossCheckContactReceipts>;
+     switch(p.lifeV4.kind){
+       case 'life_review':result=reviewNpcLife(as<Parameters<typeof reviewNpcLife>[0]>(data));break;
+       case 'promotion_review':result=reviewKeyPromotion(as<Parameters<typeof reviewKeyPromotion>[0]>(data));break;
+       case 'contact_proofs':result=crossCheckContactReceipts(as<Parameters<typeof crossCheckContactReceipts>[0]>(data));break;
+       case 'social_change':result=proposeDirectedRelationship(data.event as Parameters<typeof proposeDirectedRelationship>[0],data.existing as Parameters<typeof proposeDirectedRelationship>[1]);break;
+       case 'personality_evolution':result=proposePersonalityEvolution(as<Parameters<typeof proposePersonalityEvolution>[0]>(data));break;
+       case 'attention_review':result=chooseNpcAttention(as<Parameters<typeof chooseNpcAttention>[0]>(data));break;
+       default:return deny('NPC_LIFE_V4_UNKNOWN_KIND','Invalid Life V4 sub-operation');
+     }
+     return result.ok?pass(result):deny(result.code,result.reason);
+   }
+   return validateNpcIndependentDecision(p.decision as Parameters<typeof validateNpcIndependentDecision>[0],setOf(p.knownOpportunityIds,'knownOpportunityIds'));
+ }
+
  case 'craft_advance':return advanceCraftOrder({...as<Parameters<typeof advanceCraftOrder>[0]>(p),holidays:setOfNumbers(p.holidays)});
  case 'craft_qc':return approveCraftCompletion(p.order as Parameters<typeof approveCraftCompletion>[0],p.quality as Parameters<typeof approveCraftCompletion>[1]);
  case 'workshop_capacity':return allocateWorkshopCapacity(as<Parameters<typeof allocateWorkshopCapacity>[0]>(p.slots as Record<string,unknown>),p.staffMinutes as number);
