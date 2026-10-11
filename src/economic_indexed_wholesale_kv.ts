@@ -13,6 +13,7 @@
 import type { EconomicAccount, MarketLot } from "./economic_atomic_plan.ts";
 import type { AtomicKvStore, KvKey, KvEntry } from "./economic_kv_atomic.ts";
 import type { NpcWholesaleOrder } from "./npc_wholesale_clearing.ts";
+import {makeIndexedQueueRegistration} from "./economic_indexed_outbox_queue.ts";
 
 export type IndexedSaleLot = MarketLot & { legalOwnerAccountId:string };
 export type IndexedHome = {
@@ -244,7 +245,9 @@ export async function commitIndexedNpcWholesaleStaging(
     state:"PENDING_INDEXED_PROJECTION",
     journalKey:indexedEc06Keys.journal(o.orderId),
   };
+  const queue=makeIndexedQueueRegistration(scopeId,o.orderId,indexedEc06Keys.journal(o.orderId));
   let op=kv.atomic()
+    .check({key:queue.key,versionstamp:null})
     .check({key:indexedEc06Keys.seal(scopeId),versionstamp:seal.versionstamp})
     .check({key:hs.key,versionstamp:hs.versionstamp})
     .check({key:hb.key,versionstamp:hb.versionstamp})
@@ -262,7 +265,8 @@ export async function commitIndexedNpcWholesaleStaging(
     .set(indexedEc06Keys.tx(o.orderId),tx)
     .set(indexedEc06Keys.delivery(o.deliveredReceiptRef),{orderId:o.orderId})
     .set(indexedEc06Keys.journal(o.orderId),journal)
-    .set(indexedEc06Keys.outbox(o.orderId),outbox);
+    .set(indexedEc06Keys.outbox(o.orderId),outbox)
+    .set(queue.key,queue.value);
   if(dst && splitEntry && splitHome){
     op=op.check({key:splitEntry.key,versionstamp:null})
       .check({key:splitHome.key,versionstamp:null})
