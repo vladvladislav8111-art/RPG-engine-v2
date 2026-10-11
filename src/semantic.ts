@@ -40,6 +40,7 @@ import { validateWorkDemand } from "./work_demand.ts";
 import { validateRumorTransmission } from "./world_information.ts";
 import { validateMajorWorldEvent } from "./world_events.ts";
 import { auditMaterialTransformation } from "./physical_integrity.ts";
+import { assertUniqueInventoryEventIds } from "./economic_atomic_plan.ts";
 import { parseCanonicalSpecializations, runtimeDomainForCompetence, validateSpecializationAcquisition } from "./specialization_catalog.ts";
 import { materialRefsInCanon, permanentMaterialLocksInCanon, passportToSheetRecord, validatePhysicalPassport } from "./physical_passport.ts";
 import type {
@@ -1106,6 +1107,9 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     writeRow("PLAYER_CONDITIONS", conditionRows, i, row);
   }
 
+  // No repeated spending or handoff of one physical ID within one prepared turn.
+  // This check runs before the entire inventory/material audit is assembled.
+  assertUniqueInventoryEventIds(semantic.inventoryEvents ?? []);
   const inventoryRows = sheets[TABLES.INVENTORY_CURRENT.range] ?? [];
   const inventoryOutcomes: unknown[] = [];
   const physicalAudits: unknown[] = [];
