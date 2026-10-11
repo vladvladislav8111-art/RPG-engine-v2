@@ -13,6 +13,8 @@ import { ACHIEVEMENT_CATALOG_COUNTS } from "./world_sim_v3/achievement_catalog.t
 import { resolveSceneActorIds } from "./scene_routing.ts";
 import { buildNpcBehavioralContext } from "./npc_behavior.ts";
 import { buildTurnBrief, contactActorIdsForRequest } from "./turn_dispatcher.ts";
+import { chooseMemoryRoute } from "./context_memory_router.ts";
+import { planIndependentWorldTick } from "./world_tick_dispatcher.ts";
 import { buildSystemNotificationCenter } from "./system_notification_center.ts";
 import { availableCurrentOpportunities, parseLiveClock } from "./world_sim_v3/source_bridge.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
@@ -259,6 +261,9 @@ export async function getTurnContext(input: TurnContextRequest) {
   );
   const routeSaveId = String(findControl(routingControlRows, "save_id") ?? "");
   const tagSet = new Set((input.tags ?? []).map((t) => t.toUpperCase()));
+  const memoryRoute = chooseMemoryRoute({turnClass:input.turnClass,tags:input.tags??[],
+    actorIds:input.actorIds,actorRefs:input.actorRefs,
+    docQueriesCount:input.docQueries?.length??0,lookupsCount:input.lookups?.length??0});
   const wantsSystemInbox = hasAny(tagSet, ["NOTIFICATIONS", "INBOX", "SYSTEM_INBOX", "ALERTS"]);
   const sourceContacts = rowsToObjects(sceneRouting["SYSTEM_CONTACTS_CURRENT!A1:J200"] ?? []);
   const requestedActorIds = [...new Set([
@@ -857,6 +862,10 @@ export async function getTurnContext(input: TurnContextRequest) {
       resourceDetails,
       worldContinuity,
       worldActionDocket,
+      memoryRoute,
+      worldTickPlan: input.plannedElapsedSeconds != null || hasAny(tagSet, ["WORLD","WAIT","REST","SLEEP","TRAVEL","WORK","CRAFT","NPC_LIFE"])
+        ? planIndependentWorldTick({saveId,worldDay:Number(worldDay),worldTime:String(worldTime),
+          elapsedSeconds:input.plannedElapsedSeconds??0,sparse:continuityRanges}) : null,
       worldSimulationV3: { enabled: config.worldSimV3Enabled, mode: "READ_ONLY_PROPOSALS", maxBatchJobs: 12, achievementCandidates: ACHIEVEMENT_CATALOG_COUNTS.achievements, titleCandidates: ACHIEVEMENT_CATALOG_COUNTS.titles, committed: false },
       systemNotificationCenter: wantsSystemInbox ? buildSystemNotificationCenter({
         pendingChoices: (structured.PENDING_CHOICES as Array<Record<string, unknown>> | undefined) ?? [],
