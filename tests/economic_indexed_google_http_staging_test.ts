@@ -1,3 +1,6 @@
+import {commitIndexedWageStaging,type IndexedWageContract} from "../src/economic_indexed_wage_kv.ts";
+import {listIndexedQueuePage,indexedQueueShardForTx,
+  pruneVerifiedIndexedQueuePointer} from "../src/economic_indexed_outbox_queue.ts";
 import {wrapDenoAtomicEconomyKv} from "../src/economic_deno_kv_adapter.ts";
 import {indexedEc06Keys,type IndexedOutbox} from "../src/economic_indexed_wholesale_kv.ts";
 import {
@@ -280,4 +283,155 @@ Deno.test("source staging adapter refuses live Sheets/Docs, unplanned item and c
     catch{invalid=true}
     if(!invalid)throw Error("Two distinct physical economic rows shared one Google slot");
   }finally{db.close()}
+});
+
+/**
+ * One-shot full staging chain:
+ * independently mocked/source-scoped funded genesis -> REAL indexed KV wage
+ * reserve + immutable journal + queue in one CAS -> emulated crash before
+ * projection -> bounded queue discovery -> actual fenced transport adapter ->
+ * independent Sheets/Docs readback -> ACK -> CAS queue prune and replay.
+ *
+ * Google transport here is MockGoogleApi, NOT the external Google service.
+ * Runtime uses Deno.openKv(":memory:"), NEVER production keys or Shura.
+ */
+async function committedQueuedReserveFixture() {
+  const db=await Deno.openKv(":memory:");
+  const sourceMigration="proof.fixture.isolated_funding_e2e";
+  const signed="proof.fixture.accepted_contract";
+  const acceptance="proof.fixture.source_real_wage";
+  const contract:IndexedWageContract={
+    demandId:"demand.fixture.job",employerAccountId:owner,
+    workerAccountId:worker,agreedCopper:30,
+    sourceContractRef:signed,dueGameMinute:100,
+  };
+  const home=(entityId:string)=>({
+    schema:"EC06_INDEX_HOME_V1" as const,kind:"account" as const,
+    entityId,scopeId:scope,sourceProofRef:"proof.fixture.isolated_actor",
+  });
+  try {
+    await Promise.all([
+      db.set(indexedEc06Keys.seal(scope),{
+        schema:"EC06_INDEX_MIGRATION_V1",scopeId:scope,
+        state:"STAGING_INDEXED_ONLY",originalSaveId:"V2-ISOLATED-TEST",
+        independentlyVerifiedMigrationRef:sourceMigration,
+        originalSourceFingerprint:"fixture.nonproduction_genesis",
+      }),
+      db.set(indexedEc06Keys.home("account",owner),home(owner)),
+      db.set(indexedEc06Keys.home("account",worker),home(worker)),
+      db.set(indexedEc06Keys.account(scope,owner),payerBefore),
+      db.set(indexedEc06Keys.account(scope,worker),workerBefore),
+    ]);
+    const kv=wrapDenoAtomicEconomyKv(db);
+    const reserve=()=>commitIndexedWageStaging(kv,{
+      scopeId:scope,
+      event:{kind:"RESERVE",txId:tx,escrowId:escrow,
+        contract,sourceEvidenceRef:acceptance},
+      authority:{
+        nowGameMinute:0,
+        migrationProofRefs:new Set([sourceMigration]),
+        sourceEvidenceRefs:new Set([signed,acceptance]),
+        actualAcceptedContracts:new Map([[contract.demandId,contract]]),
+        acceptedReservationProofByDemand:new Map([[contract.demandId,acceptance]]),
+        verifiedCompletedProofByDemand:new Map(),
+        verifiedCancelledProofByDemand:new Map(),
+      },
+    });
+    const first=await reserve();
+    if(first.kind!=="INDEXED_WAGE_COMMITTED_STAGING")
+      throw Error("Actual indexed wage reserve did not commit once");
+    const persisted=(await db.get<IndexedWageJournal>(
+      indexedEc06Keys.journal(tx) as Deno.KvKey)).value;
+    if(!persisted||JSON.stringify(persisted)!==JSON.stringify(journal))
+      throw Error("Primary canonical journal differs from projected wage intent");
+    // The real wage function must have written the pointer in the very same CAS.
+    const shard=indexedQueueShardForTx(tx);
+    const queued=await listIndexedQueuePage({db,scopeId:scope,shard,limit:2});
+    if(queued.entries.length!==1||queued.entries[0].txId!==tx)
+      throw Error("Crash window lost committed transaction's queue pointer");
+    const employer=(await db.get<EconomicAccount>(
+      indexedEc06Keys.account(scope,owner) as Deno.KvKey)).value;
+    const staff=(await db.get<EconomicAccount>(
+      indexedEc06Keys.account(scope,worker) as Deno.KvKey)).value;
+    if(employer?.availableCopper!==40||employer.heldCopper!==30||
+       staff?.availableCopper!==0||
+       employer.availableCopper+employer.heldCopper+staff.availableCopper!==70)
+      throw Error("Primary indexed KV lost/minted isolated starting copper");
+    // A new adapter instance represents worker restart after the Deno KV commit.
+    const api=new MockGoogleApi();
+    const adapter=makeIsolatedIndexedGoogleHttpAdapter({
+      stagingSpreadsheetId:sheetId,stagingDocumentId:docId,
+      rowsSheetId:73,receiptsSheetId:74,
+      scopeId:scope,slots:rowPlan,kv,httpJson:api.request.bind(api),
+    });
+    return {db,kv,api,adapter,reserve,shard};
+  }catch(e){
+    db.close();
+    throw e;
+  }
+}
+Deno.test("one-shot E2E: true KV wage CAS -> durable sharded queue -> fenced mocked-Google dual projection -> ACK/prune/replay",async()=>{
+  const {db,kv,api,adapter,reserve,shard}=await committedQueuedReserveFixture();
+  try {
+    if(api.sheetBatchCalls||api.docsBatchCalls)
+      throw Error("Google was touched before hypothetical worker restart");
+    await rejects(()=>pruneVerifiedIndexedQueuePointer({
+      db,scopeId:scope,txId:tx}),"pending primary outbox prune");
+    const written=await reconcileIndexedDeltaStaging({
+      kv,adapter,scopeId:scope,txId:tx,
+    });
+    if(written.state!=="PROJECTED_INDEXED"||
+       api.sheetBatchCalls!==1||api.docsBatchCalls!==1||
+       api.lastSheetRequestCount!==3)
+      throw Error("End-to-end target projection did not write both targets exactly once");
+    for(const target of ["TEMP_RUNTIME","LIVE_TRANSACTION_ARCHIVE"] as const){
+      const receipt=await adapter.readReceipt(target,scope,tx);
+      if(receipt?.journalHash!==written.intent.journalHash||receipt.txId!==tx)
+        throw Error("Projection receipt is not bound to immutable source SHA-256");
+    }
+    const row=(await adapter.readRows("TEMP_RUNTIME",scope,[
+      {kind:"account",id:owner},{kind:"escrow",id:escrow},
+    ]));
+    if((row[0].value as EconomicAccount).heldCopper!==30||
+       (row[1].value as {state:string}).state!=="RESERVED")
+      throw Error("Authenticated transport readback did not preserve wager source state");
+    const old=await reserve();
+    const again=await reconcileIndexedDeltaStaging({kv,adapter,scopeId:scope,txId:tx});
+    if(old.kind!=="IDEMPOTENT_REPLAY"||
+       again.state!=="ALREADY_PROJECTED_INDEXED"||
+       api.sheetBatchCalls!==1||api.docsBatchCalls!==1)
+      throw Error("Retry created duplicate economic/GDocs projection");
+    if(await pruneVerifiedIndexedQueuePointer({db,scopeId:scope,txId:tx})!=="PRUNED")
+      throw Error("Confirmed indexed outbox did not allow bounded queue reclamation");
+    if((await listIndexedQueuePage({db,scopeId:scope,shard,limit:2})).entries.length||
+       !(await db.get(indexedEc06Keys.journal(tx) as Deno.KvKey)).value||
+       !(await db.get(indexedEc06Keys.outbox(tx) as Deno.KvKey)).value)
+      throw Error("Pruning deleted source journal/outbox or left duplicate queue entry");
+  } finally {db.close()}
+});
+Deno.test("one-shot E2E outage: real committed money survives Google Docs failure, no retry/unlock/prune",async()=>{
+  const {db,kv,api,adapter,shard}=await committedQueuedReserveFixture();
+  try{
+    api.failBeforeDocs=true;
+    await rejects(()=>reconcileIndexedDeltaStaging({
+      kv,adapter,scopeId:scope,txId:tx,
+    }),"Google Docs unavailable after Sheets projection");
+    if(api.sheetBatchCalls!==1||api.docsBatchCalls!==0||
+       (await adapter.readReceipt("TEMP_RUNTIME",scope,tx))?.txId!==tx)
+      throw Error("Ambiguous partial external outage lost Sheets durable receipt");
+    await rejects(()=>reconcileIndexedDeltaStaging({
+      kv,adapter,scopeId:scope,txId:tx,
+    }),"Google HELD lock illegally stolen for duplicate projection");
+    await rejects(()=>pruneVerifiedIndexedQueuePointer({
+      db,scopeId:scope,txId:tx}),"unresolved partial Google projection reclaimed");
+    const p=(await db.get<{state:string}>(
+      indexedEc06Keys.outbox(tx) as Deno.KvKey)).value;
+    const employer=(await db.get<EconomicAccount>(
+      indexedEc06Keys.account(scope,owner) as Deno.KvKey)).value;
+    if(p?.state!=="PENDING_INDEXED_PROJECTION"||
+       employer?.availableCopper!==40||employer?.heldCopper!==30||
+       api.sheetBatchCalls!==1||
+       (await listIndexedQueuePage({db,scopeId:scope,shard,limit:2})).entries.length!==1)
+      throw Error("Failure path duplicated reserves or lost primary queued intent");
+  } finally {db.close()}
 });
