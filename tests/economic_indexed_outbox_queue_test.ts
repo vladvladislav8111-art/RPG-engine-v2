@@ -11,8 +11,8 @@ const txName=(i:number)=>"tx.fixture.independent_"+String(i).padStart(5,"0");
 function journal(txId:string):IndexedJournal{
   return {schema:"EC06_INDEX_SALE_JOURNAL_V1",txId,scopeId,
     sourceOrderId:txId,deliveredReceiptRef:"proof.fixture.delivery_001",
-    accountDeltas:[{id:"account.fixture.test",before:{availableCopper:10},
-      after:{availableCopper:9}}],lotDeltas:[],grossCopper:1,units:1};
+    accountDeltas:[{id:"account.fixture.test",before:{accountId:"account.fixture.test",availableCopper:10,heldCopper:0},
+      after:{accountId:"account.fixture.test",availableCopper:9,heldCopper:0}}],lotDeltas:[],grossCopper:1,units:1};
 }
 async function seed(db:Deno.Kv,txId:string){
   const registration=makeIndexedQueueRegistration(
