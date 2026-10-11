@@ -4,6 +4,7 @@ import * as z from "npm:zod@4.6.5/v4";
 import { commitTurn, prepareCommit } from "./commit.ts";
 import { config } from "./config.ts";
 import { getTurnContext } from "./context.ts";
+import { bridgeFeatureStatus } from "./bridge_integration.ts";
 import { sheetsBatchGet } from "./google.ts";
 import { getHudSnapshot, HUD_HTML, HUD_RESOURCE_URI, HUD_UI_VERSION } from "./hud.ts";
 import {
@@ -430,6 +431,7 @@ function buildServer() {
         ok: true,
         engineVersion: RULESET_VERSION,
         architectureVersion: "world-automation-v2",
+        bridgeIntegration:bridgeFeatureStatus(),
         worldSimulationV3: config.worldSimV3Enabled ? "READ_ONLY_PROPOSALS" : "DISABLED",
         hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
