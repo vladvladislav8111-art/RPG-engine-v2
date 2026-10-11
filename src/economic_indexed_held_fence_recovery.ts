@@ -30,8 +30,8 @@ export type ReviewedIndexedLock={
   originalVersionstamp:string;
 };
 export type IndependentQuiescenceEvidence={
-  workerTerminatedAndNoInflightWrites:true;
-  allOtherGoogleWritersExcluded:true;
+  workerTerminatedAndNoInflightWrites:boolean;
+  allOtherGoogleWritersExcluded:boolean;
   resourceId:string;
   incidentProofRef:string;
 };
