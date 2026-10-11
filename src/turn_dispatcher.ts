@@ -66,7 +66,7 @@ export function buildTurnBrief(input: {
   const pendingChoices = input.pendingChoices
     .filter((r) => {
       const status = field(r, "Status").toUpperCase();
-      return status.startsWith("PENDING") || status === "OPEN";
+      return status.startsWith("PENDING") || status === "OPEN" || status === "AWAITING_CHOICE";
     })
     .map((r) => ({
       choiceId: field(r, "Choice ID"),
