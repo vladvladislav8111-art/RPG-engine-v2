@@ -261,9 +261,6 @@ export async function getTurnContext(input: TurnContextRequest) {
   );
   const routeSaveId = String(findControl(routingControlRows, "save_id") ?? "");
   const tagSet = new Set((input.tags ?? []).map((t) => t.toUpperCase()));
-  const memoryRoute = chooseMemoryRoute({turnClass:input.turnClass,tags:input.tags??[],
-    actorIds:input.actorIds,actorRefs:input.actorRefs,
-    docQueriesCount:input.docQueries?.length??0,lookupsCount:input.lookups?.length??0});
   const wantsSystemInbox = hasAny(tagSet, ["NOTIFICATIONS", "INBOX", "SYSTEM_INBOX", "ALERTS"]);
   const sourceContacts = rowsToObjects(sceneRouting["SYSTEM_CONTACTS_CURRENT!A1:J200"] ?? []);
   const requestedActorIds = [...new Set([
@@ -271,6 +268,9 @@ export async function getTurnContext(input: TurnContextRequest) {
     ...contactActorIdsForRequest(input.tags ?? [], sourceContacts),
   ])];
   const actorRefs = input.actorRefs ?? [];
+  const memoryRoute = chooseMemoryRoute({turnClass:input.turnClass,tags:input.tags??[],
+    actorIds:requestedActorIds,actorRefs,
+    docQueriesCount:input.docQueries?.length??0,lookupsCount:input.lookups?.length??0});
   const explicitActorRequest = requestedActorIds.length > 0 || actorRefs.length > 0;
   const requireNpcContextGate = input.requireNpcContextGate ?? explicitActorRequest;
   const recentChatLimit = Math.max(0, Math.min(20, Math.floor(input.recentChatLimit ?? 8)));
@@ -278,10 +278,10 @@ export async function getTurnContext(input: TurnContextRequest) {
   const docQueries = input.docQueries ?? [];
   const needsInventory = hasAny(tagSet, ["ITEM", "INVENTORY", "PURCHASE", "SALE", "CONSUME", "COMBAT", "CRAFT", "SURVIVAL", "STORAGE", "EQUIPMENT"]);
   const needsLocalWorldContext = hasAny(tagSet, [
-    "SERVICES", "SOCIAL", "ECONOMY", "WORK", "JOB", "BOARD", "TRAVEL", "MAP", "EXPLORATION",
+    "SERVICES", "ECONOMY", "WORK", "JOB", "BOARD", "TRAVEL", "MAP", "EXPLORATION",
     "LAW", "WEAPON", "MAGIC", "RELIGION", "TEMPLE", "FOOD", "MEAL", "EAT", "SHOP", "LODGING",
     "REST", "SLEEP", "COURIER", "MESSAGE", "BATH", "HYGIENE", "FACTION", "POLITICS", "AREA_PREP",
-    "GUILD", "CRAFT", "NPC", "DIVINE", "GOD", "PRAYER", "EIRAN", "VEIRA", "SEREN", "SELVARA",
+    "GUILD", "CRAFT", "DIVINE", "GOD", "PRAYER", "EIRAN", "VEIRA", "SEREN", "SELVARA",
     "NERETH", "LORVEN", "KHARAD", "ULMAR", "SCENE", "AMBIENT", "RUMOR", "REPUTATION", "CRIME",
     "THREAT", "OBSERVE", "LOOK",
   ]);
@@ -862,7 +862,20 @@ export async function getTurnContext(input: TurnContextRequest) {
       resourceDetails,
       worldContinuity,
       worldActionDocket,
-      memoryRoute,
+      memoryRoute:{
+        ...memoryRoute,
+        actualSourceReads:{
+          actorBounded:boundedActorLoad!=null,
+          actorCount:resolvedActorIds.length,
+          archiveLookups:archiveReadPlan.length,
+          canonRegistryCount:pregenRequests.length,
+          targetedDocQueries:docQueries.length,
+          targetedSheetLookups:lookups.length,
+        },
+        deepNpcContextReady:!memoryRoute.reasons.some(r=>r.id==="NPC_CONTEXT") ||
+          npcContextGate.readyForSubstantiveReply,
+        autoSourceRouting:true,
+      },
       worldTickPlan: input.plannedElapsedSeconds != null || hasAny(tagSet, ["WORLD","WAIT","REST","SLEEP","TRAVEL","WORK","CRAFT","NPC_LIFE"])
         ? planIndependentWorldTick({saveId,worldDay:Number(worldDay),worldTime:String(worldTime),
           elapsedSeconds:input.plannedElapsedSeconds??0,sparse:continuityRanges}) : null,
