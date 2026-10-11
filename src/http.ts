@@ -5,6 +5,7 @@ import { sheetsBatchGet } from "./google.ts";
 import { HUD_UI_VERSION } from "./hud.ts";
 import { diagnoseMcp, handleMcp } from "./mcp.ts";
 import { intBetween } from "./rng.ts";
+import { readRpgKvAttachmentCanary, createRpgKvAttachmentCanaryOnce } from "./kv_attachment_probe.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import type { CommitRequest, TurnContextRequest } from "./types.ts";
 
@@ -51,6 +52,54 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
 
     if (pathname.startsWith("/diag/") && !authorized(req)) {
       return json({ error: "unauthorized" }, 401);
+    }
+
+    if (pathname === "/diag/kv" && req.method === "GET") {
+      // No memory-cache fallback: prove only that the deployed process can
+      // OPEN and READ its current environment's Deno KV attachment.
+      if (!config.enableKv) return json({ ok: false, reason: "kv_disabled" }, 503);
+      try {
+        const kv = await Deno.openKv();
+        try {
+          const canary = await readRpgKvAttachmentCanary(kv);
+          return json({
+            ok: true,
+            kvReadSucceeded: true,
+            deployDetected: Deno.env.get("DENO_DEPLOY") === "1",
+            appSlug: Deno.env.get("DENO_DEPLOY_APP_SLUG") ?? null,
+            revisionId: Deno.env.get("DENO_DEPLOY_REVISION_ID") ?? null,
+            canary,
+            persistentAcrossRevisionsVerified: false,
+          });
+        } finally {
+          kv.close();
+        }
+      } catch {
+        return json({ ok: false, reason: "kv_unavailable" }, 503);
+      }
+    }
+
+    if (pathname === "/diag/kv/canary" && req.method === "POST") {
+      // Synthetic ONE-KEY test is explicitly opt-in. Attaching a KV in the
+      // console does not imply consent for test writes into live runtime.
+      if (!config.enableKv || Deno.env.get("RPG_KV_DIAG_ALLOW_WRITE") !== "true") {
+        return json({ ok: false, reason: "canary_write_disabled" }, 403);
+      }
+      try {
+        const kv = await Deno.openKv();
+        try {
+          const canary = await createRpgKvAttachmentCanaryOnce(kv);
+          return json({
+            ok: true,
+            ...canary,
+            next: "Re-read GET /diag/kv after deploying a new revision on the SAME timeline",
+          });
+        } finally {
+          kv.close();
+        }
+      } catch {
+        return json({ ok: false, reason: "kv_canary_unavailable" }, 503);
+      }
     }
 
     if (pathname === "/diag/context" && req.method === "GET") {
