@@ -12,7 +12,7 @@ const str=(x:unknown)=>String(x??"").trim();
 function asStamp(x:string):number|null{
  const m=x.match(/^Day\s*(\d+)\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/i);
  if(!m)return null;
- const [day,h,min,sec]=m.slice(1).map(Number);
+ const day=Number(m[1]),h=Number(m[2]),min=Number(m[3]),sec=Number(m[4]??0);
  if(day<1||h>23||min>59||sec>59)return null;
  return day*86400+h*3600+min*60+sec;
 }
@@ -24,10 +24,10 @@ function records(rows:Rows):Record<string,unknown>[]{
 export function auditPreparedTurn(input:AuditInput){
  const fail=(reason:string)=>{throw Error("TURN_INTEGRITY_AUDIT:"+reason)};
  if(!input.txId)fail("TX_ID_MISSING");
- if(!Number.isSafeInteger(input.elapsedSeconds)||input.elapsedSeconds<0)fail("INVALID_DURATION");
+ if(!Number.isFinite(input.elapsedSeconds)||input.elapsedSeconds<0)fail("INVALID_DURATION");
  const before=asStamp("Day"+input.oldDay+" "+input.oldTime);
  const after=asStamp("Day"+input.newDay+" "+input.newTime);
- if(before===null||after===null||after-before!==input.elapsedSeconds)
+ if(before===null||after===null||after-before!==Math.round(input.elapsedSeconds))
    fail("WORLD_CLOCK_ADVANCE_MISMATCH");
  const sessionBefore=asStamp(input.sessionStart),sessionAfter=asStamp(input.sessionEnd);
  // A committed session cannot disguise time or jump to another day.
