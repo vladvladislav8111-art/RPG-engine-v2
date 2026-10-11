@@ -182,8 +182,13 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   });
   // A paid offer cannot be created from an NPC salary without a live financial writer.
   // This is deliberately more restrictive than source-only V3 proposals.
-  if ((semantic.workDemandEvents?.length??0)>0 && !config.ec06FundedOffersWriterReady)
-    throw Error("EC06_FUNDED_OFFERS_WRITER_NOT_ATTESTED");
+  if ((semantic.workDemandEvents?.length??0)>0) {
+    if (!config.ec06FundedOffersWriterReady)
+      throw Error("EC06_FUNDED_OFFERS_WRITER_NOT_ATTESTED");
+    // The config flag does not attest specific accounts, escrow or protected
+    // KV transaction. Explicit source proof must be implemented before cutover.
+    throw Error("EC06_PER_OFFER_LEDGER_ESCROW_ATTESTATION_NOT_YET_IMPLEMENTED");
+  }
   const touched = new Set<RuntimeTableName>([
     "CONTROL",
     "PLAYER_RESOURCES",
