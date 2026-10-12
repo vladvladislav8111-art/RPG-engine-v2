@@ -35,6 +35,7 @@ export function scrubCallerHeatProvenance(
   for (const key of [
     "engineNpcAttentionReceipts", "engineNpcReceiptIntegrity",
     "engineNpcReceiptDigest", "engineNpcReceiptEpoch",
+    "engineNpcReceiptChain", "engineNpcEpochGenesis",
   ]) delete out[key];
   return out;
 }

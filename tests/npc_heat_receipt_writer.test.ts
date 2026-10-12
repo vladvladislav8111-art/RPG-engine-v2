@@ -88,6 +88,8 @@ Deno.test("Caller-controlled engine provenance cannot overwrite derived receipt"
     normal: true, engineNpcAttentionReceipts: [{eventId: "forged"}],
     engineNpcReceiptDigest: "forged", engineNpcReceiptEpoch: "forged",
     engineNpcReceiptIntegrity: "forged",
+    engineNpcReceiptChain: {epochId:"TEST-FAKE",sequence:0,previousDigest:"GENESIS"},
+    engineNpcEpochGenesis: "forged",
   });
   assert.deepEqual(clean, {normal: true});
   assert.equal(scrubCallerHeatProvenance(["forged"]), null);
