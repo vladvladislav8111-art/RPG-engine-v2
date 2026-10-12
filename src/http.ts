@@ -6,6 +6,11 @@ import { sheetsBatchGet } from "./google.ts";
 import { HUD_UI_VERSION } from "./hud.ts";
 import { diagnoseMcp, handleMcp } from "./mcp.ts";
 import { intBetween } from "./rng.ts";
+import {
+  previewKvGate, previewKvSession, previewKvStatus, previewKvHold,
+  previewKvContend, PREVIEW_KV_PAGE,
+  PREVIEW_KV_SETUP_PAGE, isPreviewTimeline, previewKvGateChecks,
+} from "./preview_kv_probe.ts";
 import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
 import type { WorldV3BatchRequest } from "./world_sim_v3/runtime_facade.ts";
 import { RULESET_VERSION } from "./rules.ts";
@@ -129,6 +134,60 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
 
     if (pathname === "/diag/mcp" && req.method === "GET") {
       return json(await diagnoseMcp());
+    }
+
+    // Authenticated synthetic KV-only probe. Never reaches Google writer.
+    const timeline=(globalThis as unknown as {
+      Deno?: {env?: {get?: (name:string)=>string|undefined}};
+    }).Deno?.env?.get?.("DENO_TIMELINE") ?? "";
+    const previewKvInput={
+      timeline,enabled:config.previewKvRaceEnabled,
+      writesEnabled:config.allowWrites,rawWritesEnabled:config.allowRawCommits,
+      npcHeatWriterEnabled:config.npcHeatTestWriterEnabled,
+      kvEnabled:config.enableKv,configuredWorkbookId:config.files.TEMP_RUNTIME,
+      isolatedWorkbookId:config.npcHeatTestWorkbookId,
+    };
+    const previewKvAllowed=previewKvGate(previewKvInput);
+    if (pathname==="/preview/kv-race/setup" && req.method==="GET") {
+      if(!isPreviewTimeline(timeline)) return json({error:"not_found"},404);
+      return new Response(PREVIEW_KV_SETUP_PAGE,{headers:{
+        "content-type":"text/html; charset=utf-8",
+        "cache-control":"no-store",
+        "referrer-policy":"no-referrer",
+        "content-security-policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      }});
+    }
+    if (pathname==="/preview/kv-race/diagnostics" && req.method==="GET") {
+      if(!isPreviewTimeline(timeline)) return json({error:"not_found"},404);
+      if(!authorized(req)) return json({error:"unauthorized"},401);
+      const checks=previewKvGateChecks(previewKvInput);
+      return json({testOnly:true,ready:previewKvAllowed,
+        checks,failedChecks:Object.entries(checks).filter(([,pass])=>!pass).map(([key])=>key),
+        googleCallsPerformed:0,kvWritesPerformed:0,
+      });
+    }
+    if (pathname.startsWith("/preview/kv-race")) {
+      if (!previewKvAllowed) return json({error:"not_found"},404);
+      if (pathname==="/preview/kv-race" && req.method==="GET") {
+        return new Response(PREVIEW_KV_PAGE,{headers:{
+          "content-type":"text/html; charset=utf-8",
+          "cache-control":"no-store",
+          "referrer-policy":"no-referrer",
+          "content-security-policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        }});
+      }
+      if (!authorized(req))return json({error:"unauthorized"},401);
+      if (pathname==="/preview/kv-race/status" && req.method==="GET")
+        return json(await previewKvStatus(previewKvSession(url.searchParams.get("session"))));
+      if (req.method==="POST" &&
+          (pathname==="/preview/kv-race/hold"||pathname==="/preview/kv-race/contend")) {
+        if(Number(req.headers.get("content-length")??"0")>2048)
+          return json({error:"request_too_large"},413);
+        const session=previewKvSession((await body<{sessionId?:unknown}>(req)).sessionId);
+        return json(pathname.endsWith("/hold")
+          ? await previewKvHold(session) : await previewKvContend(session));
+      }
+      return json({error:"not_found"},404);
     }
 
     if (pathname === "/mcp") {
