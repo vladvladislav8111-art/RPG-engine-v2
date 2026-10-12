@@ -1,4 +1,5 @@
-import { cacheGet, cacheSet } from "./cache.ts";
+import { cacheGet, cacheSet, requireWriterKv } from "./cache.ts";
+import { withKvWriterLease } from "./writer_kv_lease.ts";
 import { config } from "./config.ts";
 import { docsAppendIdempotent, sheetsBatchGet, sheetsBatchUpdate } from "./google.ts";
 import { prepareSemanticCommit } from "./semantic.ts";
@@ -61,6 +62,16 @@ export async function commitTurn(input: CommitRequest) {
     throw new Error("Raw commits are disabled. Ordinary gameplay must use semantic commits; set ALLOW_RAW_COMMITS=true only for deliberate migration/repair.");
   }
 
+  if(config.kvWriterLeaseEnabled && !input.dryRun){
+    const kv=await requireWriterKv();
+    // Acquire before prepare; two writers cannot both prepare the same snapshot.
+    return await withKvWriterLease({kv,workbookId:config.files.TEMP_RUNTIME,
+      txId:input.txId,action:()=>commitTurnUnlocked(input)});
+  }
+  return await commitTurnUnlocked(input);
+}
+
+async function commitTurnUnlocked(input:CommitRequest) {
   const started = performance.now();
   const prepared: any = await prepareCommit(input);
   if (input.dryRun) return { ...prepared, committed: false };

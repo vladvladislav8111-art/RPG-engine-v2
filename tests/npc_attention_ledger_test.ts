@@ -24,9 +24,12 @@ Deno.test("NPC heat journals only grounded actor events, deduplicates replay, an
   const row=Object.fromEntries(NPC_HEAT_INDEX_COLUMNS.map(k=>[k,""])) as Record<string,unknown>;
   Object.assign(row,{"NPC ID":"npc.test","Profile Tier":profile.profileTier,
     "Last Relevant Day":67,"Last Relevant Time":"17:23:00",
-    "Last Evidence TX":"TEST-T1","Last Stimulus JSON":JSON.stringify(profile.lastStimulus)});
+    "Last Evidence TX":"TEST-T1","Source Save ID":"TEST-S1",
+    "Last Stimulus JSON":JSON.stringify(profile.lastStimulus)});
   assertEquals(readNpcHeatIndex(row,67,"17:30:00","RECURRING","TEST-S1")?.activeTier,1);
   assertEquals(readNpcHeatIndex(row,68,"17:23:00","RECURRING","TEST-S2")?.activeTier,0);
+  assertEquals(readNpcHeatIndex(row,67,"17:30:00","RECURRING","TEST-S2")?.activeTier,0);
+  assertEquals(readNpcHeatIndex(row,67,"17:30:00","RECURRING","TEST-S2")?.sourceSaveId,"TEST-S1");
   assertEquals(readNpcHeatIndex(row,68,"17:23:00","KEY","TEST-S2")?.activeTier,5);
   const collision=[...rows,["TEST-T1",JSON.stringify({engineNpcAttentionReceipts:
     [{...receipts[0],meaningfulEvidence:"changed"}]})]];

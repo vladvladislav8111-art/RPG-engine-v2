@@ -26,6 +26,8 @@ export const config = {
   worldSimV3Enabled: (rawEnv("WORLD_SIM_V3_ENABLED") ?? "true").toLowerCase() === "true",
   // Requires an owner-created NPC_ATTENTION_CURRENT tab and isolated writer E2E before activation.
   npcAttentionIndexEnabled: (rawEnv("RPG_NPC_ATTENTION_INDEX_ENABLED") ?? "false").toLowerCase() === "true",
+  // An optional distributed commit lease. Disabled pending real Google/KV fencing E2E.
+  kvWriterLeaseEnabled: (rawEnv("RPG_KV_WRITER_LEASE_ENABLED") ?? "false").toLowerCase() === "true",
   // Off until the owner-approved ACK tab exists in the one authoritative TEMP workbook.
   systemNotificationAckEnabled: (rawEnv("RPG_SYSTEM_NOTIFICATION_ACK_ENABLED") ?? "false").toLowerCase() === "true",
   // Enable after the existing Bridge is updated to supply source-backed zero/award reviews.

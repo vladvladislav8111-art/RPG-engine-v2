@@ -125,9 +125,13 @@ export function readNpcHeatIndex(row:Record<string,unknown>|undefined,
         now-minute(parsed.day,parsed.time)!<=60)lastStimulus=parsed;
     }catch{/* Invalid optional hint is never an attested stimulus. */}
   }
+  const indexSaveId=String(row["Source Save ID"]??"");
+  // A row verified on a previous save remains historical evidence, but cannot
+  // impersonate a source-current read projection after another commit.
+  const sourceCurrent=indexSaveId===liveSaveId;
   return {schema:"NPC_HEAT_RUNTIME_INDEX_V1" as const,actorId:row["NPC ID"],
-    profileTier:key?5:profile,activeTier:key?5:recent?profile:0,
-    sourceSaveId:liveSaveId,sourceTxId:row["Last Evidence TX"],recent,
+    profileTier:key?5:profile,activeTier:key?5:sourceCurrent&&recent?profile:0,
+    sourceSaveId:indexSaveId,sourceCurrent,sourceTxId:row["Last Evidence TX"],recent,
     lastStimulus,derivedFrom:"COMMITTED_RUNTIME_SHEET_AND_SESSION_RECEIPTS" as const,
     affectionInferred:false as const,keyPromotionAutomatic:false as const};
 }
