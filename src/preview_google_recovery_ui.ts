@@ -18,8 +18,25 @@ pre{padding:16px;white-space:pre-wrap;overflow-wrap:anywhere;background:#263449}
 <label>Действующий Bearer-ключ (введите здесь, не присылайте в чат)
 <input id="secret" type="password" autocomplete="off" spellcheck="false"></label>
 <button type="button" id="go">Сверить TEST-транзакцию</button>
+<button type="button" id="lost">Сверить прерванную запись TEST-S4 (только чтение)</button>
 <pre id="result">Проверка не запускалась.</pre>
 <script>
+
+document.querySelector("#lost").addEventListener("click",async()=>{
+ const button=document.querySelector("#lost"),out=document.querySelector("#result");
+ const secret=document.querySelector("#secret").value;
+ document.querySelector("#secret").value="";
+ button.disabled=true;
+ try{
+  const res=await fetch("/preview/google-recovery/ack-drop",{
+   method:"GET",cache:"no-store",referrerPolicy:"no-referrer",
+   headers:{"authorization":"Bearer "+secret}
+  });
+  out.textContent="HTTP "+res.status+String.fromCharCode(10)+
+   JSON.stringify(await res.json(),null,2);
+ }catch(e){out.textContent="Ошибка: "+String(e);}
+ finally{button.disabled=false;}
+});
 document.querySelector("#go").addEventListener("click",async()=>{
  const btn=document.querySelector("#go"),out=document.querySelector("#result");
  const secret=document.querySelector("#secret").value;

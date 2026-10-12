@@ -11,6 +11,7 @@ import { sheetsBatchGet } from "./google.ts";
 import { HUD_UI_VERSION } from "./hud.ts";
 import { diagnoseMcp, handleMcp } from "./mcp.ts";
 import { intBetween } from "./rng.ts";
+import {readAckDropForensics} from "./preview_google_ack_drop_report.ts";
 import {ackDropGate,runAckDropTest} from "./preview_google_ack_drop_runner.ts";
 import {PREVIEW_ACK_DROP_PAGE} from "./preview_google_ack_drop_ui.ts";
 import {fixedRecoveryGate,readFixedRecovery} from "./preview_google_recovery.ts";
@@ -241,6 +242,19 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
         "referrer-policy":"no-referrer",
         "content-security-policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
       }});
+    }
+    if(pathname==="/preview/google-recovery/ack-drop" &&
+        req.method==="GET"){
+      if(!fixedRecoveryGate({
+        timeline,tempId:config.files.TEMP_RUNTIME,
+        testWorkbookId:config.npcHeatTestWorkbookId,
+        docs:config.files,allowWrites:config.allowWrites,
+        rawWrites:config.allowRawCommits,
+        writerEnabled:config.npcHeatTestWriterEnabled,
+        kvEnabled:config.enableKv,
+      }))return json({error:"not_found"},404);
+      if(!authorized(req))return json({error:"unauthorized"},401);
+      return json(await readAckDropForensics());
     }
     if(pathname==="/preview/google-recovery/report" && req.method==="GET"){
       if(!fixedRecoveryGate({
