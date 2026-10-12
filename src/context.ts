@@ -12,6 +12,12 @@ import { buildWorldActionDocket } from "./world_scheduler.ts";
 import { ACHIEVEMENT_CATALOG_COUNTS } from "./world_sim_v3/achievement_catalog.ts";
 import { resolveSceneActorIds } from "./scene_routing.ts";
 import { buildNpcBehavioralContext } from "./npc_behavior.ts";
+import { buildTurnBrief, contactActorIdsForRequest } from "./turn_dispatcher.ts";
+import { buildTurnTriage } from "./turn_triage.ts";
+import { planNpcInitiativeV4 } from "./npc_initiative_v4.ts";
+import { reviewNpcRoutineCadence } from "./npc_cadence_review.ts";
+import { shouldLoadSceneActors, sourceReadBudgetNotice } from "./context_hotpath_budget.ts";
+import { buildSystemNotificationCenter } from "./system_notification_center.ts";
 import { projectNpcHeatContextShadow } from "./npc_heat_context_adapter.ts";
 import { chooseMemoryRoute } from "./context_memory_router.ts";
 import { planIndependentWorldTick } from "./world_tick_dispatcher.ts";
@@ -253,7 +259,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   // The current scene actors are derived routing hints, bounded to the latest
   // authoritative CONTROL scene/location. The cache cannot override the save.
   const sceneRouting = await sheetsBatchGet(config.files.TEMP_RUNTIME, [
-    "CONTROL!A1:D12", "ACTIVE_CONTEXT!A1:F15",
+    "CONTROL!A1:D12", "ACTIVE_CONTEXT!A1:F15", "SYSTEM_CONTACTS_CURRENT!A1:J200",
   ]);
   const routingControlRows = sceneRouting["CONTROL!A1:D12"] ?? [];
   const routedSceneActorIds = resolveSceneActorIds(
@@ -261,7 +267,19 @@ export async function getTurnContext(input: TurnContextRequest) {
   );
   const routeSaveId = String(findControl(routingControlRows, "save_id") ?? "");
   const tagSet = new Set((input.tags ?? []).map((t) => t.toUpperCase()));
-  const requestedActorIds = [...new Set([...(input.actorIds ?? []), ...routedSceneActorIds])];
+  const wantsSystemInbox = ["SYSTEM_INBOX", "INBOX", "NOTIFICATIONS", "ALERTS"].some(t => tagSet.has(t));
+  const sourceContacts = rowsToObjects(sceneRouting["SYSTEM_CONTACTS_CURRENT!A1:J200"] ?? []);
+  const sceneLoadPolicy = shouldLoadSceneActors({
+    turnClass: input.turnClass, tags: input.tags ?? [],
+    explicitActorIds: input.actorIds, actorRefs: input.actorRefs,
+    requireNpcContextGate: input.requireNpcContextGate,
+  });
+  const sceneActorsForContext = sceneLoadPolicy.loadSceneActors ? routedSceneActorIds : [];
+  const contactRoutingTags = wantsSystemInbox ? [...(input.tags ?? []), "CONTACTS"] : input.tags ?? [];
+  const requestedActorIds = [...new Set([
+    ...(input.actorIds ?? []), ...sceneActorsForContext,
+    ...contactActorIdsForRequest(contactRoutingTags, sourceContacts),
+  ])];
   const actorRefs = input.actorRefs ?? [];
   const memoryRoute = chooseMemoryRoute({turnClass:input.turnClass,tags:input.tags??[],
     actorIds:requestedActorIds,actorRefs,
@@ -305,6 +323,8 @@ export async function getTurnContext(input: TurnContextRequest) {
     }
     if (!structuredNames.includes(name)) structuredNames.push(name);
   };
+  addStructured("PENDING_CHOICES"); // Preexisting hot-state milestones; never decide for Shura.
+  if (wantsSystemInbox) addStructured("PROGRESSION_EVENTS"); // Only explicit Inbox requests.
 
   if (hasAny(tagSet, ["SKILL", "WORK", "LANGUAGE", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY", "TRAINING", "SPECIALIZATION", "DEXTERITY", "HANDS"])) {
     addStructured("SPECIALIZATIONS");
@@ -452,6 +472,11 @@ export async function getTurnContext(input: TurnContextRequest) {
     hasAny(tagSet, ["WORLD","WAIT","REST","SLEEP","TRAVEL","WORK","CRAFT","NPC_LIFE"])
     ? planIndependentWorldTick({saveId,worldDay:Number(worldDay),worldTime:String(worldTime),
        elapsedSeconds:input.plannedElapsedSeconds??0,sparse:continuityRanges}) : null;
+  const prospectiveNpcCadence = prospectiveWorldTickPlan !== null
+    ? reviewNpcRoutineCadence({
+        worldDay: Number(worldDay), worldTime: String(worldTime),
+        elapsedSeconds: input.plannedElapsedSeconds ?? 0, sparse: continuityRanges,
+      }) : null;
 
   const rawNpcCurrent = explicitActorRequest
     ? rowsToObjects(actorIndexScan?.npcReferenceRows ?? [])
@@ -766,6 +791,23 @@ export async function getTurnContext(input: TurnContextRequest) {
     actors[id] = {
       current,
       contextHeat: heatShadow.actors[id] ?? null,
+      initiativePlan: planNpcInitiativeV4({
+        actorId: id, current, activityRule,
+        relationshipToShura: relationshipRows.find(r =>
+          String(r["Actor ID"] ?? "") === id && String(r["Toward ID"] ?? "") === "player.shura") ?? null,
+        knowledge: actorKnowledge.filter(r => String(r["NPC ID"] ?? "") === id),
+        observedStimuli: [], // Historical committed TX receipts are not loaded.
+        socialMemories: filterByParticipants(socialMemoryRows, [id]),
+        openThreads: filterByParticipants(openThreadRows, [id]),
+        elapsedSeconds: input.plannedElapsedSeconds ?? 0,
+        verifiedCoPresenceWithShura: sceneActorsForContext.includes(id),
+        verifiedLiveCommunicationChannel: sourceContacts.some(r =>
+          String(r["Peer Actor ID"] ?? "") === id &&
+          String(r["Owner Actor ID"] ?? "") === "player.shura" &&
+          String(r["Status"] ?? "").toUpperCase() === "ACTIVE" &&
+          String(r["Consent"] ?? "").toUpperCase() === "TRUE"),
+        discretionaryWindowConfirmed: false,
+      }),
       durableIdentity,
       knowledge: actorKnowledge.filter((r) => String(r["NPC ID"] ?? "") === id),
       relationships: filterRelationships(relationshipRows, [id]),
@@ -836,6 +878,38 @@ export async function getTurnContext(input: TurnContextRequest) {
     actors: actorContextGate,
   };
 
+  const pendingChoiceRows =
+    (structured.PENDING_CHOICES as Array<Record<string, unknown>> | undefined) ?? [];
+  const gmTurnBrief = buildTurnBrief({
+    turnClass: input.turnClass, tags: input.tags ?? [],
+    contacts: sourceContacts, pendingChoices: pendingChoiceRows,
+    recentChatByActor: actorRecentChat, actorIdsLoaded: resolvedActorIds,
+    worldAgenda: worldActionDocket.items,
+  });
+  const gmTurnTriage = buildTurnTriage({
+    turnClass: input.turnClass, tags: input.tags ?? [],
+    memory: memoryRoute, worldPlan: prospectiveWorldTickPlan,
+    npcRoutineCadence: prospectiveNpcCadence,
+    actorContextRequired: requireNpcContextGate,
+    actorContextReady: npcContextGate.readyForSubstantiveReply,
+    pendingChoices: pendingChoiceRows,
+  });
+  const systemNotifications = wantsSystemInbox ? buildSystemNotificationCenter({
+    pendingChoices: pendingChoiceRows,
+    progressEvents: (structured.PROGRESSION_EVENTS as Array<Record<string, unknown>> | undefined) ?? [],
+    contacts: sourceContacts, chatEvents: actorChatRows,
+    worldAgenda: worldActionDocket.items, currentDay: Number(worldDay),
+    ackSourceReady: false, maxItems: 25,
+  }) : null;
+  const contextReadBudget = sourceReadBudgetNotice({
+    turnClass: input.turnClass, tags: input.tags ?? [],
+    sceneActorsConsidered: routedSceneActorIds.length,
+    sceneActorsLoaded: sceneActorsForContext.length,
+    actorIndexApproxCells: actorIndexScan?.approxCellsRead ?? 0,
+    actorExactApproxCells: boundedActorLoad?.approxCellsRead ?? 0,
+    targetedDocQueries: docQueries.length,
+  });
+
   const docMap = new Map(docs);
   const queriedDocs = docQueries.map((q) => {
     const doc = docMap.get(q.documentKey)!;
@@ -870,6 +944,11 @@ export async function getTurnContext(input: TurnContextRequest) {
       resourceDetails,
       worldContinuity,
       worldActionDocket,
+      npcRoutineCadence: prospectiveNpcCadence,
+      gmTurnBrief,
+      gmTurnTriage,
+      systemNotifications,
+      contextReadBudget,
       bridgeIntegration:bridgeTurnIntegrationPlan({
         saveId,turnClass:input.turnClass,
         memoryDepth:memoryRoute.depth,missingSources:memoryRoute.missingSources,
@@ -911,6 +990,7 @@ export async function getTurnContext(input: TurnContextRequest) {
       actorContext: {
         requestedActorIds,
         routedSceneActorIds,
+        sceneLoadPolicy,
         requestedActorRefs: actorRefs,
         resolvedActorIds,
         resolution: actorResolution,
