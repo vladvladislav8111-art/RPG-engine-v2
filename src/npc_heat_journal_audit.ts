@@ -57,6 +57,7 @@ export async function auditNpcHeatJournal(input:JournalAuditRequest) {
     semanticWrites:0 as const, automaticPromotion:false as const,
     fullNpcContextRequired:true as const,
     checkedRows,sourceRows,candidateCount:found,
+    contentBoundV2Rows:0,
     receipts:events,
     notes:[
       "SESSION_LOG State hash binds save/time/scene/TX envelope, not World advances JSON.",
