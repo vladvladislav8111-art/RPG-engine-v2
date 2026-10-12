@@ -9,6 +9,7 @@ import { intBetween } from "./rng.ts";
 import {
   previewKvGate, previewKvSession, previewKvStatus, previewKvHold,
   previewKvContend, PREVIEW_KV_PAGE,
+  PREVIEW_KV_SETUP_PAGE, isPreviewTimeline, previewKvGateChecks,
 } from "./preview_kv_probe.ts";
 import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
 import type { WorldV3BatchRequest } from "./world_sim_v3/runtime_facade.ts";
@@ -136,16 +137,35 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
     }
 
     // Authenticated synthetic KV-only probe. Never reaches Google writer.
-    const previewKvAllowed=previewKvGate({
-      timeline:(globalThis as unknown as {
-        Deno?: {env?: {get?: (name:string)=>string|undefined}};
-      }).Deno?.env?.get?.("DENO_TIMELINE") ?? "",
-      enabled:config.previewKvRaceEnabled,
+    const timeline=(globalThis as unknown as {
+      Deno?: {env?: {get?: (name:string)=>string|undefined}};
+    }).Deno?.env?.get?.("DENO_TIMELINE") ?? "";
+    const previewKvInput={
+      timeline,enabled:config.previewKvRaceEnabled,
       writesEnabled:config.allowWrites,rawWritesEnabled:config.allowRawCommits,
       npcHeatWriterEnabled:config.npcHeatTestWriterEnabled,
       kvEnabled:config.enableKv,configuredWorkbookId:config.files.TEMP_RUNTIME,
       isolatedWorkbookId:config.npcHeatTestWorkbookId,
-    });
+    };
+    const previewKvAllowed=previewKvGate(previewKvInput);
+    if (pathname==="/preview/kv-race/setup" && req.method==="GET") {
+      if(!isPreviewTimeline(timeline)) return json({error:"not_found"},404);
+      return new Response(PREVIEW_KV_SETUP_PAGE,{headers:{
+        "content-type":"text/html; charset=utf-8",
+        "cache-control":"no-store",
+        "referrer-policy":"no-referrer",
+        "content-security-policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      }});
+    }
+    if (pathname==="/preview/kv-race/diagnostics" && req.method==="GET") {
+      if(!isPreviewTimeline(timeline)) return json({error:"not_found"},404);
+      if(!authorized(req)) return json({error:"unauthorized"},401);
+      const checks=previewKvGateChecks(previewKvInput);
+      return json({testOnly:true,ready:previewKvAllowed,
+        checks,failedChecks:Object.entries(checks).filter(([,pass])=>!pass).map(([key])=>key),
+        googleCallsPerformed:0,kvWritesPerformed:0,
+      });
+    }
     if (pathname.startsWith("/preview/kv-race")) {
       if (!previewKvAllowed) return json({error:"not_found"},404);
       if (pathname==="/preview/kv-race" && req.method==="GET") {

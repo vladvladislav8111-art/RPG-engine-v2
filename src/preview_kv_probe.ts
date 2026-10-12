@@ -16,12 +16,25 @@ export type PreviewKvGate = {
   isolatedWorkbookId: string;
 };
 
+export function isPreviewTimeline(timeline: string): boolean {
+  return timeline.startsWith("git-branch/") || timeline.startsWith("preview/");
+}
+
+/** Safe, named diagnostics only: no secrets, IDs, tokens or ENV values. */
+export function previewKvGateChecks(g: PreviewKvGate) {
+  return {
+    previewTimeline: isPreviewTimeline(g.timeline),
+    probeEnabled: g.enabled,
+    kvEnabled: g.kvEnabled,
+    googleWritesDisabled: !g.writesEnabled,
+    rawCommitsDisabled: !g.rawWritesEnabled,
+    heatTestWriterDisabled: !g.npcHeatWriterEnabled,
+    isolatedTempWorkbook: g.configuredWorkbookId === SYNTHETIC_PREVIEW_WORKBOOK_ID,
+    isolatedWriterWorkbook: g.isolatedWorkbookId === SYNTHETIC_PREVIEW_WORKBOOK_ID,
+  };
+}
 export function previewKvGate(g: PreviewKvGate): boolean {
-  return g.enabled && g.kvEnabled && !g.writesEnabled &&
-    !g.rawWritesEnabled && !g.npcHeatWriterEnabled &&
-    (g.timeline.startsWith("git-branch/") || g.timeline.startsWith("preview/")) &&
-    g.configuredWorkbookId === SYNTHETIC_PREVIEW_WORKBOOK_ID &&
-    g.isolatedWorkbookId === SYNTHETIC_PREVIEW_WORKBOOK_ID;
+  return Object.values(previewKvGateChecks(g)).every(Boolean);
 }
 
 export function previewKvSession(sessionId: unknown): string {
@@ -148,6 +161,53 @@ document.querySelector("#go").addEventListener("click",async()=>{
        "Облако обработало запросы в одном JS-экземпляре: мультиинстансность не доказана"
    },null,2);
  }catch(e){out.textContent="Тест не пройден: "+String(e);if(owner)owner.catch(()=>{});}
+ finally{btn.disabled=false;}
+});
+</script></body></html>`;
+
+/** HTML is static and hosted only on Deno's non-production timeline. */
+export const PREVIEW_KV_SETUP_PAGE = `<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>RPG V2 — диагностика Preview</title>
+<style>
+body{font:16px system-ui;max-width:640px;margin:30px auto;padding:16px;background:#121b2b;color:#e8edf5}
+input,button{font:inherit;padding:12px;width:100%;box-sizing:border-box;border-radius:8px;margin-top:10px}
+input{background:#27334a;color:white;border:1px solid #60708b}
+button{border:0;background:#3976ea;color:white;cursor:pointer}
+pre{background:#27334a;padding:15px;border-radius:10px;white-space:pre-wrap;overflow-wrap:anywhere}
+a{color:#93bcff}
+</style></head><body>
+<h2>RPG V2 — проверка окружения Preview</h2>
+<p>Никаких Google-записей или KV-модификаций. Показывает только названия пройденных условий.
+Ключ вводится локально, не сохраняется и не отображается в ответе. Ничего секретного не присылай в чат.</p>
+<label>Действующий Bearer-ключ
+<input id="secret" type="password" autocomplete="off" spellcheck="false"></label>
+<button type="button" id="diagnose">Проверить условия Preview</button>
+<pre id="result">Ещё не проверено.</pre>
+<p id="next"></p>
+<script>
+document.querySelector("#diagnose").addEventListener("click",async()=>{
+ const btn=document.querySelector("#diagnose"),display=document.querySelector("#result");
+ const secret=document.querySelector("#secret").value;
+ document.querySelector("#secret").value="";
+ btn.disabled=true;
+ try {
+  const response=await fetch("/preview/kv-race/diagnostics",{
+    cache:"no-store",referrerPolicy:"no-referrer",headers:{"authorization":"Bearer "+secret}
+  });
+  const data=await response.json();
+  display.textContent=JSON.stringify(data,null,2);
+  if(response.ok&&data.ready===true){
+   const next=document.querySelector("#next");
+   next.textContent="Все условия выполнены. ";
+   const link=document.createElement("a");
+   link.href="/preview/kv-race";
+   link.textContent="Открыть тест KV";
+   next.appendChild(link);
+  }
+ }catch(error){display.textContent=String(error);}
  finally{btn.disabled=false;}
 });
 </script></body></html>`;
