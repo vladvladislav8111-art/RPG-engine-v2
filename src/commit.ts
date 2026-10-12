@@ -149,6 +149,20 @@ async function executeCommitTurn(input: CommitRequest) {
  * The existing production commit path remains unchanged with the flag OFF.
  */
 export async function commitTurn(input: CommitRequest) {
+  // First preserve semantic/source and save-ID validation even when KV is OFF.
+  // These errors must not be masked by a more general runtime gate.
+  if (config.npcHeatTestWriterEnabled) {
+    if (config.files.TEMP_RUNTIME !== PREVIEW_TEST_TEMP_RUNTIME_ID)
+      throw Error("TEST_WRITER_CANNOT_TARGET_NON_TEST_WORKBOOK");
+    requireIsolatedHeatWriter({
+      enabled:true,workbookId:config.files.TEMP_RUNTIME,
+      isolatedWorkbookId:config.npcHeatTestWorkbookId,
+      expectedSaveId:input.expectedSaveId,saveTo:input.saveTo,
+      source:input.semantic?.session.source,
+    });
+    if (!input.semantic || config.allowRawCommits)
+      throw Error("NPC_HEAT_TEST_SEMANTIC_WRITER_REQUIRED");
+  }
   // Enforce the isolated workbook boundary before any commit path can read
   // or write Google, even if the general ALLOW_WRITES flag was set by mistake.
   const isolated = config.files.TEMP_RUNTIME === PREVIEW_TEST_TEMP_RUNTIME_ID;
@@ -169,14 +183,6 @@ export async function commitTurn(input: CommitRequest) {
   if (config.npcHeatTestWriterEnabled && !isolated)
     throw Error("TEST_WRITER_CANNOT_TARGET_NON_TEST_WORKBOOK");
   if (!config.npcHeatTestWriterEnabled) return await executeCommitTurn(input);
-  requireIsolatedHeatWriter({
-    enabled: true, workbookId: config.files.TEMP_RUNTIME,
-    isolatedWorkbookId: config.npcHeatTestWorkbookId,
-    expectedSaveId: input.expectedSaveId, saveTo: input.saveTo,
-    source: input.semantic?.session.source,
-  });
-  if (!input.semantic || config.allowRawCommits)
-    throw Error("NPC_HEAT_TEST_SEMANTIC_WRITER_REQUIRED");
   if (input.dryRun) return await executeCommitTurn(input);
   if (!config.allowWrites || !config.enableKv)
     throw Error("NPC_HEAT_TEST_WRITER_KV_AND_WRITES_REQUIRED");
