@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {config} from "../src/config.ts";
 import {commitTurn} from "../src/commit.ts";
 import type {CommitRequest} from "../src/types.ts";
+import {PREVIEW_TEST_TEMP_RUNTIME_ID,PREVIEW_TEST_DOC_IDS} from "../src/preview_test_storage.ts";
 
 /** CI-only Google transport stub. No external Google or player workbook request. */
 Deno.test("TEST writer: persisted Sheets plus lost ACK retains KV lock and prevents second money / NPC receipt",async()=>{
@@ -12,8 +13,10 @@ Deno.test("TEST writer: persisted Sheets plus lost ACK retains KV lock and preve
     publicExponent:new Uint8Array([1,0,1]),hash:"SHA-256",
   },true,["sign","verify"]);
   const bytes=new Uint8Array(await crypto.subtle.exportKey("pkcs8",keys.privateKey));
-  const sheet="TEST-NPC-CHAOS-"+crypto.randomUUID();
-  const docId="TEST-NPC-CHAOS-DOC";
+  const sheet=PREVIEW_TEST_TEMP_RUNTIME_ID;
+  const oldTimeline=Deno.env.get("DENO_TIMELINE");
+  Deno.env.set("DENO_TIMELINE","preview/ci-ack-only");
+  const docId=PREVIEW_TEST_DOC_IDS.LIVE_SESSION_LOG;
   const tx="TEST-NPC-CHAOS-TX";
   const lockKey=["rpg-v2","semantic-writer-lock",sheet] as const;
   config.google.privateKey="-----BEGIN PRIVATE KEY-----\n"+
@@ -115,6 +118,8 @@ Deno.test("TEST writer: persisted Sheets plus lost ACK retains KV lock and preve
       await kv.delete(lockKey);
       kv.close();
     }
+    if(oldTimeline===undefined)Deno.env.delete("DENO_TIMELINE");
+    else Deno.env.set("DENO_TIMELINE",oldTimeline);
     globalThis.fetch=priorFetch;
     config.google=saved.google;
     config.files=saved.files;

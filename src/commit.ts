@@ -160,9 +160,9 @@ export async function commitTurn(input: CommitRequest) {
     const allowedDocs = new Set<string>(Object.values(PREVIEW_TEST_DOC_IDS));
     const pinned = config.npcHeatTestWorkbookId === PREVIEW_TEST_TEMP_RUNTIME_ID &&
       (input.docAppends ?? []).every(d => allowedDocs.has(config.files[d.documentKey]));
-    if (!preview || !pinned) throw Error("TEST_WRITER_CONTEXT_NOT_ISOLATED");
     if (!input.dryRun && !config.npcHeatTestWriterEnabled)
       throw Error("TEST_WORKBOOK_WRITES_REQUIRE_TEST_WRITER");
+    if (!preview || !pinned) throw Error("TEST_WRITER_CONTEXT_NOT_ISOLATED");
     if (!input.dryRun && (!config.allowWrites || config.allowRawCommits || !config.enableKv))
       throw Error("TEST_WRITER_WRITES_AND_KV_GATE_FAILED");
   }
