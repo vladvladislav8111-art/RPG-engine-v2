@@ -12,10 +12,19 @@ import { buildWorldActionDocket } from "./world_scheduler.ts";
 import { ACHIEVEMENT_CATALOG_COUNTS } from "./world_sim_v3/achievement_catalog.ts";
 import { resolveSceneActorIds } from "./scene_routing.ts";
 import { buildNpcBehavioralContext } from "./npc_behavior.ts";
+import { buildTurnBrief, contactActorIdsForRequest } from "./turn_dispatcher.ts";
+import { buildTurnTriage } from "./turn_triage.ts";
 import { chooseMemoryRoute } from "./context_memory_router.ts";
 import { planIndependentWorldTick } from "./world_tick_dispatcher.ts";
 import { buildNpcAutonomyPlan } from "./npc_autonomy_planner.ts";
+import { planNpcInitiativeV4 } from "./npc_initiative_v4.ts";
+import { reviewNpcRoutineCadence } from "./npc_cadence_review.ts";
+import { shouldLoadSceneActors, sourceReadBudgetNotice } from "./context_hotpath_budget.ts";
+import { readNpcHeatIndex } from "./npc_attention_ledger.ts";
+import { planAttentionReadBudget } from "./npc_attention_load_router.ts";
 import { bridgeTurnIntegrationPlan } from "./bridge_integration.ts";
+import { buildSystemNotificationCenter } from "./system_notification_center.ts";
+import { availableCurrentOpportunities, parseLiveClock } from "./world_sim_v3/source_bridge.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
@@ -252,7 +261,8 @@ export async function getTurnContext(input: TurnContextRequest) {
   // The current scene actors are derived routing hints, bounded to the latest
   // authoritative CONTROL scene/location. The cache cannot override the save.
   const sceneRouting = await sheetsBatchGet(config.files.TEMP_RUNTIME, [
-    "CONTROL!A1:D12", "ACTIVE_CONTEXT!A1:F15",
+    "CONTROL!A1:D12", "ACTIVE_CONTEXT!A1:F15", "SYSTEM_CONTACTS_CURRENT!A1:J200",
+    ...(config.npcAttentionIndexEnabled?[TABLES.NPC_ATTENTION_CURRENT.range]:[]),
   ]);
   const routingControlRows = sceneRouting["CONTROL!A1:D12"] ?? [];
   const routedSceneActorIds = resolveSceneActorIds(
@@ -260,7 +270,21 @@ export async function getTurnContext(input: TurnContextRequest) {
   );
   const routeSaveId = String(findControl(routingControlRows, "save_id") ?? "");
   const tagSet = new Set((input.tags ?? []).map((t) => t.toUpperCase()));
-  const requestedActorIds = [...new Set([...(input.actorIds ?? []), ...routedSceneActorIds])];
+  const wantsSystemInbox = hasAny(tagSet, ["NOTIFICATIONS", "INBOX", "SYSTEM_INBOX", "ALERTS"]);
+  const sourceContacts = rowsToObjects(sceneRouting["SYSTEM_CONTACTS_CURRENT!A1:J200"] ?? []);
+  const npcAttentionIndexRows=config.npcAttentionIndexEnabled
+    ?rowsToObjects(sceneRouting[TABLES.NPC_ATTENTION_CURRENT.range]??[]):[];
+  const npcAttentionByActor=new Map(npcAttentionIndexRows.map(r=>[String(r["NPC ID"]??""),r]));
+  const sceneLoadPolicy = shouldLoadSceneActors({
+    turnClass: input.turnClass, tags: input.tags ?? [],
+    explicitActorIds: input.actorIds, actorRefs: input.actorRefs,
+    requireNpcContextGate: input.requireNpcContextGate,
+  });
+  const sceneActorsForContext = sceneLoadPolicy.loadSceneActors ? routedSceneActorIds : [];
+  const requestedActorIds = [...new Set([
+    ...(input.actorIds ?? []), ...sceneActorsForContext,
+    ...contactActorIdsForRequest(input.tags ?? [], sourceContacts),
+  ])];
   const actorRefs = input.actorRefs ?? [];
   const memoryRoute = chooseMemoryRoute({turnClass:input.turnClass,tags:input.tags??[],
     actorIds:requestedActorIds,actorRefs,
@@ -272,10 +296,10 @@ export async function getTurnContext(input: TurnContextRequest) {
   const docQueries = input.docQueries ?? [];
   const needsInventory = hasAny(tagSet, ["ITEM", "INVENTORY", "PURCHASE", "SALE", "CONSUME", "COMBAT", "CRAFT", "SURVIVAL", "STORAGE", "EQUIPMENT"]);
   const needsLocalWorldContext = hasAny(tagSet, [
-    "SERVICES", "SOCIAL", "ECONOMY", "WORK", "JOB", "BOARD", "TRAVEL", "MAP", "EXPLORATION",
+    "SERVICES", "ECONOMY", "WORK", "JOB", "BOARD", "TRAVEL", "MAP", "EXPLORATION",
     "LAW", "WEAPON", "MAGIC", "RELIGION", "TEMPLE", "FOOD", "MEAL", "EAT", "SHOP", "LODGING",
     "REST", "SLEEP", "COURIER", "MESSAGE", "BATH", "HYGIENE", "FACTION", "POLITICS", "AREA_PREP",
-    "GUILD", "CRAFT", "NPC", "DIVINE", "GOD", "PRAYER", "EIRAN", "VEIRA", "SEREN", "SELVARA",
+    "GUILD", "CRAFT", "DIVINE", "GOD", "PRAYER", "EIRAN", "VEIRA", "SEREN", "SELVARA",
     "NERETH", "LORVEN", "KHARAD", "ULMAR", "SCENE", "AMBIENT", "RUMOR", "REPUTATION", "CRIME",
     "THREAT", "OBSERVE", "LOOK",
   ]);
@@ -286,6 +310,12 @@ export async function getTurnContext(input: TurnContextRequest) {
     "PLAYER_RESOURCES!A1:E20",
     "PLAYER_CONDITIONS!A1:F100",
     ...(needsCompetences ? [TABLES.COMPETENCES.range] : []),
+    ...(wantsSystemInbox ? [
+      TABLES.PROGRESSION_EVENTS.range,
+      "ACTOR_ACHIEVEMENTS!A1:I1000",
+      TABLES.SYSTEM_CHAT_LOG.range,
+      ...(config.systemNotificationAckEnabled ? [TABLES.SYSTEM_NOTIFICATION_ACK_CURRENT.range] : []),
+    ] : []),
   ]);
 
   const boundedActorNames = new Set<keyof typeof TABLES>([
@@ -305,6 +335,8 @@ export async function getTurnContext(input: TurnContextRequest) {
     if (!structuredNames.includes(name)) structuredNames.push(name);
   };
 
+  // Never hide an unlocked System choice just because the next chat used no SKILL tag.
+  addStructured("PENDING_CHOICES");
   if (hasAny(tagSet, ["SKILL", "WORK", "LANGUAGE", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY", "TRAINING", "SPECIALIZATION", "DEXTERITY", "HANDS"])) {
     addStructured("SPECIALIZATIONS");
     addStructured("MILESTONES");
@@ -317,7 +349,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   if (hasAny(tagSet, ["CRAFT", "MATERIAL", "MATERIAL_PASSPORT", "PHYSICAL", "ENGINEERING"])) {
     addStructured("PHYSICAL_PASSPORTS_CURRENT");
   }
-  if (hasAny(tagSet, ["SERVICES", "SOCIAL", "ECONOMY", "LANGUAGE", "WORK"])) {
+  if (hasAny(tagSet, ["SERVICES", "SOCIAL", "ECONOMY", "LANGUAGE", "WORK", "JOB", "BOARD", "TRADE"])) {
     addStructured("SERVICES_CURRENT");
     addStructured("OPPORTUNITIES_CURRENT");
   }
@@ -447,10 +479,15 @@ export async function getTurnContext(input: TurnContextRequest) {
     clocks: worldClocksFromSparseRanges(continuityRanges),
     factionSeeds: clockAgendaSeeds,
   });
+  // One bounded computation shared by client integration and packet display.
   const prospectiveWorldTickPlan = input.plannedElapsedSeconds != null ||
     hasAny(tagSet, ["WORLD","WAIT","REST","SLEEP","TRAVEL","WORK","CRAFT","NPC_LIFE"])
     ? planIndependentWorldTick({saveId,worldDay:Number(worldDay),worldTime:String(worldTime),
-       elapsedSeconds:input.plannedElapsedSeconds??0,sparse:continuityRanges}) : null;
+        elapsedSeconds:input.plannedElapsedSeconds??0,sparse:continuityRanges})
+    : null;
+  const prospectiveNpcCadence = input.plannedElapsedSeconds != null
+    ? reviewNpcRoutineCadence({worldDay:Number(worldDay),worldTime:String(worldTime),
+      elapsedSeconds:input.plannedElapsedSeconds,sparse:continuityRanges}) : null;
 
   const rawNpcCurrent = explicitActorRequest
     ? rowsToObjects(actorIndexScan?.npcReferenceRows ?? [])
@@ -463,6 +500,17 @@ export async function getTurnContext(input: TurnContextRequest) {
     ...requestedActorIds,
     ...actorResolution.filter((r) => r.status === "RESOLVED").flatMap((r) => r.actorIds),
   ])];
+  const npcAttentionSnapshots=config.npcAttentionIndexEnabled
+    ?rawNpcCurrent.map(r=>readNpcHeatIndex(npcAttentionByActor.get(String(r["NPC ID"]??"")),
+       Number(worldDay),String(worldTime),String(r["Importance"]??""),saveId))
+       .filter((x):x is NonNullable<typeof x>=>x!==null):[];
+  const npcAttentionReadPlan=config.npcAttentionIndexEnabled
+    ?planAttentionReadBudget({saveId,sceneActorIds:routedSceneActorIds,
+       explicitlyRequestedActorIds:resolvedActorIds,
+       snapshots:npcAttentionSnapshots.map(x=>({actorId:String(x.actorId),
+         activeTier:x.activeTier,importance:String(rawNpcCurrent.find(r=>
+           r["NPC ID"]===x.actorId)?.["Importance"]??""),sourceSaveId:saveId}))})
+    :null;
   const activeNpcIds = new Set(rawNpcCurrent.map((r) => String(r["NPC ID"] ?? "")).filter(Boolean));
   const identityNpcIds = new Set(identityPregenRows.map((r) => String(r["NPC ID"] ?? "")).filter(Boolean));
   const dormantActorIds = resolvedActorIds.filter((id) => !activeNpcIds.has(id) && identityNpcIds.has(id));
@@ -772,12 +820,42 @@ export async function getTurnContext(input: TurnContextRequest) {
           }
         : null,
       autonomy: { activityRule, activeWorldClocks, freshness },
+      npcAttention: config.npcAttentionIndexEnabled
+        ?readNpcHeatIndex(npcAttentionByActor.get(id),Number(worldDay),
+          String(worldTime),String(current?.["Importance"]??""),saveId):null,
+      initiativePlan: planNpcInitiativeV4({
+        actorId: id, current, activityRule,
+        relationshipToShura: relationshipRows.find(r =>
+          String(r["Actor ID"] ?? "") === id && String(r["Toward ID"] ?? "") === "player.shura") ?? null,
+        knowledge: actorKnowledge.filter(r => String(r["NPC ID"] ?? "") === id),
+        observedStimuli:(()=>{
+          const heat=config.npcAttentionIndexEnabled
+            ?readNpcHeatIndex(npcAttentionByActor.get(id),Number(worldDay),String(worldTime),
+              String(current?.["Importance"]??""),saveId):null;
+          const stimulus=heat?.lastStimulus;
+          return stimulus?[{sourceRef:String(stimulus.sourceRef),
+            kind:"NEW_INFORMATION" as const,witnessedByNpc:true,currentDecisionWindow:true,
+            ...(stimulus.targetActorId?{targetActorId:String(stimulus.targetActorId)}:{})}]:[];
+        })(),
+        socialMemories: filterByParticipants(socialMemoryRows, [id]),
+        openThreads: filterByParticipants(openThreadRows, [id]),
+        elapsedSeconds: input.plannedElapsedSeconds ?? 0,
+        verifiedCoPresenceWithShura: sceneActorsForContext.includes(id),
+        verifiedLiveCommunicationChannel: sourceContacts.some(c =>
+          String(c["Peer Actor ID"] ?? "") === id &&
+          String(c["Owner Actor ID"] ?? "") === "player.shura" &&
+          String(c["Status"] ?? "").toUpperCase() === "ACTIVE" &&
+          String(c["Consent"] ?? "").toUpperCase() === "TRUE"),
+        discretionaryWindowConfirmed: false,
+      }),
       independentLifePlan: buildNpcAutonomyPlan({
-        actorId:id,worldDay:Number(worldDay),worldTime:String(worldTime),current,activityRule,
-        knownFacts:actorKnowledge.filter(r=>String(r["NPC ID"]??"")===id),
+        actorId:id,worldDay:Number(worldDay),worldTime:String(worldTime),
+        current,activityRule,
+        knownFacts:actorKnowledge.filter((r)=>String(r["NPC ID"]??"")===id),
         directedRelationships:filterRelationships(relationshipRows,[id]),
         socialMemory:filterByParticipants(socialMemoryRows,[id]),
-        openThreads:filterByParticipants(openThreadRows,[id]),activeWorldClocks,
+        openThreads:filterByParticipants(openThreadRows,[id]),
+        activeWorldClocks,
       }),
       behavioralContext: buildNpcBehavioralContext({
         actorId: id,
@@ -861,7 +939,8 @@ export async function getTurnContext(input: TurnContextRequest) {
       worldActionDocket,
       bridgeIntegration:bridgeTurnIntegrationPlan({
         saveId,turnClass:input.turnClass,
-        memoryDepth:memoryRoute.depth,missingSources:memoryRoute.missingSources,
+        memoryDepth:memoryRoute.depth,
+        missingSources:memoryRoute.missingSources,
         plannedElapsedSeconds:input.plannedElapsedSeconds??0,
         keyNpcDue:prospectiveWorldTickPlan?.keyNpcDueCount ??
           worldContinuity.keyNpcDue.filter(x=>x.reason!=="ACTIVITY_RULE_MISSING").length,
@@ -875,15 +954,66 @@ export async function getTurnContext(input: TurnContextRequest) {
           actorBounded:boundedActorLoad!=null,
           actorCount:resolvedActorIds.length,
           archivedActorLookups:archiveReadPlan.length,
+          archiveLookups:archiveReadPlan.length,
           canonRegistryRequests:pregenRequests.length,
+          canonRegistryCount:pregenRequests.length,
           targetedDocQueries:docQueries.length,
           targetedSheetLookups:lookups.length,
         },
-        deepNpcContextReady:npcContextGate.readyForSubstantiveReply,
+        deepNpcContextReady:!memoryRoute.reasons.some(r=>r.id==="NPC_CONTEXT") ||
+          npcContextGate.readyForSubstantiveReply,
         autoSourceRouting:true,
       },
       worldTickPlan:prospectiveWorldTickPlan,
+      npcAttentionReadPlan,
+      npcRoutineCadence:prospectiveNpcCadence,
+      contextReadBudget: sourceReadBudgetNotice({
+        turnClass:input.turnClass,tags:input.tags??[],
+        sceneActorsConsidered:routedSceneActorIds.length,
+        sceneActorsLoaded:sceneActorsForContext.length,
+        actorIndexApproxCells:actorIndexScan?.approxCellsRead??0,
+        actorExactApproxCells:boundedActorLoad?.approxCellsRead??0,
+        targetedDocQueries:docQueries.length,
+      }),
       worldSimulationV3: { enabled: config.worldSimV3Enabled, mode: "READ_ONLY_PROPOSALS", maxBatchJobs: 12, achievementCandidates: ACHIEVEMENT_CATALOG_COUNTS.achievements, titleCandidates: ACHIEVEMENT_CATALOG_COUNTS.titles, committed: false },
+      systemNotificationCenter: wantsSystemInbox ? buildSystemNotificationCenter({
+        pendingChoices: (structured.PENDING_CHOICES as Array<Record<string, unknown>> | undefined) ?? [],
+        progressEvents: rowsToObjects(base[TABLES.PROGRESSION_EVENTS.range] ?? []),
+        achievements: rowsToObjects(base["ACTOR_ACHIEVEMENTS!A1:I1000"] ?? []),
+        contacts: sourceContacts,
+        chatEvents: rowsToObjects(base[TABLES.SYSTEM_CHAT_LOG.range] ?? []),
+        worldAgenda: worldActionDocket.items,
+        ackReceipts: config.systemNotificationAckEnabled
+          ? rowsToObjects(base[TABLES.SYSTEM_NOTIFICATION_ACK_CURRENT.range] ?? []) : [],
+        ackSourceReady: config.systemNotificationAckEnabled,
+        currentDay: Number(worldDay),
+        maxItems: 30,
+      }) : null,
+      turnTriage:buildTurnTriage({
+        turnClass:input.turnClass,tags:input.tags??[],
+        memory:{depth:memoryRoute.depth,missingSources:memoryRoute.missingSources},
+        worldPlan:prospectiveWorldTickPlan,
+        npcRoutineCadence:prospectiveNpcCadence,
+        actorContextRequired:npcContextGate.required,
+        actorContextReady:npcContextGate.readyForSubstantiveReply,
+        pendingChoices:(structured.PENDING_CHOICES as Array<Record<string,unknown>>|undefined)??[],
+      }),
+      gmTurnBrief: buildTurnBrief({
+        turnClass: input.turnClass,
+        tags: input.tags ?? [],
+        contacts: sourceContacts,
+        pendingChoices: (structured.PENDING_CHOICES as Array<Record<string, unknown>> | undefined) ?? [],
+        recentChatByActor: actorRecentChat,
+        actorIdsLoaded: recentChatLoaded ? resolvedActorIds : [],
+        worldAgenda: worldActionDocket.items,
+        sourceOnlyOfferBoard: hasAny(tagSet, ["ECONOMY", "WORK", "JOB", "BOARD", "TRADE"])
+          ? availableCurrentOpportunities({
+              clock: parseLiveClock(base["CONTROL!A1:D12"] ?? []),
+              rows: base[TABLES.OPPORTUNITIES_CURRENT.range] ?? [],
+              maxResults: 12,
+            })
+          : null,
+      }),
       survival: {
         satiety: { current: satiety, max: Number((resourceDetails["Satiety"] as any)?.max ?? 100), band: survivalBand(satiety) },
         hydration: { current: hydration, max: Number((resourceDetails["Hydration"] as any)?.max ?? 100), band: survivalBand(hydration) },
@@ -930,6 +1060,8 @@ export async function getTurnContext(input: TurnContextRequest) {
       readPlan: [
         "TEMP:CORE",
         "TEMP:SCENE_ROUTING",
+        "TEMP:SYSTEM_CONTACTS_CURRENT:ACTIVE",
+        ...(wantsSystemInbox ? ["TEMP:SYSTEM_NOTIFICATION_CENTER:SOURCE_DERIVED"] : []),
         "TEMP:WORLD_CONTINUITY_SPARSE",
         ...(needsCompetences ? ["TEMP:COMPETENCES"] : []),
         ...(actorIndexScan?.readPlan ?? []),

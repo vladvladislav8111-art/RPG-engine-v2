@@ -1,4 +1,5 @@
 import { config } from "./config.ts";
+import type { LeaseKv } from "./writer_kv_lease.ts";
 
 type CacheKeyPart = string | number | bigint | boolean | Uint8Array;
 type KvLike = {
@@ -35,4 +36,12 @@ export async function cacheSet<T>(key: readonly CacheKeyPart[], value: T): Promi
     return;
   }
   memory.set(keyString(key), value);
+}
+
+/** Never use the memory fallback for a distributed write lock. */
+export async function requireWriterKv():Promise<LeaseKv>{
+ const kv=await getKv();
+ if(!kv||typeof (kv as unknown as {atomic?:unknown}).atomic!=="function")
+   throw Error("WRITER_DENO_KV_UNAVAILABLE_FAIL_CLOSED");
+ return kv as unknown as LeaseKv;
 }

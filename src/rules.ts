@@ -64,16 +64,24 @@ export function computeCompetenceAward(input: {
     return Math.round(input.exactOverride);
   }
 
+  if (!Number.isFinite(input.productiveMinutes) || input.productiveMinutes < 0) {
+    throw new Error("productiveMinutes must be a finite non-negative number");
+  }
+  // No productive practice cannot yield XP, regardless of the band's nominal minimum.
+  if (input.productiveMinutes === 0) return 0;
   const minutes = clamp(input.productiveMinutes, 5, 240);
   const timeFactor = Math.sqrt(minutes / 60);
   const m = input.modifiers ?? {};
-  const multiplier =
-    (m.novelty ?? 1) *
-    (m.feedback ?? 1) *
-    (m.difficulty ?? 1) *
-    (m.repetition ?? 1) *
-    (m.fatigue ?? 1);
-
+  const factors = [
+    m.novelty ?? 1, m.feedback ?? 1, m.difficulty ?? 1,
+    m.repetition ?? 1, m.fatigue ?? 1,
+  ];
+  if (factors.some((factor) => !Number.isFinite(factor) || factor < 0)) {
+    throw new Error("learning modifiers must be finite non-negative numbers");
+  }
+  const multiplier = factors.reduce((value, factor) => value * factor, 1);
+  // Repetition=0 or missing novelty/feedback cannot become free XP via BAND.min.
+  if (multiplier === 0) return 0;
   const raw = spec.base * timeFactor * multiplier;
   return Math.round(clamp(raw, spec.min, spec.max));
 }
@@ -96,6 +104,11 @@ export function computeSpecializationProgress(input: {
   }
   const quality = input.quality ?? "useful";
   const base = STAR_QUALITY[quality] ?? STAR_QUALITY.useful;
+  if (!Number.isFinite(input.productiveMinutes) || input.productiveMinutes < 0 ||
+      !Number.isFinite(input.repetition ?? 1) || (input.repetition ?? 1) < 0) {
+    throw new Error("specialization learning requires non-negative finite time and repetition");
+  }
+  if (input.productiveMinutes === 0 || input.repetition === 0) return 0;
   const minutes = clamp(input.productiveMinutes, 5, 240);
   const repetition = input.repetition ?? 1;
   return Math.max(0, Math.round(base * Math.sqrt(minutes / 30) * repetition));

@@ -2,7 +2,11 @@ import { commitTurn, prepareCommit } from "./commit.ts";
 import { config } from "./config.ts";
 import { bridgeFeatureStatus } from "./bridge_integration.ts";
 import { getTurnContext } from "./context.ts";
-import { sheetsBatchGet } from "./google.ts";
+import { docsGet, sheetsBatchGet } from "./google.ts";
+import { requireWriterKv } from "./cache.ts";
+import { PREVIEW_TEST_DOC_IDS, PREVIEW_TEST_SAVE_ID, PREVIEW_TEST_TEMP_RUNTIME_ID } from "./preview_fixture.ts";
+import { previewE2EHtml, runIsolatedPreviewWriteE2E } from "./preview_e2e_runner.ts";
+import { remoteKvRaceHtml, remoteKvRaceStatus, remoteKvRaceHold, remoteKvRaceContend } from "./preview_kv_race.ts";
 import { HUD_UI_VERSION } from "./hud.ts";
 import { diagnoseMcp, handleMcp } from "./mcp.ts";
 import { intBetween } from "./rng.ts";
@@ -34,8 +38,10 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
   try {
     if (pathname === "/" && req.method === "GET") {
       let googleConnected = false;
+      let fixtureSaveId: string | null = null;
       try {
-        await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2"]);
+        const values = await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2"]);
+        fixtureSaveId = String(values["CONTROL!B2"]?.[0]?.[0] ?? "");
         googleConnected = true;
       } catch {
         googleConnected = false;
@@ -50,7 +56,112 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
         writesEnabled: config.allowWrites,
         rawCommitsEnabled: config.allowRawCommits,
         googleConnected,
+        ...(config.previewFixture ? {
+          previewFixture: {
+            storageScope: "TEST_ONLY",
+            fixtureSaveId,
+            fixtureSaveVerified: fixtureSaveId === PREVIEW_TEST_SAVE_ID,
+            docTargetsPinned: true,
+            inheritedLiveDocIdsIgnored: true,
+          },
+        } : {}),
       });
+    }
+
+    // Public READ-ONLY test diagnostics; never exposed on production runtime.
+    if (pathname === "/preview/readiness" && req.method === "GET") {
+      if (!config.previewFixture) return json({ error: "not_found" }, 404);
+      const values = await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2", "CONTROL!B5"]);
+      const saveId = String(values["CONTROL!B2"]?.[0]?.[0] ?? "");
+      const worldTime = values["CONTROL!B5"]?.[0]?.[0] ?? null;
+      // This is a real deployed Deno KV read, not a JS-memory-cache fallback.
+      // No records are written to KV or Google by the readiness route.
+      let kvReadable = false;
+      try {
+        const kv = await requireWriterKv();
+        await kv.get(["rpg-v2", "preview-readiness", PREVIEW_TEST_TEMP_RUNTIME_ID]);
+        kvReadable = true;
+      } catch {
+        kvReadable = false;
+      }
+      let prepareDryRunPassed = false;
+      try {
+        const prepared = await prepareCommit({
+          turnId: "preview-test-only-dry-run",
+          txId: "preview-test-only-dry-run",
+          expectedSaveId: PREVIEW_TEST_SAVE_ID,
+          saveTo: PREVIEW_TEST_SAVE_ID,
+          dryRun: true,
+          preconditions: [{ range: "CONTROL!B5", equals: worldTime as string | number | boolean | null }],
+          sheetWrites: [],
+          docAppends: [],
+        });
+        prepareDryRunPassed = prepared.validation?.every((step: { pass: boolean }) => step.pass) ?? false;
+      } catch {
+        prepareDryRunPassed = false;
+      }
+      const checks = await Promise.all(
+        Object.keys(PREVIEW_TEST_DOC_IDS).map(async (key) => {
+          const docKey = key as keyof typeof PREVIEW_TEST_DOC_IDS;
+          try {
+            await docsGet(config.files[docKey]);
+            return { key, readable: true };
+          } catch {
+            return { key, readable: false };
+          }
+        }),
+      );
+      const ok = saveId === PREVIEW_TEST_SAVE_ID &&
+        checks.every((item) => item.readable) && !config.allowWrites;
+      return json({
+        ok,
+        mode: "TEST_ONLY_READINESS",
+        saveId,
+        expectedSaveId: PREVIEW_TEST_SAVE_ID,
+        writesEnabled: config.allowWrites,
+        docTargetsPinned: true,
+        kvReadable,
+        prepareDryRunPassed,
+        testDocs: checks,
+      }, ok ? 200 : 503);
+    }
+
+    if (pathname === "/preview/kv-race" && req.method === "GET") {
+      if (!config.previewFixture) return json({error:"not_found"},404);
+      return new Response(remoteKvRaceHtml(), {
+        headers:{
+          "content-type":"text/html; charset=utf-8",
+          "cache-control":"no-store", "referrer-policy":"no-referrer",
+          "content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'",
+        },
+      });
+    }
+    if (pathname.startsWith("/preview/kv-race/")) {
+      if (!config.previewFixture) return json({error:"not_found"},404);
+      if (!authorized(req)) return json({error:"unauthorized"},401);
+      if (pathname === "/preview/kv-race/status" && req.method === "GET") {
+        return json(await remoteKvRaceStatus(url.searchParams.get("session") ?? ""));
+      }
+      if (req.method === "POST" && (pathname === "/preview/kv-race/hold" || pathname === "/preview/kv-race/contend")) {
+        const input=await body<{sessionId:string}>(req);
+        if (pathname.endsWith("/hold")) return json(await remoteKvRaceHold(input.sessionId));
+        return json(await remoteKvRaceContend(input.sessionId));
+      }
+      return json({error:"not_found"},404);
+    }
+
+    if (pathname === "/preview/e2e" && req.method === "GET") {
+      if (!config.previewFixture) return json({error:"not_found"},404);
+      return new Response(previewE2EHtml(),{
+        headers:{"content-type":"text/html; charset=utf-8",
+          "cache-control":"no-store", "referrer-policy":"no-referrer",
+          "content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'"},
+      });
+    }
+    if (pathname === "/preview/e2e/run" && req.method === "POST") {
+      if (!config.previewFixture) return json({error:"not_found"},404);
+      if (!authorized(req)) return json({error:"unauthorized"},401);
+      return json(await runIsolatedPreviewWriteE2E());
     }
 
     if (pathname.startsWith("/diag/") && !authorized(req)) {

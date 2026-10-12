@@ -4,15 +4,15 @@ import { chooseMemoryRoute } from "../src/context_memory_router.ts";
 import { planIndependentWorldTick } from "../src/world_tick_dispatcher.ts";
 import { buildNpcAutonomyPlan } from "../src/npc_autonomy_planner.ts";
 
-Deno.test("Read-only Bridge deployment handshake names exact available stage",()=>{
+Deno.test("Bridge preserves phase-one contracts and truthfully advertises staged additions",()=>{
  const x=bridgeFeatureStatus();
  assertEquals(x.schema,BRIDGE_FLOW_VERSION);
- assertEquals(x.releaseStage,"READ_ONLY_PHASE_1");
+ assertEquals(x.releaseStage,"SOURCE_GATED_PHASE_2");
  assertEquals(x.gated.ec06LedgerAndPaidOffers,"BLOCKED_UNTIL_VERIFIED_ATOMIC_SOURCE_WRITER");
  assertEquals(x.gated.automatedGameplayCommit,"NOT_AUTHORIZED");
  assertEquals(x.available.fullTurnDispatcher,false);
- assertEquals(x.available.systemNotificationCenter,false);
- assertEquals(x.available.precommitFastAudit,false);
+ assertEquals(x.available.systemNotificationCenter,"SOURCE_DERIVED_READ_ONLY");
+ assertEquals(x.available.precommitFastAudit,true);
  assertEquals(x.available.worldTickPlan,"READ_ONLY_PROPOSALS");
 });
 Deno.test("Memory router escalates only on target-specific needs",()=>{
