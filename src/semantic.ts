@@ -30,6 +30,10 @@ import {
   resolveRest,
 } from "./physiology.ts";
 import { hash32 } from "./rng.ts";
+import {
+  requireIsolatedHeatWriter, scrubCallerHeatProvenance,
+  deriveEngineHeatReceipts, npcHeatStateHashV2,
+} from "./npc_heat_receipt_writer.ts";
 import { computeSurvivalChange, survivalStaminaModifiers, type SurvivalActivity } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
 import { resolveSelarinWeatherRecords, sheetObjects } from "./weather.ts";
@@ -168,6 +172,15 @@ function keyHeaderFor(table: StructuredRuntimeTable): string {
 export async function prepareSemanticCommit(input: CommitRequest & { semantic: SemanticCommitPlan }) {
   const started = performance.now();
   const semantic = input.semantic;
+  // Fail before any Google access when an experimental writer is misrouted.
+  const testHeatWriter = requireIsolatedHeatWriter({
+    enabled: config.npcHeatTestWriterEnabled,
+    workbookId: config.files.TEMP_RUNTIME,
+    isolatedWorkbookId: config.npcHeatTestWorkbookId,
+    expectedSaveId: input.expectedSaveId,
+    saveTo: input.saveTo,
+    source: semantic.session.source,
+  });
   const touched = new Set<RuntimeTableName>([
     "CONTROL",
     "PLAYER_RESOURCES",
@@ -194,6 +207,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     touched.add("SYSTEM_MODULES_CURRENT");
   }
   if ((semantic.relationshipEvents?.length ?? 0) > 0) touched.add("NPC_RELATIONSHIPS_CURRENT");
+  if (testHeatWriter) touched.add("NPC_CURRENT");
   if ((semantic.socialMemoryEvents?.length ?? 0) > 0) touched.add("SOCIAL_MEMORY_CURRENT");
   if ((semantic.threadEvents?.length ?? 0) > 0) touched.add("OPEN_THREADS_CURRENT");
   if ((semantic.chatEvents?.length ?? 0) > 0) touched.add("SYSTEM_CHAT_LOG");
@@ -1927,22 +1941,43 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   setByHeader(sessionRows, sessionRow, "Deltas JSON", JSON.stringify(semantic.session.deltas ?? {}));
   setByHeader(sessionRows, sessionRow, "New canon JSON", JSON.stringify(semantic.session.newCanon ?? {}));
   const gmWorldAdvances = semantic.session.worldAdvances;
-  const worldAdvanceLog = gmWorldAdvances && typeof gmWorldAdvances === "object" &&
-      !Array.isArray(gmWorldAdvances)
-    ? { ...(gmWorldAdvances as Record<string, unknown>), engineContinuity: worldAutomationOutcomes }
+  // Reserved proof fields can only be engine-authored; ordinary legacy
+  // gameplay otherwise stays on the existing v1 hash and schema.
+  const sanitizedAdvance = scrubCallerHeatProvenance(gmWorldAdvances);
+  const worldAdvanceLog: Record<string, unknown> = sanitizedAdvance
+    ? { ...sanitizedAdvance, engineContinuity: worldAutomationOutcomes }
     : { gmWorldAdvances: gmWorldAdvances ?? {}, engineContinuity: worldAutomationOutcomes };
-  setByHeader(sessionRows, sessionRow, "World advances JSON", JSON.stringify(worldAdvanceLog));
+  if (testHeatWriter) {
+    const currentRows = sheets[TABLES.NPC_CURRENT.range] ?? [];
+    const npcColumn = headerIndex(currentRows, "NPC ID");
+    const knownNpcIds = currentRows.slice(1)
+      .map(row => String(row[npcColumn] ?? "").trim()).filter(Boolean);
+    const receipts = deriveEngineHeatReceipts({
+      txId: input.txId, day: resolvedDay, time: resolvedTime,
+      sceneId: String(semantic.session.sceneId ?? c.sceneId ??
+        controlValue("current_scene_id") ?? ""),
+      knownNpcIds, semantic,
+    });
+    worldAdvanceLog.engineNpcAttentionReceipts = receipts;
+    worldAdvanceLog.engineNpcReceiptEpoch = "TEST_ONLY_V2";
+  }
+  const worldAdvancesJson = JSON.stringify(worldAdvanceLog);
+  setByHeader(sessionRows, sessionRow, "World advances JSON", worldAdvancesJson);
   setByHeader(sessionRows, sessionRow, "Notes", semantic.session.notes ?? "");
   setByHeader(sessionRows, sessionRow, "Committed at", new Date().toISOString());
   setByHeader(sessionRows, sessionRow, "Ruleset version", RULESET_VERSION);
-  setByHeader(
-    sessionRows,
-    sessionRow,
-    "State hash",
-    hash32([input.saveTo, resolvedInworldEnd, semantic.session.sceneId ?? c.sceneId ?? "", input.txId].join("|")).toString(16),
-  );
+  const stateHash = testHeatWriter
+    ? await npcHeatStateHashV2({
+      saveTo: input.saveTo, inworldEnd: resolvedInworldEnd,
+      sceneId: String(semantic.session.sceneId ?? c.sceneId ??
+        controlValue("current_scene_id") ?? ""),
+      txId: input.txId, worldAdvancesJson,
+    })
+    : hash32([input.saveTo, resolvedInworldEnd,
+      semantic.session.sceneId ?? c.sceneId ?? "", input.txId].join("|")).toString(16);
+  setByHeader(sessionRows, sessionRow, "State hash", stateHash);
   setByHeader(sessionRows, sessionRow, "Source", semantic.session.source ?? "ENGINE_FASTPATH");
-  setByHeader(sessionRows, sessionRow, "Version", 1);
+  setByHeader(sessionRows, sessionRow, "Version", testHeatWriter ? 2 : 1);
   appendRow("SESSION_LOG", sessionRows, sessionRow);
 
   const postResources: Record<string, Scalar> = {};
