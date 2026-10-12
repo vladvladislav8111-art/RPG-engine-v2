@@ -5,6 +5,7 @@ import { getTurnContext } from "./context.ts";
 import { docsGet, sheetsBatchGet } from "./google.ts";
 import { requireWriterKv } from "./cache.ts";
 import { PREVIEW_TEST_DOC_IDS, PREVIEW_TEST_SAVE_ID, PREVIEW_TEST_TEMP_RUNTIME_ID } from "./preview_fixture.ts";
+import { previewE2EHtml, runIsolatedPreviewWriteE2E } from "./preview_e2e_runner.ts";
 import { HUD_UI_VERSION } from "./hud.ts";
 import { diagnoseMcp, handleMcp } from "./mcp.ts";
 import { intBetween } from "./rng.ts";
@@ -122,6 +123,20 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
         prepareDryRunPassed,
         testDocs: checks,
       }, ok ? 200 : 503);
+    }
+
+    if (pathname === "/preview/e2e" && req.method === "GET") {
+      if (!config.previewFixture) return json({error:"not_found"},404);
+      return new Response(previewE2EHtml(),{
+        headers:{"content-type":"text/html; charset=utf-8",
+          "cache-control":"no-store", "referrer-policy":"no-referrer",
+          "content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'"},
+      });
+    }
+    if (pathname === "/preview/e2e/run" && req.method === "POST") {
+      if (!config.previewFixture) return json({error:"not_found"},404);
+      if (!authorized(req)) return json({error:"unauthorized"},401);
+      return json(await runIsolatedPreviewWriteE2E());
     }
 
     if (pathname.startsWith("/diag/") && !authorized(req)) {
