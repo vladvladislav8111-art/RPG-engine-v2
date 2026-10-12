@@ -807,7 +807,7 @@ export async function getTurnContext(input: TurnContextRequest) {
             String(findControl(freshControl,"world_day")??"")===String(worldDay) &&
             String(findControl(freshControl,"world_time")??"")===String(worldTime) &&
             String(findControl(freshControl,"current_scene_id")??"")===String(sceneId);
-          const audited=auditNpcHeatJournal({
+          const audited=await auditNpcHeatJournal({
             sourceSaveId:saveId,worldDay:Number(worldDay),worldTime:String(worldTime),
             stableAfterRead:stable,requestedActorIds:scope,index:txIndex,
             header:journalIndex[indexRanges[1]]?.[0]??[],rowStart:window.startRow,
