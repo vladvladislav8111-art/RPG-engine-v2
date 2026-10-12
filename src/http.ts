@@ -3,7 +3,8 @@ import { config } from "./config.ts";
 import { bridgeFeatureStatus } from "./bridge_integration.ts";
 import { getTurnContext } from "./context.ts";
 import { docsGet, sheetsBatchGet } from "./google.ts";
-import { PREVIEW_TEST_DOC_IDS, PREVIEW_TEST_SAVE_ID } from "./preview_fixture.ts";
+import { requireWriterKv } from "./cache.ts";
+import { PREVIEW_TEST_DOC_IDS, PREVIEW_TEST_SAVE_ID, PREVIEW_TEST_TEMP_RUNTIME_ID } from "./preview_fixture.ts";
 import { HUD_UI_VERSION } from "./hud.ts";
 import { diagnoseMcp, handleMcp } from "./mcp.ts";
 import { intBetween } from "./rng.ts";
@@ -68,8 +69,35 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
     // Public READ-ONLY test diagnostics; never exposed on production runtime.
     if (pathname === "/preview/readiness" && req.method === "GET") {
       if (!config.previewFixture) return json({ error: "not_found" }, 404);
-      const values = await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2"]);
+      const values = await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2", "CONTROL!B5"]);
       const saveId = String(values["CONTROL!B2"]?.[0]?.[0] ?? "");
+      const worldTime = values["CONTROL!B5"]?.[0]?.[0] ?? null;
+      // This is a real deployed Deno KV read, not a JS-memory-cache fallback.
+      // No records are written to KV or Google by the readiness route.
+      let kvReadable = false;
+      try {
+        const kv = await requireWriterKv();
+        await kv.get(["rpg-v2", "preview-readiness", PREVIEW_TEST_TEMP_RUNTIME_ID]);
+        kvReadable = true;
+      } catch {
+        kvReadable = false;
+      }
+      let prepareDryRunPassed = false;
+      try {
+        const prepared = await prepareCommit({
+          turnId: "preview-test-only-dry-run",
+          txId: "preview-test-only-dry-run",
+          expectedSaveId: PREVIEW_TEST_SAVE_ID,
+          saveTo: PREVIEW_TEST_SAVE_ID,
+          dryRun: true,
+          preconditions: [{ range: "CONTROL!B5", equals: worldTime as string | number | boolean | null }],
+          sheetWrites: [],
+          docAppends: [],
+        });
+        prepareDryRunPassed = prepared.validation.every((step: { pass: boolean }) => step.pass);
+      } catch {
+        prepareDryRunPassed = false;
+      }
       const checks = await Promise.all(
         Object.keys(PREVIEW_TEST_DOC_IDS).map(async (key) => {
           const docKey = key as keyof typeof PREVIEW_TEST_DOC_IDS;
@@ -90,6 +118,8 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
         expectedSaveId: PREVIEW_TEST_SAVE_ID,
         writesEnabled: config.allowWrites,
         docTargetsPinned: true,
+        kvReadable,
+        prepareDryRunPassed,
         testDocs: checks,
       }, ok ? 200 : 503);
     }
