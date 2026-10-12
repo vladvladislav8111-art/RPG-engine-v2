@@ -19,6 +19,7 @@ import { reviewNpcRoutineCadence } from "./npc_cadence_review.ts";
 import { shouldLoadSceneActors, sourceReadBudgetNotice } from "./context_hotpath_budget.ts";
 import { buildSystemNotificationCenter } from "./system_notification_center.ts";
 import { projectNpcHeatContextShadow } from "./npc_heat_context_adapter.ts";
+import { planNpcHeatJournalWindow, auditNpcHeatJournal } from "./npc_heat_journal_audit.ts";
 import { chooseMemoryRoute } from "./context_memory_router.ts";
 import { planIndependentWorldTick } from "./world_tick_dispatcher.ts";
 import { buildNpcAutonomyPlan } from "./npc_autonomy_planner.ts";
@@ -772,6 +773,65 @@ export async function getTurnContext(input: TurnContextRequest) {
     current: actorCurrent,
     activityRules: activityRuleRows,
   });
+  // On-demand historical receipt review. Never invoked on ordinary gameplay:
+  // its existing checksum does not authenticate World advances JSON contents.
+  let npcHeatJournalAudit: Record<string, unknown> | null = null;
+  if (tagSet.has("NPC_HEAT_AUDIT")) {
+    const explicit = new Set([...(input.actorIds ?? []),
+      ...actorResolution.filter(r => r.status === "RESOLVED").flatMap(r => r.actorIds)]);
+    const scope = resolvedActorIds.filter(id => explicit.has(id) && /^npc\.[a-z0-9_.-]+$/i.test(id));
+    if (!scope.length || scope.length > 12) {
+      npcHeatJournalAudit = {
+        schema:"NPC_HEAT_JOURNAL_AUDIT_V1",status:"ACTOR_SCOPE_REQUIRED_OR_EXCEEDED",
+        mode:"READ_ONLY_UNAUTHENTICATED_CANDIDATES",historyComplete:false,
+        verifiedForTierPromotion:false,contentHashAuthenticated:false,semanticWrites:0,
+      };
+    } else {
+      try {
+        const indexRanges=["SESSION_LOG!C1:C5000","SESSION_LOG!A1:P1"];
+        const journalIndex=await sheetsBatchGet(config.files.TEMP_RUNTIME,indexRanges);
+        const txIndex=journalIndex[indexRanges[0]] ?? [];
+        const window=planNpcHeatJournalWindow(txIndex);
+        if (!window.endRow) {
+          npcHeatJournalAudit = {
+            schema:"NPC_HEAT_JOURNAL_AUDIT_V1",status:"NO_COMMITTED_TX_ROWS",
+            mode:"READ_ONLY_UNAUTHENTICATED_CANDIDATES",historyComplete:false,
+            verifiedForTierPromotion:false,contentHashAuthenticated:false,semanticWrites:0,
+          };
+        } else {
+          const sliceRange=`SESSION_LOG!A${window.startRow}:P${window.endRow}`;
+          const snapshot=await sheetsBatchGet(config.files.TEMP_RUNTIME,
+            [sliceRange,"CONTROL!A1:D12"]);
+          const freshControl=snapshot["CONTROL!A1:D12"] ?? [];
+          const stable=String(findControl(freshControl,"save_id")??"")===saveId &&
+            String(findControl(freshControl,"world_day")??"")===String(worldDay) &&
+            String(findControl(freshControl,"world_time")??"")===String(worldTime) &&
+            String(findControl(freshControl,"current_scene_id")??"")===String(sceneId);
+          const audited=auditNpcHeatJournal({
+            sourceSaveId:saveId,worldDay:Number(worldDay),worldTime:String(worldTime),
+            stableAfterRead:stable,requestedActorIds:scope,index:txIndex,
+            header:journalIndex[indexRanges[1]]?.[0]??[],rowStart:window.startRow,
+            rows:snapshot[sliceRange]??[],
+          });
+          // Only aggregate proof diagnostics leave this module; never expose
+          // private GM evidence or use tentative receipts to award Heat.
+          const { receipts: _untrustedReceipts, ...summary } = audited;
+          npcHeatJournalAudit={...summary,
+            actorScopeCount:scope.length,windowStart:window.startRow,
+            windowEnd:window.endRow,truncated:window.truncated,
+            readRoutingApplied:false,proposedHeatTierChanges:0};
+        }
+      } catch {
+        npcHeatJournalAudit = {
+          schema:"NPC_HEAT_JOURNAL_AUDIT_V1",
+          mode:"READ_ONLY_UNAUTHENTICATED_CANDIDATES",
+          status:"SOURCE_UNAVAILABLE_OR_INVALID",
+          historyComplete:false,verifiedForTierPromotion:false,
+          contentHashAuthenticated:false,semanticWrites:0,
+        };
+      }
+    }
+  }
   const actors: Record<string, unknown> = {};
   const actorContextGate: Record<string, unknown> = {};
   const knowledgeLoaded = structuredNames.includes("NPC_KNOWLEDGE");
@@ -1008,6 +1068,7 @@ export async function getTurnContext(input: TurnContextRequest) {
         ])),
         contextGate: npcContextGate,
         heatIntegration: heatShadow.summary,
+        heatJournalAudit: npcHeatJournalAudit,
         boundedReadStats: explicitActorRequest
           ? {
               indexApproxCells: actorIndexScan?.approxCellsRead ?? 0,
