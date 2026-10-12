@@ -113,7 +113,7 @@ export async function runIsolatedPreviewWriteE2E() {
     action: async () => {
       // A real semantic dry-run before any writes.
       const prepared = await prepareCommit({...TEST_REQUEST, dryRun: true});
-      if (prepared.alreadyCommitted !== true &&
+      if (!(("alreadyCommitted" in prepared) && prepared.alreadyCommitted === true) &&
           !prepared.validation?.every((v: {pass:boolean}) => v.pass)) {
         throw Error("PREVIEW_E2E_SEMANTIC_PREPARE_REJECTED");
       }
