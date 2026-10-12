@@ -1,4 +1,5 @@
 import type { DocKey } from "./types.ts";
+import { isIsolatedPreviewFixture, resolveDocIdForRuntime } from "./preview_fixture.ts";
 
 function rawEnv(name: string): string | undefined {
   const g = globalThis as unknown as {
@@ -15,9 +16,14 @@ function env(name: string, required = true): string {
 }
 
 const runtime = (globalThis as unknown as { Deno?: unknown }).Deno ? "deno" : "node";
+const tempRuntimeId = env("TEMP_RUNTIME_ID");
+const previewFixture = isIsolatedPreviewFixture(tempRuntimeId);
+const docId = (key: DocKey, variableName: string) =>
+  resolveDocIdForRuntime(tempRuntimeId, key, () => env(variableName));
 
 export const config = {
   runtime,
+  previewFixture,
   port: Number(rawEnv("PORT") ?? "8000"),
   apiKey: env("RUNTIME_API_KEY"),
   allowWrites: (rawEnv("ALLOW_WRITES") ?? "false").toLowerCase() === "true",
@@ -39,16 +45,16 @@ export const config = {
     privateKey: env("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY").replace(/\\n/g, "\n"),
   },
   files: {
-    TEMP_RUNTIME: env("TEMP_RUNTIME_ID"),
+    TEMP_RUNTIME: tempRuntimeId,
     GM_PREGEN: env("GM_PREGEN_ID"),
-    LIVE_CANON_INDEX: env("LIVE_CANON_INDEX_ID"),
-    LIVE_PLAYER_INVENTORY: env("LIVE_PLAYER_INVENTORY_ID"),
-    LIVE_JOURNAL_LANGUAGE_DISCOVERIES: env("LIVE_JOURNAL_LANGUAGE_DISCOVERIES_ID"),
-    LIVE_NPCS_KNOWLEDGE_SOCIAL: env("LIVE_NPCS_KNOWLEDGE_SOCIAL_ID"),
-    LIVE_MAPS_LOCATIONS_STATE: env("LIVE_MAPS_LOCATIONS_STATE_ID"),
-    LIVE_WORLD_OPPORTUNITIES: env("LIVE_WORLD_OPPORTUNITIES_ID"),
-    LIVE_PROJECTS_LONGFORM: env("LIVE_PROJECTS_LONGFORM_ID"),
-    LIVE_SESSION_LOG: env("LIVE_SESSION_LOG_ID"),
-    LIVE_TRANSACTION_ARCHIVE: env("LIVE_TRANSACTION_ARCHIVE_ID"),
+    LIVE_CANON_INDEX: docId("LIVE_CANON_INDEX", "LIVE_CANON_INDEX_ID"),
+    LIVE_PLAYER_INVENTORY: docId("LIVE_PLAYER_INVENTORY", "LIVE_PLAYER_INVENTORY_ID"),
+    LIVE_JOURNAL_LANGUAGE_DISCOVERIES: docId("LIVE_JOURNAL_LANGUAGE_DISCOVERIES", "LIVE_JOURNAL_LANGUAGE_DISCOVERIES_ID"),
+    LIVE_NPCS_KNOWLEDGE_SOCIAL: docId("LIVE_NPCS_KNOWLEDGE_SOCIAL", "LIVE_NPCS_KNOWLEDGE_SOCIAL_ID"),
+    LIVE_MAPS_LOCATIONS_STATE: docId("LIVE_MAPS_LOCATIONS_STATE", "LIVE_MAPS_LOCATIONS_STATE_ID"),
+    LIVE_WORLD_OPPORTUNITIES: docId("LIVE_WORLD_OPPORTUNITIES", "LIVE_WORLD_OPPORTUNITIES_ID"),
+    LIVE_PROJECTS_LONGFORM: docId("LIVE_PROJECTS_LONGFORM", "LIVE_PROJECTS_LONGFORM_ID"),
+    LIVE_SESSION_LOG: docId("LIVE_SESSION_LOG", "LIVE_SESSION_LOG_ID"),
+    LIVE_TRANSACTION_ARCHIVE: docId("LIVE_TRANSACTION_ARCHIVE", "LIVE_TRANSACTION_ARCHIVE_ID"),
   } satisfies Record<DocKey | "TEMP_RUNTIME" | "GM_PREGEN", string>,
 };
