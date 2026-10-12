@@ -19,7 +19,7 @@ export type LeaseKv={
 type LeaseRow={ownerToken:string;txId:string};
 export async function withKvWriterLease<T>(input:{
   kv:LeaseKv;workbookId:string;txId:string;
-  action:()=>Promise<T>;leaseMs?:number;
+  action:()=>Promise<T>;leaseMs?:number;releaseOnError?:boolean;
 }):Promise<T>{
   const {kv,workbookId,txId}=input;
   if(!workbookId||!txId||workbookId==="ci-placeholder")throw Error("WRITER_LEASE_INVALID_TARGET");
@@ -35,13 +35,21 @@ export async function withKvWriterLease<T>(input:{
     .check({key,versionstamp:existing.versionstamp})
     .set(key,{ownerToken,txId}).commit();
   if(!acquired.ok)throw Error("WRITER_LEASE_BUSY_RETRY_LATER");
+  let finished=false;
   try{
     const check=await kv.get<LeaseRow>(key);
     if(check.value?.ownerToken!==ownerToken)throw Error("WRITER_LEASE_LOST_BEFORE_ACTION");
-    return await input.action();
+    const result=await input.action();
+    finished=true;
+    return result;
   }finally{
-    const current=await kv.get<LeaseRow>(key);
-    if(current.value?.ownerToken===ownerToken)
-      await kv.atomic().check({key,versionstamp:current.versionstamp}).delete(key).commit();
+    // Google Sheets may have accepted a batch that subsequently timed out.
+    // Never free the production writer after an ambiguous failed action.
+    // The lock survives until workers are drained and the durable TX is reconciled.
+    if(finished||input.releaseOnError!==false){
+      const current=await kv.get<LeaseRow>(key);
+      if(current.value?.ownerToken===ownerToken)
+        await kv.atomic().check({key,versionstamp:current.versionstamp}).delete(key).commit();
+    }
   }
 }

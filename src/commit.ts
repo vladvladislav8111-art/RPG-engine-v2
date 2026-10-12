@@ -66,7 +66,7 @@ export async function commitTurn(input: CommitRequest) {
     const kv=await requireWriterKv();
     // Acquire before prepare; two writers cannot both prepare the same snapshot.
     return await withKvWriterLease({kv,workbookId:config.files.TEMP_RUNTIME,
-      txId:input.txId,action:()=>commitTurnUnlocked(input)});
+      txId:input.txId,releaseOnError:false,action:()=>commitTurnUnlocked(input)});
   }
   return await commitTurnUnlocked(input);
 }
@@ -90,7 +90,8 @@ async function commitTurnUnlocked(input:CommitRequest) {
     };
   }
 
-  const txKey = ["tx", input.txId] as const;
+  // Scope transaction cache by workbook: branch Preview and Production may share KV.
+  const txKey = ["tx", config.files.TEMP_RUNTIME, input.txId] as const;
   const prior = await cacheGet<{ state: string }>(txKey);
   if (prior?.state === "COMMITTED") {
     const docs = await appendDocsIdempotent(input);

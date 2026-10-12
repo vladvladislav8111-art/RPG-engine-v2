@@ -64,3 +64,41 @@ Deno.test("writer lock has no time expiry; orphan owners fail closed pending man
     );
   }finally{raw.close();}
 });
+
+Deno.test("ambiguous writer failure leaves durable KV lock and blocks next instance",async()=>{
+  const raw=await Deno.openKv(":memory:");
+  const workbook="TEST-AMBIGUOUS-WRITE-NO-PRODUCTION";
+  const key=["rpg-v2","semantic-writer-lock",workbook] as const;
+  try{
+    await assertRejects(()=>withKvWriterLease({kv:raw as unknown as LeaseKv,
+      workbookId:workbook,txId:"TEST-MAYBE-COMMITTED",releaseOnError:false,
+      action:async()=>{throw Error("TEST_GOOGLE_TIMEOUT_RESULT_UNKNOWN");}}),
+      Error,"TEST_GOOGLE_TIMEOUT_RESULT_UNKNOWN");
+    const current=await raw.get<{txId:string}>(key);
+    assertEquals(current.value?.txId,"TEST-MAYBE-COMMITTED");
+    await assertRejects(()=>withKvWriterLease({kv:raw as unknown as LeaseKv,
+      workbookId:workbook,txId:"TEST-NEW-TX",releaseOnError:false,
+      action:async()=>{throw Error("MUST_NOT_ENTER");}}),
+      Error,"WRITER_LEASE_BUSY_RETRY_LATER");
+    // No lease cleanup: this models the fail-closed recovery-required state.
+  }finally{raw.close();}
+});
+
+Deno.test("KV lock namespaces two isolated workbooks with identical TX IDs",async()=>{
+  const raw=await Deno.openKv(":memory:");
+  try{
+    const kv=raw as unknown as LeaseKv;
+    let release:()=>void=()=>{};
+    let entered:()=>void=()=>{};
+    const hold=new Promise<void>(r=>{release=r;});
+    const began=new Promise<void>(r=>{entered=r;});
+    const first=withKvWriterLease({kv,workbookId:"TEST-WORKBOOK-1",txId:"TEST-SAME-TX",
+      action:async()=>{entered();await hold;return "one";}});
+    await began;
+    try{
+      assertEquals(await withKvWriterLease({kv,workbookId:"TEST-WORKBOOK-2",txId:"TEST-SAME-TX",
+        action:async()=> "two"}),"two");
+    }finally{release();}
+    assertEquals(await first,"one");
+  }finally{raw.close();}
+});
