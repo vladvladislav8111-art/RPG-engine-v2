@@ -34,6 +34,7 @@ import {
   requireIsolatedHeatWriter, scrubCallerHeatProvenance,
   deriveEngineHeatReceipts, npcHeatStateHashV2,
 } from "./npc_heat_receipt_writer.ts";
+import { signNpcHeatOriginV3 } from "./npc_heat_origin_v3.ts";
 import { computeSurvivalChange, survivalStaminaModifiers, type SurvivalActivity } from "./survival.ts";
 import { makeTurnToken } from "./turn_token.ts";
 import { resolveSelarinWeatherRecords, sheetObjects } from "./weather.ts";
@@ -1959,14 +1960,25 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       knownNpcIds, semantic,
     });
     worldAdvanceLog.engineNpcAttentionReceipts = receipts;
-    worldAdvanceLog.engineNpcReceiptEpoch = "TEST_ONLY_V2";
+    worldAdvanceLog.engineNpcReceiptEpoch =
+      config.npcHeatTestHmacKey ? "TEST_ONLY_V3" : "TEST_ONLY_V2";
   }
   const worldAdvancesJson = JSON.stringify(worldAdvanceLog);
   setByHeader(sessionRows, sessionRow, "World advances JSON", worldAdvancesJson);
   setByHeader(sessionRows, sessionRow, "Notes", semantic.session.notes ?? "");
   setByHeader(sessionRows, sessionRow, "Committed at", new Date().toISOString());
   setByHeader(sessionRows, sessionRow, "Ruleset version", RULESET_VERSION);
-  const stateHash = testHeatWriter
+  const stateHash = testHeatWriter && config.npcHeatTestHmacKey
+    ? await signNpcHeatOriginV3({
+      saveTo: input.saveTo,turnId:input.turnId,txId:input.txId,
+      inworldStart:semantic.session.inworldStart,
+      inworldEnd:resolvedInworldEnd,
+      sceneId:String(semantic.session.sceneId ?? c.sceneId ??
+        controlValue("current_scene_id") ?? ""),
+      source:semantic.session.source ?? "ENGINE_FASTPATH",
+      worldAdvancesJson,
+    },config.npcHeatTestHmacKeyId,config.npcHeatTestHmacKey)
+    : testHeatWriter
     ? await npcHeatStateHashV2({
       saveTo: input.saveTo, inworldEnd: resolvedInworldEnd,
       sceneId: String(semantic.session.sceneId ?? c.sceneId ??
@@ -1977,7 +1989,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       semantic.session.sceneId ?? c.sceneId ?? "", input.txId].join("|")).toString(16);
   setByHeader(sessionRows, sessionRow, "State hash", stateHash);
   setByHeader(sessionRows, sessionRow, "Source", semantic.session.source ?? "ENGINE_FASTPATH");
-  setByHeader(sessionRows, sessionRow, "Version", testHeatWriter ? 2 : 1);
+  setByHeader(sessionRows, sessionRow, "Version", testHeatWriter ? (config.npcHeatTestHmacKey ? 3 : 2) : 1);
   appendRow("SESSION_LOG", sessionRows, sessionRow);
 
   const postResources: Record<string, Scalar> = {};

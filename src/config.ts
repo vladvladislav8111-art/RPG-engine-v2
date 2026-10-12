@@ -26,6 +26,9 @@ export const config = {
   // Synthetic Preview only; hard-guarded to a separate TEST workbook & TEST save IDs.
   npcHeatTestWriterEnabled: (rawEnv("RPG_NPC_HEAT_TEST_WRITER_ENABLED") ?? "false").toLowerCase() === "true",
   npcHeatTestWorkbookId: rawEnv("RPG_NPC_HEAT_TEST_WORKBOOK_ID") ?? "",
+  // Optional, TEST-only HMAC V3 proof. Absent by default; never reuse Bearer or Google private key.
+  npcHeatTestHmacKey: rawEnv("RPG_NPC_HEAT_TEST_HMAC_KEY") ?? "",
+  npcHeatTestHmacKeyId: rawEnv("RPG_NPC_HEAT_TEST_HMAC_KEY_ID") ?? "",
   // Does not enable gameplay writing. Requires exact synthetic Preview workbook.
   previewKvRaceEnabled: (rawEnv("RPG_PREVIEW_KV_RACE_ENABLED") ?? "false").toLowerCase() === "true",
   enableKv: (rawEnv("ENABLE_KV") ?? (runtime === "deno" ? "true" : "false")).toLowerCase() === "true",
