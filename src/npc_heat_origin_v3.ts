@@ -29,12 +29,16 @@ function validate(frame:NpcHeatOriginFrame,keyId:string,secret:string) {
     (json as Record<string,unknown>).engineNpcReceiptEpoch!=="TEST_ONLY_V3")
     throw Error("TEST_V3_PROVENANCE_EPOCH_INVALID");
 }
-function bytes(frame:NpcHeatOriginFrame,keyId:string):Uint8Array {
-  return encoder.encode(JSON.stringify([
+function bytes(frame:NpcHeatOriginFrame,keyId:string):ArrayBuffer {
+  const encoded=encoder.encode(JSON.stringify([
     "NPC_HEAT_ORIGIN_V3_HMAC_SHA256",keyId,frame.saveTo,frame.turnId,
     frame.txId,frame.inworldStart,frame.inworldEnd,frame.sceneId,
     frame.source,frame.worldAdvancesJson,
   ]));
+  // WebCrypto's strict BufferSource requires a non-shared ArrayBuffer.
+  const out=new ArrayBuffer(encoded.byteLength);
+  new Uint8Array(out).set(encoded);
+  return out;
 }
 async function hmacKey(secret:string,usage:KeyUsage) {
   return await crypto.subtle.importKey(
