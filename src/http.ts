@@ -1,6 +1,8 @@
 import { commitTurn, prepareCommit } from "./commit.ts";
 import { config } from "./config.ts";
-import { previewWriterReadiness, previewWriterReadinessGate } from "./preview_writer_readiness.ts";
+import { previewWriterReadiness, previewWriterReadinessGate,
+  PREVIEW_WRITER_READINESS_PAGE } from "./preview_writer_readiness.ts";
+import { testPreviewStorage } from "./preview_test_storage.ts";
 import { bridgeFeatureStatus } from "./bridge_integration.ts";
 import { getTurnContext } from "./context.ts";
 import { sheetsBatchGet } from "./google.ts";
@@ -192,6 +194,19 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
     }
 
 
+    if(pathname==="/preview/writer-setup" && req.method==="GET"){
+      const timeline=(globalThis as unknown as {
+        Deno?:{env?:{get?:(n:string)=>string|undefined}}
+      }).Deno?.env?.get?.("DENO_TIMELINE")??"";
+      if(!testPreviewStorage(timeline,config.files.TEMP_RUNTIME))
+        return json({error:"not_found"},404);
+      return new Response(PREVIEW_WRITER_READINESS_PAGE,{headers:{
+        "content-type":"text/html; charset=utf-8",
+        "cache-control":"no-store",
+        "referrer-policy":"no-referrer",
+        "content-security-policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      }});
+    }
     if(pathname==="/preview/writer-readiness" && req.method==="GET"){
       const timeline=(globalThis as unknown as {
         Deno?:{env?:{get?:(n:string)=>string|undefined}}

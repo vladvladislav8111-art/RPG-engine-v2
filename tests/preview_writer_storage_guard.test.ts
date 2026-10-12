@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import type {DocKey} from "../src/types.ts";
 import { PREVIEW_TEST_DOC_IDS,PREVIEW_TEST_TEMP_RUNTIME_ID,
  testPreviewStorage,resolveTestDoc,assertTestGoogleTarget,testDocsPinned } from "../src/preview_test_storage.ts";
-import {previewWriterReadinessGate} from "../src/preview_writer_readiness.ts";
+import {previewWriterReadinessGate,PREVIEW_WRITER_READINESS_PAGE} from "../src/preview_writer_readiness.ts";
 import {handleHttpRequest} from "../src/http.ts";
 const id=PREVIEW_TEST_TEMP_RUNTIME_ID;
 const docs={...PREVIEW_TEST_DOC_IDS};
@@ -41,4 +41,13 @@ Deno.test("unauthorized Production never triggers Google read readiness",async()
   "https://synthetic.invalid/preview/writer-readiness"));
  assert.equal(response.status,404);
  assert.deepEqual(await response.json(),{error:"not_found"});
+});
+
+Deno.test("Preview Google setup page contains no secret or test document IDs",()=>{
+ assert.match(PREVIEW_WRITER_READINESS_PAGE,/Проверить тестовые Google Docs/);
+ assert.match(PREVIEW_WRITER_READINESS_PAGE,/\/preview\/writer-readiness/);
+ assert.equal(PREVIEW_WRITER_READINESS_PAGE.includes(PREVIEW_TEST_TEMP_RUNTIME_ID),false);
+ for(const id of Object.values(PREVIEW_TEST_DOC_IDS))
+   assert.equal(PREVIEW_WRITER_READINESS_PAGE.includes(id),false);
+ assert.equal(PREVIEW_WRITER_READINESS_PAGE.includes("RUNTIME_API_KEY"),false);
 });
