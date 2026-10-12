@@ -19,7 +19,8 @@ import { reviewNpcRoutineCadence } from "./npc_cadence_review.ts";
 import { shouldLoadSceneActors, sourceReadBudgetNotice } from "./context_hotpath_budget.ts";
 import { buildSystemNotificationCenter } from "./system_notification_center.ts";
 import { projectNpcHeatContextShadow } from "./npc_heat_context_adapter.ts";
-import { planNpcHeatJournalWindow, auditNpcHeatJournal } from "./npc_heat_journal_audit.ts";
+import { planNpcHeatJournalWindow } from "./npc_heat_journal_audit.ts";
+import { auditNpcHeatJournalIncludingTestV2 } from "./npc_heat_v2_reader.ts";
 import { chooseMemoryRoute } from "./context_memory_router.ts";
 import { planIndependentWorldTick } from "./world_tick_dispatcher.ts";
 import { buildNpcAutonomyPlan } from "./npc_autonomy_planner.ts";
@@ -807,7 +808,7 @@ export async function getTurnContext(input: TurnContextRequest) {
             String(findControl(freshControl,"world_day")??"")===String(worldDay) &&
             String(findControl(freshControl,"world_time")??"")===String(worldTime) &&
             String(findControl(freshControl,"current_scene_id")??"")===String(sceneId);
-          const audited=auditNpcHeatJournal({
+          const audited=await auditNpcHeatJournalIncludingTestV2({
             sourceSaveId:saveId,worldDay:Number(worldDay),worldTime:String(worldTime),
             stableAfterRead:stable,requestedActorIds:scope,index:txIndex,
             header:journalIndex[indexRanges[1]]?.[0]??[],rowStart:window.startRow,
