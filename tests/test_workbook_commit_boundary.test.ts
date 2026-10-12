@@ -48,7 +48,7 @@ Deno.test("isolated TEST workbook cannot write to an unpinned requested Google D
   config.files.LIVE_TRANSACTION_ARCHIVE=PREVIEW_TEST_DOC_IDS.LIVE_TRANSACTION_ARCHIVE;
   config.npcHeatTestWorkbookId="not-pinned";
   await assert.rejects(()=>commitTurn(attempt),
-    /TEST_WRITER_CONTEXT_NOT_ISOLATED/);
+    /NPC_HEAT_TEST_WRITER_ISOLATION_GATE/);
  }finally{
   if(timeline===undefined)Deno.env.delete("DENO_TIMELINE");
   else Deno.env.set("DENO_TIMELINE",timeline);
