@@ -12,6 +12,7 @@ import { buildWorldActionDocket } from "./world_scheduler.ts";
 import { ACHIEVEMENT_CATALOG_COUNTS } from "./world_sim_v3/achievement_catalog.ts";
 import { resolveSceneActorIds } from "./scene_routing.ts";
 import { buildNpcBehavioralContext } from "./npc_behavior.ts";
+import { projectNpcHeatContextShadow } from "./npc_heat_context_adapter.ts";
 import { chooseMemoryRoute } from "./context_memory_router.ts";
 import { planIndependentWorldTick } from "./world_tick_dispatcher.ts";
 import { buildNpcAutonomyPlan } from "./npc_autonomy_planner.ts";
@@ -737,6 +738,15 @@ export async function getTurnContext(input: TurnContextRequest) {
   const activityRuleRows = (structured.NPC_ACTIVITY_RULES as Array<Record<string, unknown>> | undefined) ?? [];
   const worldClockRows = (structured.WORLD_CLOCKS as Array<Record<string, unknown>> | undefined) ?? [];
   const actorRecentChat = recentActorChat(actorChatRows, resolvedActorIds, recentChatLimit);
+  const heatShadow = projectNpcHeatContextShadow({
+    saveId, worldDay, worldTime, resolvedActorIds, routedSceneActorIds,
+    explicitlyRequestedActorIds: [
+      ...(input.actorIds ?? []),
+      ...actorResolution.filter((r) => r.status === "RESOLVED").flatMap((r) => r.actorIds),
+    ],
+    current: actorCurrent,
+    activityRules: activityRuleRows,
+  });
   const actors: Record<string, unknown> = {};
   const actorContextGate: Record<string, unknown> = {};
   const knowledgeLoaded = structuredNames.includes("NPC_KNOWLEDGE");
@@ -755,6 +765,7 @@ export async function getTurnContext(input: TurnContextRequest) {
     const archivedKnowledge = dormantArchiveRows.filter((r) => String(r["NPC ID"] ?? "") === id);
     actors[id] = {
       current,
+      contextHeat: heatShadow.actors[id] ?? null,
       durableIdentity,
       knowledge: actorKnowledge.filter((r) => String(r["NPC ID"] ?? "") === id),
       relationships: filterRelationships(relationshipRows, [id]),
@@ -916,6 +927,7 @@ export async function getTurnContext(input: TurnContextRequest) {
           },
         ])),
         contextGate: npcContextGate,
+        heatIntegration: heatShadow.summary,
         boundedReadStats: explicitActorRequest
           ? {
               indexApproxCells: actorIndexScan?.approxCellsRead ?? 0,
