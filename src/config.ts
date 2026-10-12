@@ -1,4 +1,5 @@
 import type { DocKey } from "./types.ts";
+import { resolveTestDoc } from "./preview_test_storage.ts";
 
 function rawEnv(name: string): string | undefined {
   const g = globalThis as unknown as {
@@ -25,6 +26,13 @@ export const config = {
   // Synthetic Preview only; hard-guarded to a separate TEST workbook & TEST save IDs.
   npcHeatTestWriterEnabled: (rawEnv("RPG_NPC_HEAT_TEST_WRITER_ENABLED") ?? "false").toLowerCase() === "true",
   npcHeatTestWorkbookId: rawEnv("RPG_NPC_HEAT_TEST_WORKBOOK_ID") ?? "",
+  // Explicit one-shot synthetic ACK-drop after real isolated Google Sheets 200.
+  // Default OFF. TEST Preview only; no effect on Production or other TX.
+  previewGoogleAckDropEnabled:
+    (rawEnv("RPG_PREVIEW_GOOGLE_ACK_DROP_ENABLED") ?? "false").toLowerCase() === "true",
+  // Optional, TEST-only HMAC V3 proof. Absent by default; never reuse Bearer or Google private key.
+  npcHeatTestHmacKey: rawEnv("RPG_NPC_HEAT_TEST_HMAC_KEY") ?? "",
+  npcHeatTestHmacKeyId: rawEnv("RPG_NPC_HEAT_TEST_HMAC_KEY_ID") ?? "",
   // Does not enable gameplay writing. Requires exact synthetic Preview workbook.
   previewKvRaceEnabled: (rawEnv("RPG_PREVIEW_KV_RACE_ENABLED") ?? "false").toLowerCase() === "true",
   enableKv: (rawEnv("ENABLE_KV") ?? (runtime === "deno" ? "true" : "false")).toLowerCase() === "true",
@@ -36,14 +44,14 @@ export const config = {
   files: {
     TEMP_RUNTIME: env("TEMP_RUNTIME_ID"),
     GM_PREGEN: env("GM_PREGEN_ID"),
-    LIVE_CANON_INDEX: env("LIVE_CANON_INDEX_ID"),
-    LIVE_PLAYER_INVENTORY: env("LIVE_PLAYER_INVENTORY_ID"),
-    LIVE_JOURNAL_LANGUAGE_DISCOVERIES: env("LIVE_JOURNAL_LANGUAGE_DISCOVERIES_ID"),
-    LIVE_NPCS_KNOWLEDGE_SOCIAL: env("LIVE_NPCS_KNOWLEDGE_SOCIAL_ID"),
-    LIVE_MAPS_LOCATIONS_STATE: env("LIVE_MAPS_LOCATIONS_STATE_ID"),
-    LIVE_WORLD_OPPORTUNITIES: env("LIVE_WORLD_OPPORTUNITIES_ID"),
-    LIVE_PROJECTS_LONGFORM: env("LIVE_PROJECTS_LONGFORM_ID"),
-    LIVE_SESSION_LOG: env("LIVE_SESSION_LOG_ID"),
-    LIVE_TRANSACTION_ARCHIVE: env("LIVE_TRANSACTION_ARCHIVE_ID"),
+    LIVE_CANON_INDEX: resolveTestDoc(rawEnv("DENO_TIMELINE") ?? "",env("TEMP_RUNTIME_ID"),"LIVE_CANON_INDEX",env("LIVE_CANON_INDEX_ID")),
+    LIVE_PLAYER_INVENTORY: resolveTestDoc(rawEnv("DENO_TIMELINE") ?? "",env("TEMP_RUNTIME_ID"),"LIVE_PLAYER_INVENTORY",env("LIVE_PLAYER_INVENTORY_ID")),
+    LIVE_JOURNAL_LANGUAGE_DISCOVERIES: resolveTestDoc(rawEnv("DENO_TIMELINE") ?? "",env("TEMP_RUNTIME_ID"),"LIVE_JOURNAL_LANGUAGE_DISCOVERIES",env("LIVE_JOURNAL_LANGUAGE_DISCOVERIES_ID")),
+    LIVE_NPCS_KNOWLEDGE_SOCIAL: resolveTestDoc(rawEnv("DENO_TIMELINE") ?? "",env("TEMP_RUNTIME_ID"),"LIVE_NPCS_KNOWLEDGE_SOCIAL",env("LIVE_NPCS_KNOWLEDGE_SOCIAL_ID")),
+    LIVE_MAPS_LOCATIONS_STATE: resolveTestDoc(rawEnv("DENO_TIMELINE") ?? "",env("TEMP_RUNTIME_ID"),"LIVE_MAPS_LOCATIONS_STATE",env("LIVE_MAPS_LOCATIONS_STATE_ID")),
+    LIVE_WORLD_OPPORTUNITIES: resolveTestDoc(rawEnv("DENO_TIMELINE") ?? "",env("TEMP_RUNTIME_ID"),"LIVE_WORLD_OPPORTUNITIES",env("LIVE_WORLD_OPPORTUNITIES_ID")),
+    LIVE_PROJECTS_LONGFORM: resolveTestDoc(rawEnv("DENO_TIMELINE") ?? "",env("TEMP_RUNTIME_ID"),"LIVE_PROJECTS_LONGFORM",env("LIVE_PROJECTS_LONGFORM_ID")),
+    LIVE_SESSION_LOG: resolveTestDoc(rawEnv("DENO_TIMELINE") ?? "",env("TEMP_RUNTIME_ID"),"LIVE_SESSION_LOG",env("LIVE_SESSION_LOG_ID")),
+    LIVE_TRANSACTION_ARCHIVE: resolveTestDoc(rawEnv("DENO_TIMELINE") ?? "",env("TEMP_RUNTIME_ID"),"LIVE_TRANSACTION_ARCHIVE",env("LIVE_TRANSACTION_ARCHIVE_ID")),
   } satisfies Record<DocKey | "TEMP_RUNTIME" | "GM_PREGEN", string>,
 };

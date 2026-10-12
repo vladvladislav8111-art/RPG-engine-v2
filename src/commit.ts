@@ -4,6 +4,8 @@ import { docsAppendIdempotent, sheetsBatchGet, sheetsBatchUpdate } from "./googl
 import { prepareSemanticCommit } from "./semantic.ts";
 import { requireIsolatedHeatWriter } from "./npc_heat_receipt_writer.ts";
 import { withKvWriterLease, type LeaseKv } from "./writer_kv_lease.ts";
+import { throwAfterConfirmedTestSheetsWrite } from "./preview_google_ack_drop.ts";
+import { PREVIEW_TEST_TEMP_RUNTIME_ID, PREVIEW_TEST_DOC_IDS, testPreviewTimeline } from "./preview_test_storage.ts";
 import type { CommitRequest } from "./types.ts";
 
 function firstCell(values: Record<string, unknown[][]>, range: string): unknown {
@@ -15,8 +17,9 @@ function same(a: unknown, b: unknown): boolean {
   return String(a) === String(b);
 }
 
-async function appendDocsIdempotent(input: CommitRequest) {
+async function appendDocsIdempotent(input: CommitRequest, checkpoint?:()=>Promise<void>) {
   return await Promise.all((input.docAppends ?? []).map(async (item) => {
+    await checkpoint?.();
     const documentId = config.files[item.documentKey];
     return { documentKey: item.documentKey, ...(await docsAppendIdempotent(documentId, input.txId, item.text)) };
   }));
@@ -57,7 +60,7 @@ export async function prepareCommit(input: CommitRequest) {
   };
 }
 
-async function executeCommitTurn(input: CommitRequest) {
+async function executeCommitTurn(input: CommitRequest, checkpoint?:()=>Promise<void>) {
   if (!config.allowWrites) throw new Error("Writes are disabled. Set ALLOW_WRITES=true only after dry-run validation.");
   if (!input.semantic && !input.dryRun && !config.allowRawCommits) {
     throw new Error("Raw commits are disabled. Ordinary gameplay must use semantic commits; set ALLOW_RAW_COMMITS=true only for deliberate migration/repair.");
@@ -71,7 +74,7 @@ async function executeCommitTurn(input: CommitRequest) {
   // If Sheets committed but a later permanent-canon append failed, retry the requested
   // doc appends by TX marker before reporting the replay as complete.
   if (prepared.alreadyCommitted) {
-    const docs = await appendDocsIdempotent(input);
+    const docs = await appendDocsIdempotent(input,checkpoint);
     return {
       ...prepared,
       committed: true,
@@ -87,7 +90,7 @@ async function executeCommitTurn(input: CommitRequest) {
     : ["tx", input.txId] as const;
   const prior = await cacheGet<{ state: string }>(txKey);
   if (prior?.state === "COMMITTED") {
-    const docs = await appendDocsIdempotent(input);
+    const docs = await appendDocsIdempotent(input,checkpoint);
     return {
       ...prepared,
       committed: true,
@@ -99,15 +102,36 @@ async function executeCommitTurn(input: CommitRequest) {
 
   await cacheSet(txKey, { state: "COMMITTING", saveTo: input.saveTo, startedAt: new Date().toISOString() });
   try {
+    await checkpoint?.();
     const sheetResult = await sheetsBatchUpdate(config.files.TEMP_RUNTIME, prepared.manifest.sheetWrites);
+    // Only TEST-S3->TEST-S4 exact TX in a Preview with a separate explicit flag.
+    // Throws after the real Google success: catch marks RECOVERY_REQUIRED,
+    // and the no-TTL KV workbook lock is deliberately retained.
+    throwAfterConfirmedTestSheetsWrite({
+      enabled:config.previewGoogleAckDropEnabled,
+      timeline:Deno.env.get("DENO_TIMELINE") ?? "",
+      allowWrites:config.allowWrites,allowRawCommits:config.allowRawCommits,
+      testWriterEnabled:config.npcHeatTestWriterEnabled,enableKv:config.enableKv,
+      workbookId:config.files.TEMP_RUNTIME,
+      isolatedWorkbookId:config.npcHeatTestWorkbookId,
+      txId:input.txId,turnId:input.turnId,
+      expectedSaveId:input.expectedSaveId,saveTo:input.saveTo,
+      isSemantic:!!input.semantic,source:input.semantic?.session.source,
+    });
+    // If a TEST lease was changed during the Google Sheets await, never
+    // proceed into Docs. A paused worker can still have reached Sheets
+    // before this check: no external Google fencing is claimed.
+    await checkpoint?.();
     await cacheSet(txKey, { state: "SHEET_COMMITTED_DOCS_PENDING", saveTo: input.saveTo });
 
-    const docs = await appendDocsIdempotent(input);
+    const docs = await appendDocsIdempotent(input,checkpoint);
 
+    await checkpoint?.();
     const verify = await sheetsBatchGet(config.files.TEMP_RUNTIME, ["CONTROL!B2", "CONTROL!B5", "CONTROL!B6", "CONTROL!B8"]);
     const save = String(firstCell(verify, "CONTROL!B2") ?? "");
     if (save !== input.saveTo) throw new Error(`commit verification failed: expected ${input.saveTo}, got ${save}`);
 
+    await checkpoint?.();
     await cacheSet(txKey, { state: "COMMITTED", saveTo: input.saveTo, committedAt: new Date().toISOString() });
     return {
       ...prepared,
@@ -133,15 +157,40 @@ async function executeCommitTurn(input: CommitRequest) {
  * The existing production commit path remains unchanged with the flag OFF.
  */
 export async function commitTurn(input: CommitRequest) {
+  // First preserve semantic/source and save-ID validation even when KV is OFF.
+  // These errors must not be masked by a more general runtime gate.
+  if (config.npcHeatTestWriterEnabled) {
+    if (config.files.TEMP_RUNTIME !== PREVIEW_TEST_TEMP_RUNTIME_ID)
+      throw Error("TEST_WRITER_CANNOT_TARGET_NON_TEST_WORKBOOK");
+    requireIsolatedHeatWriter({
+      enabled:true,workbookId:config.files.TEMP_RUNTIME,
+      isolatedWorkbookId:config.npcHeatTestWorkbookId,
+      expectedSaveId:input.expectedSaveId,saveTo:input.saveTo,
+      source:input.semantic?.session.source,
+    });
+    if (!input.semantic || config.allowRawCommits)
+      throw Error("NPC_HEAT_TEST_SEMANTIC_WRITER_REQUIRED");
+  }
+  // Enforce the isolated workbook boundary before any commit path can read
+  // or write Google, even if the general ALLOW_WRITES flag was set by mistake.
+  const isolated = config.files.TEMP_RUNTIME === PREVIEW_TEST_TEMP_RUNTIME_ID;
+  if (isolated) {
+    const preview = testPreviewTimeline(Deno.env.get("DENO_TIMELINE") ?? "");
+    // Check every document actually requested by this commit BEFORE Sheets
+    // is modified. The Google transport independently blocks other TEST
+    // workbook targets, including every direct Docs call.
+    const allowedDocs = new Set<string>(Object.values(PREVIEW_TEST_DOC_IDS));
+    const pinned = config.npcHeatTestWorkbookId === PREVIEW_TEST_TEMP_RUNTIME_ID &&
+      (input.docAppends ?? []).every(d => allowedDocs.has(config.files[d.documentKey]));
+    if (!input.dryRun && !config.npcHeatTestWriterEnabled)
+      throw Error("TEST_WORKBOOK_WRITES_REQUIRE_TEST_WRITER");
+    if (!preview || !pinned) throw Error("TEST_WRITER_CONTEXT_NOT_ISOLATED");
+    if (!input.dryRun && (!config.allowWrites || config.allowRawCommits || !config.enableKv))
+      throw Error("TEST_WRITER_WRITES_AND_KV_GATE_FAILED");
+  }
+  if (config.npcHeatTestWriterEnabled && !isolated)
+    throw Error("TEST_WRITER_CANNOT_TARGET_NON_TEST_WORKBOOK");
   if (!config.npcHeatTestWriterEnabled) return await executeCommitTurn(input);
-  requireIsolatedHeatWriter({
-    enabled: true, workbookId: config.files.TEMP_RUNTIME,
-    isolatedWorkbookId: config.npcHeatTestWorkbookId,
-    expectedSaveId: input.expectedSaveId, saveTo: input.saveTo,
-    source: input.semantic?.session.source,
-  });
-  if (!input.semantic || config.allowRawCommits)
-    throw Error("NPC_HEAT_TEST_SEMANTIC_WRITER_REQUIRED");
   if (input.dryRun) return await executeCommitTurn(input);
   if (!config.allowWrites || !config.enableKv)
     throw Error("NPC_HEAT_TEST_WRITER_KV_AND_WRITES_REQUIRED");
@@ -153,6 +202,6 @@ export async function commitTurn(input: CommitRequest) {
   return await withKvWriterLease({
     kv, workbookId: config.files.TEMP_RUNTIME, txId: input.txId,
     releaseOnError: false,
-    action: async () => await executeCommitTurn(input),
+    action: async ({assertOwner}) => await executeCommitTurn(input,assertOwner),
   });
 }

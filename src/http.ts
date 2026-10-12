@@ -1,11 +1,22 @@
 import { commitTurn, prepareCommit } from "./commit.ts";
 import { config } from "./config.ts";
+import { fixedWriterE2EGate,runFixedWriterE2E } from "./preview_writer_e2e.ts";
+import { PREVIEW_WRITER_E2E_HTML } from "./preview_writer_e2e_ui.ts";
+import { previewWriterReadiness, previewWriterReadinessGate,
+  PREVIEW_WRITER_READINESS_PAGE } from "./preview_writer_readiness.ts";
+import { testPreviewStorage } from "./preview_test_storage.ts";
 import { bridgeFeatureStatus } from "./bridge_integration.ts";
 import { getTurnContext } from "./context.ts";
 import { sheetsBatchGet } from "./google.ts";
 import { HUD_UI_VERSION } from "./hud.ts";
 import { diagnoseMcp, handleMcp } from "./mcp.ts";
 import { intBetween } from "./rng.ts";
+import {readAckDropForensics} from "./preview_google_ack_drop_report.ts";
+import {ackDropGate,runAckDropTest} from "./preview_google_ack_drop_runner.ts";
+import {PREVIEW_ACK_DROP_PAGE} from "./preview_google_ack_drop_ui.ts";
+import {fixedRecoveryGate,readFixedRecovery} from "./preview_google_recovery.ts";
+import {PREVIEW_GOOGLE_RECOVERY_PAGE} from "./preview_google_recovery_ui.ts";
+import { crossRevisionGate, runCrossRevisionProbe, CROSS_REVISION_PAGE } from "./preview_kv_cross_revision.ts";
 import {
   previewKvGate, previewKvSession, previewKvStatus, previewKvHold,
   previewKvContend, PREVIEW_KV_PAGE,
@@ -166,6 +177,97 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
         googleCallsPerformed:0,kvWritesPerformed:0,
       });
     }
+    if (pathname==="/preview/kv-cross-revision" &&
+        req.method==="GET") {
+      if(!crossRevisionGate(previewKvInput))
+        return json({error:"not_found"},404);
+      return new Response(CROSS_REVISION_PAGE,{headers:{
+        "content-type":"text/html; charset=utf-8",
+        "cache-control":"no-store",
+        "referrer-policy":"no-referrer",
+        "content-security-policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      }});
+    }
+    if (pathname==="/preview/kv-cross-revision/run" &&
+        req.method==="POST") {
+      if(!crossRevisionGate(previewKvInput))
+        return json({error:"not_found"},404);
+      if(!authorized(req))return json({error:"unauthorized"},401);
+      if(Number(req.headers.get("content-length")??"0")>0)
+        return json({error:"no_request_body_allowed"},400);
+      return json(await runCrossRevisionProbe());
+    }
+    if(pathname==="/preview/ack-drop" && req.method==="GET"){
+      if(!ackDropGate({
+        timeline,tempId:config.files.TEMP_RUNTIME,
+        isolatedId:config.npcHeatTestWorkbookId,docs:config.files,
+        allowWrites:config.allowWrites,allowRawCommits:config.allowRawCommits,
+        writerEnabled:config.npcHeatTestWriterEnabled,kvEnabled:config.enableKv,
+        ackFlag:config.previewGoogleAckDropEnabled,
+        hmacSecret:config.npcHeatTestHmacKey,
+      }))return json({error:"not_found"},404);
+      return new Response(PREVIEW_ACK_DROP_PAGE,{headers:{
+        "content-type":"text/html; charset=utf-8","cache-control":"no-store",
+        "referrer-policy":"no-referrer",
+        "content-security-policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      }});
+    }
+    if(pathname==="/preview/ack-drop/run" && req.method==="POST"){
+      if(!ackDropGate({
+        timeline,tempId:config.files.TEMP_RUNTIME,
+        isolatedId:config.npcHeatTestWorkbookId,docs:config.files,
+        allowWrites:config.allowWrites,allowRawCommits:config.allowRawCommits,
+        writerEnabled:config.npcHeatTestWriterEnabled,kvEnabled:config.enableKv,
+        ackFlag:config.previewGoogleAckDropEnabled,
+        hmacSecret:config.npcHeatTestHmacKey,
+      }))return json({error:"not_found"},404);
+      if(!authorized(req))return json({error:"unauthorized"},401);
+      if(Number(req.headers.get("content-length")??"0")>0)
+        return json({error:"no_caller_payload_permitted"},400);
+      return json(await runAckDropTest());
+    }
+    if(pathname==="/preview/google-recovery" &&
+        req.method==="GET"){
+      if(!fixedRecoveryGate({
+        timeline,tempId:config.files.TEMP_RUNTIME,
+        testWorkbookId:config.npcHeatTestWorkbookId,
+        docs:config.files,allowWrites:config.allowWrites,
+        rawWrites:config.allowRawCommits,
+        writerEnabled:config.npcHeatTestWriterEnabled,
+        kvEnabled:config.enableKv,
+      }))return json({error:"not_found"},404);
+      return new Response(PREVIEW_GOOGLE_RECOVERY_PAGE,{headers:{
+        "content-type":"text/html; charset=utf-8",
+        "cache-control":"no-store",
+        "referrer-policy":"no-referrer",
+        "content-security-policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      }});
+    }
+    if(pathname==="/preview/google-recovery/ack-drop" &&
+        req.method==="GET"){
+      if(!fixedRecoveryGate({
+        timeline,tempId:config.files.TEMP_RUNTIME,
+        testWorkbookId:config.npcHeatTestWorkbookId,
+        docs:config.files,allowWrites:config.allowWrites,
+        rawWrites:config.allowRawCommits,
+        writerEnabled:config.npcHeatTestWriterEnabled,
+        kvEnabled:config.enableKv,
+      }))return json({error:"not_found"},404);
+      if(!authorized(req))return json({error:"unauthorized"},401);
+      return json(await readAckDropForensics());
+    }
+    if(pathname==="/preview/google-recovery/report" && req.method==="GET"){
+      if(!fixedRecoveryGate({
+        timeline,tempId:config.files.TEMP_RUNTIME,
+        testWorkbookId:config.npcHeatTestWorkbookId,
+        docs:config.files,allowWrites:config.allowWrites,
+        rawWrites:config.allowRawCommits,
+        writerEnabled:config.npcHeatTestWriterEnabled,
+        kvEnabled:config.enableKv,
+      }))return json({error:"not_found"},404);
+      if(!authorized(req))return json({error:"unauthorized"},401);
+      return json(await readFixedRecovery());
+    }
     if (pathname.startsWith("/preview/kv-race")) {
       if (!previewKvAllowed) return json({error:"not_found"},404);
       if (pathname==="/preview/kv-race" && req.method==="GET") {
@@ -188,6 +290,63 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
           ? await previewKvHold(session) : await previewKvContend(session));
       }
       return json({error:"not_found"},404);
+    }
+
+
+
+    if(pathname==="/preview/writer-e2e" && req.method==="GET"){
+      const timeline=(globalThis as unknown as {
+        Deno?:{env?:{get?:(n:string)=>string|undefined}}
+      }).Deno?.env?.get?.("DENO_TIMELINE")??"";
+      // The setup page itself is static; it cannot read or write Google.
+      if(!testPreviewStorage(timeline,config.files.TEMP_RUNTIME))
+        return json({error:"not_found"},404);
+      return new Response(PREVIEW_WRITER_E2E_HTML,{headers:{
+        "content-type":"text/html; charset=utf-8",
+        "cache-control":"no-store",
+        "referrer-policy":"no-referrer",
+        "content-security-policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      }});
+    }
+    if(pathname==="/preview/writer-e2e/run" && req.method==="POST"){
+      const timeline=(globalThis as unknown as {
+        Deno?:{env?:{get?:(n:string)=>string|undefined}}
+      }).Deno?.env?.get?.("DENO_TIMELINE")??"";
+      if(!fixedWriterE2EGate({timeline,workbookId:config.files.TEMP_RUNTIME,
+        isolatedWorkbookId:config.npcHeatTestWorkbookId,docs:config.files,
+        allowWrites:config.allowWrites,allowRawCommits:config.allowRawCommits,
+        testWriterEnabled:config.npcHeatTestWriterEnabled,kvEnabled:config.enableKv}))
+        return json({error:"not_found"},404);
+      if(!authorized(req))return json({error:"unauthorized"},401);
+      if(Number(req.headers.get("content-length")??"0")>0)
+        return json({error:"no_caller_payload_permitted"},400);
+      return json(await runFixedWriterE2E());
+    }
+    if(pathname==="/preview/writer-setup" && req.method==="GET"){
+      const timeline=(globalThis as unknown as {
+        Deno?:{env?:{get?:(n:string)=>string|undefined}}
+      }).Deno?.env?.get?.("DENO_TIMELINE")??"";
+      if(!testPreviewStorage(timeline,config.files.TEMP_RUNTIME))
+        return json({error:"not_found"},404);
+      return new Response(PREVIEW_WRITER_READINESS_PAGE,{headers:{
+        "content-type":"text/html; charset=utf-8",
+        "cache-control":"no-store",
+        "referrer-policy":"no-referrer",
+        "content-security-policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      }});
+    }
+    if(pathname==="/preview/writer-readiness" && req.method==="GET"){
+      const timeline=(globalThis as unknown as {
+        Deno?:{env?:{get?:(n:string)=>string|undefined}}
+      }).Deno?.env?.get?.("DENO_TIMELINE")??"";
+      if(!previewWriterReadinessGate({
+        timeline,tempId:config.files.TEMP_RUNTIME,
+        docs:config.files,allowWrites:config.allowWrites,
+        rawWrites:config.allowRawCommits,
+        heatWriter:config.npcHeatTestWriterEnabled,kvEnabled:config.enableKv,
+      }))return json({error:"not_found"},404);
+      if(!authorized(req))return json({error:"unauthorized"},401);
+      return json(await previewWriterReadiness());
     }
 
     if (pathname === "/mcp") {

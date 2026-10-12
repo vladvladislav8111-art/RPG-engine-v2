@@ -19,7 +19,8 @@ export type LeaseKv={
 type LeaseRow={ownerToken:string;txId:string};
 export async function withKvWriterLease<T>(input:{
   kv:LeaseKv;workbookId:string;txId:string;
-  action:()=>Promise<T>;leaseMs?:number;releaseOnError?:boolean;
+  action:(lease:{assertOwner:()=>Promise<void>})=>Promise<T>;
+  leaseMs?:number;releaseOnError?:boolean;
 }):Promise<T>{
   const {kv,workbookId,txId}=input;
   if(!workbookId||!txId||workbookId==="ci-placeholder")throw Error("WRITER_LEASE_INVALID_TARGET");
@@ -36,10 +37,21 @@ export async function withKvWriterLease<T>(input:{
     .set(key,{ownerToken,txId}).commit();
   if(!acquired.ok)throw Error("WRITER_LEASE_BUSY_RETRY_LATER");
   let finished=false;
+  // Capture the initial CAS versionstamp. An ABA delete/re-create of the
+  // same owner token is not authority to continue old Google operations.
+  const guard=async()=>{
+    const present=await kv.get<LeaseRow>(key);
+    if(!present.value || present.value.ownerToken!==ownerToken ||
+       present.value.txId!==txId || present.versionstamp!==initialStamp)
+      throw Error("WRITER_LEASE_LOST_BEFORE_GOOGLE_STAGE");
+  };
+  let initialStamp:string|null=null;
   try{
     const check=await kv.get<LeaseRow>(key);
-    if(check.value?.ownerToken!==ownerToken)throw Error("WRITER_LEASE_LOST_BEFORE_ACTION");
-    const result=await input.action();
+    if(check.value?.ownerToken!==ownerToken || check.value.txId!==txId)
+      throw Error("WRITER_LEASE_LOST_BEFORE_ACTION");
+    initialStamp=check.versionstamp;
+    const result=await input.action({assertOwner:guard});
     finished=true;
     return result;
   }finally{
@@ -50,7 +62,9 @@ export async function withKvWriterLease<T>(input:{
       const current=await kv.get<LeaseRow>(key);
       // Even an apparently successful Google write cannot report success if
       // another holder replaced the lock or CAS release failed.
-      if(current.value?.ownerToken!==ownerToken){
+      if(current.value?.ownerToken!==ownerToken ||
+         current.value.txId!==txId ||
+         current.versionstamp!==initialStamp){
         if(finished)throw Error("WRITER_LEASE_LOST_AFTER_ACTION");
       }else{
         const released=await kv.atomic()

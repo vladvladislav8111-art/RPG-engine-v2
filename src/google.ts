@@ -1,4 +1,9 @@
 import { getGoogleAccessToken } from "./auth.ts";
+import { config } from "./config.ts";
+import { assertTestGoogleTarget } from "./preview_test_storage.ts";
+
+const protect=(id:string,intent:"read"|"write")=>
+  assertTestGoogleTarget(config.files.TEMP_RUNTIME,id,intent,config.files.GM_PREGEN);
 
 async function googleJson<T>(url: string, init?: RequestInit): Promise<T> {
   const token = await getGoogleAccessToken();
@@ -15,6 +20,7 @@ async function googleJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export async function fileModifiedTime(fileId: string): Promise<string | null> {
+  protect(fileId,"read");
   const data = await googleJson<{ modifiedTime?: string }>(
     `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=modifiedTime`,
   );
@@ -22,6 +28,7 @@ export async function fileModifiedTime(fileId: string): Promise<string | null> {
 }
 
 export async function sheetsBatchGet(spreadsheetId: string, ranges: string[]): Promise<Record<string, unknown[][]>> {
+  protect(spreadsheetId,"read");
   if (!ranges.length) return {};
   const params = new URLSearchParams();
   for (const range of ranges) params.append("ranges", range);
@@ -43,6 +50,7 @@ export async function sheetsBatchUpdate(
   spreadsheetId: string,
   writes: Array<{ range: string; values: unknown[][] }>,
 ): Promise<{ totalUpdatedCells?: number }> {
+  protect(spreadsheetId,"write");
   if (!writes.length) return { totalUpdatedCells: 0 };
   return await googleJson(
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values:batchUpdate`,
@@ -69,6 +77,7 @@ function flattenStructural(elements: any[] | undefined): string {
 }
 
 export async function docsGet(documentId: string): Promise<{ text: string; revisionId: string | null; tabId?: string }> {
+  protect(documentId,"read");
   const doc = await googleJson<any>(
     `https://docs.googleapis.com/v1/documents/${encodeURIComponent(documentId)}?includeTabsContent=true`,
   );
@@ -80,6 +89,7 @@ export async function docsGet(documentId: string): Promise<{ text: string; revis
 }
 
 export async function docsAppendIdempotent(documentId: string, txId: string, text: string): Promise<{ skipped: boolean }> {
+  protect(documentId,"write");
   const current = await docsGet(documentId);
   const marker = `[TX:${txId}]`;
   if (current.text.includes(marker)) return { skipped: true };

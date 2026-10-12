@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { PREVIEW_TEST_TEMP_RUNTIME_ID } from "../src/preview_test_storage.ts";
 import { withKvWriterLease, type LeaseKv } from "../src/writer_kv_lease.ts";
 import { planHeatLockRecovery } from "../src/npc_heat_lock_recovery.ts";
 import { commitTurn } from "../src/commit.ts";
@@ -132,6 +133,9 @@ Deno.test("crashed instance, ambiguous Sheets, stale source and incomplete Docs 
   }
 });
 Deno.test("even test-flag writes reject real save and disabled KV before Google network", async () => {
+  const oldTimeline=Deno.env.get("DENO_TIMELINE");
+  Deno.env.set("DENO_TIMELINE","preview/ci-lock-gate");
+
   const initial = {flag:config.npcHeatTestWriterEnabled,
     allowWrites:config.allowWrites, enableKv:config.enableKv,
     raw:config.allowRawCommits,workbook:config.npcHeatTestWorkbookId,
@@ -146,15 +150,15 @@ Deno.test("even test-flag writes reject real save and disabled KV before Google 
     config.allowWrites=true;
     config.allowRawCommits=false;
     config.enableKv=false;
-    config.files.TEMP_RUNTIME="TEST-ISOLATED-WORKBOOK";
+    config.files.TEMP_RUNTIME=PREVIEW_TEST_TEMP_RUNTIME_ID;
     config.npcHeatTestWorkbookId=config.files.TEMP_RUNTIME;
     await assert.rejects(()=>commitTurn({...base,
       expectedSaveId:"V2-S0795",saveTo:"V2-S0796"}),/ISOLATION_GATE/);
     await assert.rejects(()=>commitTurn(base),
-      /NPC_HEAT_TEST_WRITER_KV_AND_WRITES_REQUIRED/);
+      /TEST_WRITER_WRITES_AND_KV_GATE_FAILED/);
     await assert.rejects(()=>commitTurn({...base,semantic:undefined}),
       /NPC_HEAT_TEST_SEMANTIC_WRITER_REQUIRED/);
-    assert.equal(config.files.TEMP_RUNTIME,"TEST-ISOLATED-WORKBOOK");
+    assert.equal(config.files.TEMP_RUNTIME,PREVIEW_TEST_TEMP_RUNTIME_ID);
   }finally{
     config.npcHeatTestWriterEnabled=initial.flag;
     config.allowWrites=initial.allowWrites;
@@ -162,5 +166,7 @@ Deno.test("even test-flag writes reject real save and disabled KV before Google 
     config.enableKv=initial.enableKv;
     config.npcHeatTestWorkbookId=initial.workbook;
     config.files.TEMP_RUNTIME=initial.tempfile;
+    if(oldTimeline===undefined)Deno.env.delete("DENO_TIMELINE");
+    else Deno.env.set("DENO_TIMELINE",oldTimeline);
   }
 });
