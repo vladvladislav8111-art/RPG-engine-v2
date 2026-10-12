@@ -6,6 +6,7 @@
  * Never use this output to increase earned Heat, promote KEY or prune context.
  */
 import { hash32 } from "./rng.ts";
+import { npcHeatStateHashV2 } from "./npc_heat_receipt_writer.ts";
 
 type Receipt = {
   eventId: string; actorId: string; txId: string; sourceRef: string;
@@ -44,7 +45,7 @@ export type JournalAuditRequest = {
   rowStart:number;
   rows:readonly (readonly unknown[])[];
 };
-export function auditNpcHeatJournal(input:JournalAuditRequest) {
+export async function auditNpcHeatJournal(input:JournalAuditRequest) {
   const result=(code:string,events:Receipt[]=[],
     checkedRows=0,sourceRows=0,found=0) => ({
     schema:"NPC_HEAT_JOURNAL_AUDIT_V1" as const,
@@ -56,6 +57,7 @@ export function auditNpcHeatJournal(input:JournalAuditRequest) {
     semanticWrites:0 as const, automaticPromotion:false as const,
     fullNpcContextRequired:true as const,
     checkedRows,sourceRows,candidateCount:found,
+    contentBoundV2Rows:0,
     receipts:events,
     notes:[
       "SESSION_LOG State hash binds save/time/scene/TX envelope, not World advances JSON.",
@@ -90,7 +92,7 @@ export function auditNpcHeatJournal(input:JournalAuditRequest) {
   const actors=new Set(input.requestedActorIds);
   const events:Receipt[]=[];
   const eventIds=new Set<string>();
-  let sourced=0,checked=0,found=0;
+  let sourced=0,checked=0,found=0,contentBoundV2Rows=0;
   for(let i=0;i<input.rows.length;i++) {
     const r=input.rows[i],rowNo=input.rowStart+i;
     const tx=value(r[col("TX ID")]);
@@ -118,11 +120,21 @@ export function auditNpcHeatJournal(input:JournalAuditRequest) {
     const source=value(r[col("Source")]),version=value(r[col("Version")]);
     const endAt=moment(end),startAt=moment(start);
     const now=moment("Day"+input.worldDay+" "+input.worldTime)!;
-    if(!save||!turn||!scene||!tx||endAt===null||startAt===null||
-      endAt<startAt||endAt>now||source!=="ENGINE_FASTPATH"||version!=="1"||
-      hash!==hash32([save,end,scene,tx].join("|")).toString(16)||
-      indexCounts.get(tx)!==1)
-      return result("UNATTESTED_ENGINE_TX_ENVELOPE");
+    const envelopeValid=!!save&&!!turn&&!!scene&&!!tx&&
+      endAt!==null&&startAt!==null&&endAt>=startAt&&endAt<=now&&
+      source==="ENGINE_FASTPATH"&&indexCounts.get(tx)===1;
+    if(!envelopeValid)return result("UNATTESTED_ENGINE_TX_ENVELOPE");
+    if(version==="1"){
+      if(hash!==hash32([save,end,scene,tx].join("|")).toString(16))
+        return result("UNATTESTED_ENGINE_TX_ENVELOPE");
+    }else if(version==="2"){
+      const expected=await npcHeatStateHashV2({
+        saveTo:save,inworldEnd:end,sceneId:scene,txId:tx,worldAdvancesJson:raw,
+      });
+      if(hash!==expected||world.engineNpcReceiptEpoch!==2)
+        return result("UNATTESTED_ENGINE_TX_ENVELOPE");
+      contentBoundV2Rows++;
+    }else{return result("UNSUPPORTED_JOURNAL_VERSION");}
     const match=/^Day\s*(\d+)\s+(\d{1,2}:\d{2}(?::\d{2})?)$/.exec(end)!;
     for(const e of world.engineNpcAttentionReceipts) {
       if(!e||typeof e!=="object"||Array.isArray(e))
@@ -148,6 +160,9 @@ export function auditNpcHeatJournal(input:JournalAuditRequest) {
       if(actors.has(actor))events.push(v as Receipt);
     }
   }
-  return result(window.truncated?"PARTIAL_JOURNAL_WINDOW":"COMPLETE_WINDOW_NOT_FULL_HISTORY",
-    events,checked,sourced,found);
+  return {
+    ...result(window.truncated?"PARTIAL_JOURNAL_WINDOW":"COMPLETE_WINDOW_NOT_FULL_HISTORY",
+      events,checked,sourced,found),
+    contentBoundV2Rows,
+  };
 }
