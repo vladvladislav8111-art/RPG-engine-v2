@@ -6,6 +6,7 @@ import { docsGet, sheetsBatchGet } from "./google.ts";
 import { requireWriterKv } from "./cache.ts";
 import { PREVIEW_TEST_DOC_IDS, PREVIEW_TEST_SAVE_ID, PREVIEW_TEST_TEMP_RUNTIME_ID } from "./preview_fixture.ts";
 import { previewE2EHtml, runIsolatedPreviewWriteE2E } from "./preview_e2e_runner.ts";
+import { remoteKvRaceHtml, remoteKvRaceStatus, remoteKvRaceHold, remoteKvRaceContend } from "./preview_kv_race.ts";
 import { HUD_UI_VERSION } from "./hud.ts";
 import { diagnoseMcp, handleMcp } from "./mcp.ts";
 import { intBetween } from "./rng.ts";
@@ -123,6 +124,30 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
         prepareDryRunPassed,
         testDocs: checks,
       }, ok ? 200 : 503);
+    }
+
+    if (pathname === "/preview/kv-race" && req.method === "GET") {
+      if (!config.previewFixture) return json({error:"not_found"},404);
+      return new Response(remoteKvRaceHtml(), {
+        headers:{
+          "content-type":"text/html; charset=utf-8",
+          "cache-control":"no-store", "referrer-policy":"no-referrer",
+          "content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'",
+        },
+      });
+    }
+    if (pathname.startsWith("/preview/kv-race/")) {
+      if (!config.previewFixture) return json({error:"not_found"},404);
+      if (!authorized(req)) return json({error:"unauthorized"},401);
+      if (pathname === "/preview/kv-race/status" && req.method === "GET") {
+        return json(await remoteKvRaceStatus(url.searchParams.get("session") ?? ""));
+      }
+      if (req.method === "POST" && (pathname === "/preview/kv-race/hold" || pathname === "/preview/kv-race/contend")) {
+        const input=await body<{sessionId:string}>(req);
+        if (pathname.endsWith("/hold")) return json(await remoteKvRaceHold(input.sessionId));
+        return json(await remoteKvRaceContend(input.sessionId));
+      }
+      return json({error:"not_found"},404);
     }
 
     if (pathname === "/preview/e2e" && req.method === "GET") {
