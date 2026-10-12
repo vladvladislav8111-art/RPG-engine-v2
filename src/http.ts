@@ -94,7 +94,7 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
           sheetWrites: [],
           docAppends: [],
         });
-        prepareDryRunPassed = prepared.validation.every((step: { pass: boolean }) => step.pass);
+        prepareDryRunPassed = prepared.validation?.every((step: { pass: boolean }) => step.pass) ?? false;
       } catch {
         prepareDryRunPassed = false;
       }
