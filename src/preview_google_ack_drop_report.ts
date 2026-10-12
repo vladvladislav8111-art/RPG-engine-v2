@@ -23,6 +23,7 @@ type Source={
 export function assessAckDropForensics(s:Source){
  const {evidence:e,before,after,controlStable}=s;
  const lockStable=before.versionstamp===after.versionstamp &&
+   before.cacheState===after.cacheState &&
    before.held===after.held &&
    before.ownerIsFixedTx===after.ownerIsFixedTx;
  const expectedSheets=e.saveId===TEST_ACK_DROP_SAVE_TO &&
