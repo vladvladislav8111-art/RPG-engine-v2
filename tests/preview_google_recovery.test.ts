@@ -77,8 +77,12 @@ Deno.test("partial or conflicting Google state never becomes complete",()=>{
 });
 Deno.test("recovery fails closed on changed KV owner or source snapshot",()=>{
  const other={...held,lockOwnerMatchesFixedTx:false};
- const mismatch=assessFixedRecovery({
+ const ownerChanged=assessFixedRecovery({
   evidence:complete,before:held,after:other,controlStable:true,
+ });
+ assert.equal(ownerChanged.status,"UNSTABLE_READONLY_SNAPSHOT");
+ const mismatch=assessFixedRecovery({
+  evidence:complete,before:other,after:other,controlStable:true,
  });
  assert.equal(mismatch.status,"UNKNOWN_LOCK_OWNER_BLOCKED");
  const race=assessFixedRecovery({
@@ -89,7 +93,7 @@ Deno.test("recovery fails closed on changed KV owner or source snapshot",()=>{
   evidence:complete,before:noLock,after:noLock,controlStable:false,
  });
  assert.equal(sourceChanged.status,"UNSTABLE_READONLY_SNAPSHOT");
- for(const result of [mismatch,race,sourceChanged])
+ for(const result of [ownerChanged,mismatch,race,sourceChanged])
   assert.equal(result.automaticRetryAllowed,false);
 });
 Deno.test("scoped cache state cannot override invalid receipts or held lock",()=>{
