@@ -2,6 +2,8 @@ import { cacheGet, cacheSet } from "./cache.ts";
 import { config } from "./config.ts";
 import { docsAppendIdempotent, sheetsBatchGet, sheetsBatchUpdate } from "./google.ts";
 import { prepareSemanticCommit } from "./semantic.ts";
+import { requireIsolatedHeatWriter } from "./npc_heat_receipt_writer.ts";
+import { withKvWriterLease, type LeaseKv } from "./writer_kv_lease.ts";
 import type { CommitRequest } from "./types.ts";
 
 function firstCell(values: Record<string, unknown[][]>, range: string): unknown {
@@ -55,7 +57,7 @@ export async function prepareCommit(input: CommitRequest) {
   };
 }
 
-export async function commitTurn(input: CommitRequest) {
+async function executeCommitTurn(input: CommitRequest) {
   if (!config.allowWrites) throw new Error("Writes are disabled. Set ALLOW_WRITES=true only after dry-run validation.");
   if (!input.semantic && !input.dryRun && !config.allowRawCommits) {
     throw new Error("Raw commits are disabled. Ordinary gameplay must use semantic commits; set ALLOW_RAW_COMMITS=true only for deliberate migration/repair.");
@@ -79,7 +81,10 @@ export async function commitTurn(input: CommitRequest) {
     };
   }
 
-  const txKey = ["tx", input.txId] as const;
+  // Synthetic preview TX cache cannot collide with production on shared KV.
+  const txKey = config.npcHeatTestWriterEnabled
+    ? ["tx", config.files.TEMP_RUNTIME, input.txId] as const
+    : ["tx", input.txId] as const;
   const prior = await cacheGet<{ state: string }>(txKey);
   if (prior?.state === "COMMITTED") {
     const docs = await appendDocsIdempotent(input);
@@ -121,4 +126,33 @@ export async function commitTurn(input: CommitRequest) {
     await cacheSet(txKey, { state: "RECOVERY_REQUIRED", saveTo: input.saveTo, error: String(error) });
     throw error;
   }
+}
+
+/**
+ * TEST-only lock encloses source reads, manifest creation and all writes.
+ * The existing production commit path remains unchanged with the flag OFF.
+ */
+export async function commitTurn(input: CommitRequest) {
+  if (!config.npcHeatTestWriterEnabled) return await executeCommitTurn(input);
+  requireIsolatedHeatWriter({
+    enabled: true, workbookId: config.files.TEMP_RUNTIME,
+    isolatedWorkbookId: config.npcHeatTestWorkbookId,
+    expectedSaveId: input.expectedSaveId, saveTo: input.saveTo,
+    source: input.semantic?.session.source,
+  });
+  if (!input.semantic || config.allowRawCommits)
+    throw Error("NPC_HEAT_TEST_SEMANTIC_WRITER_REQUIRED");
+  if (input.dryRun) return await executeCommitTurn(input);
+  if (!config.allowWrites || !config.enableKv)
+    throw Error("NPC_HEAT_TEST_WRITER_KV_AND_WRITES_REQUIRED");
+  const deno = (globalThis as unknown as {
+    Deno?: { openKv?: () => Promise<LeaseKv> };
+  }).Deno;
+  if (!deno?.openKv) throw Error("NPC_HEAT_TEST_REMOTE_KV_REQUIRED");
+  const kv = await deno.openKv();
+  return await withKvWriterLease({
+    kv, workbookId: config.files.TEMP_RUNTIME, txId: input.txId,
+    releaseOnError: false,
+    action: async () => await executeCommitTurn(input),
+  });
 }

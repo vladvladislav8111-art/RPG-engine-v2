@@ -36,3 +36,5 @@ jobs:
         run: deno check main.ts
       - name: Run regression tests
         run: deno task test
+      - name: Prove cross-process local KV CAS and orphan retention (no network)
+        run: deno run --unstable-kv --allow-read --allow-write --allow-run scripts/kv_multiprocess_probe.ts
