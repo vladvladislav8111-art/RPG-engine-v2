@@ -11,6 +11,8 @@ import { sheetsBatchGet } from "./google.ts";
 import { HUD_UI_VERSION } from "./hud.ts";
 import { diagnoseMcp, handleMcp } from "./mcp.ts";
 import { intBetween } from "./rng.ts";
+import {fixedRecoveryGate,readFixedRecovery} from "./preview_google_recovery.ts";
+import {PREVIEW_GOOGLE_RECOVERY_PAGE} from "./preview_google_recovery_ui.ts";
 import { crossRevisionGate, runCrossRevisionProbe, CROSS_REVISION_PAGE } from "./preview_kv_cross_revision.ts";
 import {
   previewKvGate, previewKvSession, previewKvStatus, previewKvHold,
@@ -191,6 +193,35 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
       if(Number(req.headers.get("content-length")??"0")>0)
         return json({error:"no_request_body_allowed"},400);
       return json(await runCrossRevisionProbe());
+    }
+    if(pathname==="/preview/google-recovery" &&
+        req.method==="GET"){
+      if(!fixedRecoveryGate({
+        timeline,tempId:config.files.TEMP_RUNTIME,
+        testWorkbookId:config.npcHeatTestWorkbookId,
+        docs:config.files,allowWrites:config.allowWrites,
+        rawWrites:config.allowRawCommits,
+        writerEnabled:config.npcHeatTestWriterEnabled,
+        kvEnabled:config.enableKv,
+      }))return json({error:"not_found"},404);
+      return new Response(PREVIEW_GOOGLE_RECOVERY_PAGE,{headers:{
+        "content-type":"text/html; charset=utf-8",
+        "cache-control":"no-store",
+        "referrer-policy":"no-referrer",
+        "content-security-policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      }});
+    }
+    if(pathname==="/preview/google-recovery/report" && req.method==="GET"){
+      if(!fixedRecoveryGate({
+        timeline,tempId:config.files.TEMP_RUNTIME,
+        testWorkbookId:config.npcHeatTestWorkbookId,
+        docs:config.files,allowWrites:config.allowWrites,
+        rawWrites:config.allowRawCommits,
+        writerEnabled:config.npcHeatTestWriterEnabled,
+        kvEnabled:config.enableKv,
+      }))return json({error:"not_found"},404);
+      if(!authorized(req))return json({error:"unauthorized"},401);
+      return json(await readFixedRecovery());
     }
     if (pathname.startsWith("/preview/kv-race")) {
       if (!previewKvAllowed) return json({error:"not_found"},404);
