@@ -49,7 +49,11 @@ export type WriterEvidence = {
   copper:number|null;stateDigestValid:boolean;v2ReceiptCount:number;
   v2ReceiptActorValid:boolean;v2EnvelopeValid:boolean;
 };
-export async function readFixedWriterEvidence():Promise<WriterEvidence>{
+export async function readFixedWriterEvidence(
+  spec:{txId:string;turnId:string;saveTo:string}={
+    txId:TEST_E2E_TX,turnId:TEST_E2E_TURN,saveTo:TEST_E2E_TO,
+  },
+):Promise<WriterEvidence>{
   const data=await sheetsBatchGet(pinnedId,[
     "CONTROL!B2","CONTROL!B5","PLAYER_RESOURCES!A1:D75",
     "SESSION_LOG!A1:P5000",
@@ -72,7 +76,7 @@ export async function readFixedWriterEvidence():Promise<WriterEvidence>{
     "State hash","World advances JSON","Inworld end","Scene ID"])
     if(!columns.includes(key))throw Error("TEST_E2E_SESSION_SCHEMA");
   const col=(name:string)=>columns.indexOf(name);
-  const receipts=log.slice(1).filter(r=>String(r[col("TX ID")]??"")===TEST_E2E_TX);
+  const receipts=log.slice(1).filter(r=>String(r[col("TX ID")]??"")===spec.txId);
   let stateDigestValid=false,v2ReceiptCount=0,v2ReceiptActorValid=false,
     v2EnvelopeValid=false;
   if(receipts.length===1){
@@ -87,12 +91,12 @@ export async function readFixedWriterEvidence():Promise<WriterEvidence>{
     const v2=Array.isArray(records)?records:[];
     v2ReceiptCount=v2.length;
     v2ReceiptActorValid=v2.length===1 &&
-      v2[0]?.actorId===TEST_NPC && v2[0]?.txId===TEST_E2E_TX &&
+      v2[0]?.actorId===TEST_NPC && v2[0]?.txId===spec.txId &&
       v2[0]?.kind==="SCENE_PRESENCE" && v2[0]?.committed===true &&
       v2[0]?.sourceRef==="scene:scene.test_only";
     v2EnvelopeValid=
-      String(r[col("Save ID")])===TEST_E2E_TO &&
-      String(r[col("Turn ID")])===TEST_E2E_TURN &&
+      String(r[col("Save ID")])===spec.saveTo &&
+      String(r[col("Turn ID")])===spec.turnId &&
       String(r[col("Source")])==="ENGINE_FASTPATH" &&
       String(r[col("Version")])==="2" &&
       String(r[col("Scene ID")])==="scene.test_only" &&
@@ -107,7 +111,7 @@ export async function readFixedWriterEvidence():Promise<WriterEvidence>{
   }
   // The configured Doc key is mapped exclusively to the isolated TEST Doc.
   const doc=await docsGet(config.files[TEST_DOC]);
-  const marker="[TX:"+TEST_E2E_TX+"]";
+  const marker="[TX:"+spec.txId+"]";
   const docMarkerCount=doc.text.split(marker).length-1;
   return {saveId,worldTime,receiptCount:receipts.length,docMarkerCount,
     copper,stateDigestValid,v2ReceiptCount,v2ReceiptActorValid,v2EnvelopeValid};

@@ -4,6 +4,7 @@ import { docsAppendIdempotent, sheetsBatchGet, sheetsBatchUpdate } from "./googl
 import { prepareSemanticCommit } from "./semantic.ts";
 import { requireIsolatedHeatWriter } from "./npc_heat_receipt_writer.ts";
 import { withKvWriterLease, type LeaseKv } from "./writer_kv_lease.ts";
+import { throwAfterConfirmedTestSheetsWrite } from "./preview_google_ack_drop.ts";
 import type { CommitRequest } from "./types.ts";
 
 function firstCell(values: Record<string, unknown[][]>, range: string): unknown {
@@ -100,6 +101,20 @@ async function executeCommitTurn(input: CommitRequest) {
   await cacheSet(txKey, { state: "COMMITTING", saveTo: input.saveTo, startedAt: new Date().toISOString() });
   try {
     const sheetResult = await sheetsBatchUpdate(config.files.TEMP_RUNTIME, prepared.manifest.sheetWrites);
+    // Only TEST-S3->TEST-S4 exact TX in a Preview with a separate explicit flag.
+    // Throws after the real Google success: catch marks RECOVERY_REQUIRED,
+    // and the no-TTL KV workbook lock is deliberately retained.
+    throwAfterConfirmedTestSheetsWrite({
+      enabled:config.previewGoogleAckDropEnabled,
+      timeline:Deno.env.get("DENO_TIMELINE") ?? "",
+      allowWrites:config.allowWrites,allowRawCommits:config.allowRawCommits,
+      testWriterEnabled:config.npcHeatTestWriterEnabled,enableKv:config.enableKv,
+      workbookId:config.files.TEMP_RUNTIME,
+      isolatedWorkbookId:config.npcHeatTestWorkbookId,
+      txId:input.txId,turnId:input.turnId,
+      expectedSaveId:input.expectedSaveId,saveTo:input.saveTo,
+      isSemantic:!!input.semantic,source:input.semantic?.session.source,
+    });
     await cacheSet(txKey, { state: "SHEET_COMMITTED_DOCS_PENDING", saveTo: input.saveTo });
 
     const docs = await appendDocsIdempotent(input);

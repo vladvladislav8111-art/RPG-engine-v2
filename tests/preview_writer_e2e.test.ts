@@ -3,6 +3,10 @@ import { fixedWriterE2EGate, runFixedWriterE2E, TEST_E2E_TX,
   TEST_E2E_TO } from "../src/preview_writer_e2e.ts";
 import { PREVIEW_TEST_DOC_IDS, PREVIEW_TEST_TEMP_RUNTIME_ID } from "../src/preview_test_storage.ts";
 import { config } from "../src/config.ts";
+import { runAckDropTest,ACK_DROP_REQUEST } from "../src/preview_google_ack_drop_runner.ts";
+import { commitTurn } from "../src/commit.ts";
+import { TEST_ACK_DROP_TX,shouldInjectTestAckDrop,
+  TEST_ACK_DROP_SAVE_FROM,TEST_ACK_DROP_SAVE_TO } from "../src/preview_google_ack_drop.ts";
 import { handleHttpRequest } from "../src/http.ts";
 
 const sheet = PREVIEW_TEST_TEMP_RUNTIME_ID;
@@ -138,6 +142,37 @@ Deno.test("TEST-only real semantic writer with synthetic Google transport writes
     kv=await Deno.openKv();
     assert.equal((await kv.get([
       "rpg-v2","semantic-writer-lock",sheet])).value,null);
+    // Fully isolated, mocked Google transport: one real semantic writer call
+    // loses its ACK *after* Sheets was durably mutated in the fixture.
+    config.previewGoogleAckDropEnabled=true;
+    config.npcHeatTestHmacKey="";
+    const fault=await runAckDropTest();
+    assert.equal(fault.ackDiscardSimulated,true);
+    assert.equal(fault.postSheets200Injected,true);
+    assert.equal(fault.actualNetworkAckLossProven,false);
+    assert.equal(fault.status,
+      "EXPECTED_PARTIAL_DURABLE_TEST_STATE_REQUIRES_OPERATOR_REVIEW");
+    assert.equal(fault.googleSheetsPersisted,true);
+    assert.equal(fault.docTxMarkerCount,0);
+    assert.equal(fault.lockHeld,true);
+    assert.equal(fault.lockOwnerMatchesTx,true);
+    assert.equal(fault.cacheRecoveryRequired,true);
+    assert.equal(fault.automaticRetryAllowed,false);
+    assert.equal(fault.programmaticUnlockAllowed,false);
+    assert.equal(state.CONTROL[1][1],TEST_ACK_DROP_SAVE_TO);
+    assert.equal(state.PLAYER_RESOURCES[6][3],12);
+    assert.equal(state.SESSION_LOG.length,3);
+    assert.equal(sheetWrites,2);
+    assert.equal(docInserts,1); // No Docs marker was appended for lost ACK.
+    assert.equal(docText.includes("[TX:"+TEST_ACK_DROP_TX+"]"),false);
+    const held=await kv.get<{txId:string}>([
+      "rpg-v2","semantic-writer-lock",sheet]);
+    assert.equal(held.value?.txId,TEST_ACK_DROP_TX);
+    // Repeating the same TX while locked must not write a second time.
+    await assert.rejects(()=>commitTurn(ACK_DROP_REQUEST),
+      /WRITER_LEASE_BUSY_RETRY_LATER/);
+    assert.equal(sheetWrites,2);
+    assert.equal(docInserts,1);
   }finally{
     if(kv)kv.close();
     globalThis.fetch=priorFetch;

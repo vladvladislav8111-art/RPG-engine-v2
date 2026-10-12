@@ -26,6 +26,10 @@ export const config = {
   // Synthetic Preview only; hard-guarded to a separate TEST workbook & TEST save IDs.
   npcHeatTestWriterEnabled: (rawEnv("RPG_NPC_HEAT_TEST_WRITER_ENABLED") ?? "false").toLowerCase() === "true",
   npcHeatTestWorkbookId: rawEnv("RPG_NPC_HEAT_TEST_WORKBOOK_ID") ?? "",
+  // Explicit one-shot synthetic ACK-drop after real isolated Google Sheets 200.
+  // Default OFF. TEST Preview only; no effect on Production or other TX.
+  previewGoogleAckDropEnabled:
+    (rawEnv("RPG_PREVIEW_GOOGLE_ACK_DROP_ENABLED") ?? "false").toLowerCase() === "true",
   // Optional, TEST-only HMAC V3 proof. Absent by default; never reuse Bearer or Google private key.
   npcHeatTestHmacKey: rawEnv("RPG_NPC_HEAT_TEST_HMAC_KEY") ?? "",
   npcHeatTestHmacKeyId: rawEnv("RPG_NPC_HEAT_TEST_HMAC_KEY_ID") ?? "",
