@@ -27,7 +27,8 @@ export async function auditNpcHeatJournalIncludingTestV2(input: JournalAuditRequ
   if (cols.length < 16 || cols[9] !== "World advances JSON" ||
       cols[13] !== "State hash" || cols[15] !== "Version") {
     return { ...auditNpcHeatJournal(input), testV2DigestMatches: 0,
-      testV2DigestRequired: true, testV2CryptographicallyAuthenticated: false as const };
+      testV2DigestRequired: true, testV2CryptographicallyAuthenticated: false as const,
+      testV3HmacMatches: 0, testV3FullHistoryAuthenticated: false as const };
   }
   let matched = 0, signed = 0;
   const normalized: unknown[][] = [];
