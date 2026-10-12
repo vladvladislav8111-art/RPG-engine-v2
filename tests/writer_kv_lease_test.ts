@@ -35,11 +35,32 @@ Deno.test("KV lock is scoped by workbook and refuses invalid lease configuration
     await assertRejects(()=>withKvWriterLease({kv,workbookId:"ci-placeholder",txId:"X",action:async()=>1}),
       Error,"WRITER_LEASE_INVALID_TARGET");
     await assertRejects(()=>withKvWriterLease({kv,workbookId:"TEST",txId:"X",
-      leaseMs:100,action:async()=>1}),Error,"WRITER_LEASE_INVALID_TTL");
+      leaseMs:100,action:async()=>1}),Error,"WRITER_LEASE_TTL_UNSAFE_WITHOUT_GOOGLE_FENCING");
     const result=await Promise.all([
       withKvWriterLease({kv,workbookId:"TEST-A",txId:"TEST-1",action:async()=>1}),
       withKvWriterLease({kv,workbookId:"TEST-B",txId:"TEST-2",action:async()=>2}),
     ]);
     assertEquals(result,[1,2]);
+  }finally{raw.close();}
+});
+
+Deno.test("writer lock has no time expiry; orphan owners fail closed pending manual recovery",async()=>{
+  const raw=await Deno.openKv(":memory:");
+  const workbook="TEST-ORPHAN-LOCK-ONLY";
+  const lockKey=["rpg-v2","semantic-writer-lock",workbook] as const;
+  try{
+    // Model an earlier worker whose Google write outcome is still unknown.
+    await raw.set(lockKey,{ownerToken:"stale-worker-must-not-be-overridden",txId:"TEST-OLD"});
+    await assertRejects(
+      ()=>withKvWriterLease({kv:raw as unknown as LeaseKv,workbookId:workbook,txId:"TEST-NEW",action:async()=>1}),
+      Error,"WRITER_LEASE_BUSY_RETRY_LATER",
+    );
+    const held=await raw.get<{ownerToken:string}>(lockKey);
+    assertEquals(held.value?.ownerToken,"stale-worker-must-not-be-overridden");
+    await assertRejects(
+      ()=>withKvWriterLease({kv:raw as unknown as LeaseKv,workbookId:"TEST-TTL-REJECT",txId:"TEST-TTL",
+        leaseMs:600_000,action:async()=>1}),
+      Error,"WRITER_LEASE_TTL_UNSAFE_WITHOUT_GOOGLE_FENCING",
+    );
   }finally{raw.close();}
 });

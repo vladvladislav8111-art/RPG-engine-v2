@@ -1,7 +1,10 @@
-/** Optional lease guard for one isolated runtime workbook.
- * Deno KV atomic check gives cross-instance exclusion while the lease is live.
- * It is NOT a Google Sheets fencing token: a stale worker after TTL expiry must
- * still be considered unsafe. Gate off until external concurrency E2E.
+/** Optional fail-closed writer exclusion for one runtime workbook.
+ * Cross-instance ownership uses Deno KV atomic CAS with **no automatic TTL**.
+ * A crashed process intentionally leaves an orphan lock: never silently expire
+ * and allow a suspended stale writer to overwrite Google Sheets later.
+ * Before a manual operator recovery, drain/stop all workers and reconcile the
+ * durable SESSION_LOG, Docs receipts and the KV lock owner. Feature OFF until
+ * real shared-KV concurrency and recovery E2E has been verified.
  */
 export type LeaseKvKey=(string|number|boolean|bigint|Uint8Array)[];
 export type LeaseKv={
@@ -20,16 +23,17 @@ export async function withKvWriterLease<T>(input:{
 }):Promise<T>{
   const {kv,workbookId,txId}=input;
   if(!workbookId||!txId||workbookId==="ci-placeholder")throw Error("WRITER_LEASE_INVALID_TARGET");
-  const leaseMs=input.leaseMs??600_000;
-  if(!Number.isSafeInteger(leaseMs)||leaseMs<60_000||leaseMs>3_600_000)
-    throw Error("WRITER_LEASE_INVALID_TTL");
+  // A time-bound lease cannot fence delayed writes to Google Sheets. Reject
+  // even a seemingly generous TTL; fail closed instead of risking stale writes.
+  if(input.leaseMs!==undefined)
+    throw Error("WRITER_LEASE_TTL_UNSAFE_WITHOUT_GOOGLE_FENCING");
   const key:LeaseKvKey=["rpg-v2","semantic-writer-lock",workbookId];
   const existing=await kv.get<LeaseRow>(key);
   if(existing.value)throw Error("WRITER_LEASE_BUSY_RETRY_LATER");
   const ownerToken=crypto.randomUUID();
   const acquired=await kv.atomic()
     .check({key,versionstamp:existing.versionstamp})
-    .set(key,{ownerToken,txId}, {expireIn:leaseMs}).commit();
+    .set(key,{ownerToken,txId}).commit();
   if(!acquired.ok)throw Error("WRITER_LEASE_BUSY_RETRY_LATER");
   try{
     const check=await kv.get<LeaseRow>(key);
