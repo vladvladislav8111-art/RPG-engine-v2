@@ -33,7 +33,7 @@ Deno.test("lost-ACK simulator requires every exact TEST save, TX and Preview gat
  }
  for(const change of [
   {timeline:"production"},{ackFlag:false},{allowWrites:false},
-  {rawWrites:true},{writerEnabled:false},{kvEnabled:false},
+  {allowRawCommits:true},{writerEnabled:false},{kvEnabled:false},
   {isolatedId:"prod"},{tempId:"prod"},{hmacSecret:"set"},
   {docs:{...PREVIEW_TEST_DOC_IDS,LIVE_TRANSACTION_ARCHIVE:"PRODUCTION"}},
  ]){
