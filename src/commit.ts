@@ -5,6 +5,7 @@ import { prepareSemanticCommit } from "./semantic.ts";
 import { requireIsolatedHeatWriter } from "./npc_heat_receipt_writer.ts";
 import { withKvWriterLease, type LeaseKv } from "./writer_kv_lease.ts";
 import { throwAfterConfirmedTestSheetsWrite } from "./preview_google_ack_drop.ts";
+import { PREVIEW_TEST_TEMP_RUNTIME_ID, PREVIEW_TEST_DOC_IDS, testPreviewTimeline } from "./preview_test_storage.ts";
 import type { CommitRequest } from "./types.ts";
 
 function firstCell(values: Record<string, unknown[][]>, range: string): unknown {
@@ -148,6 +149,25 @@ async function executeCommitTurn(input: CommitRequest) {
  * The existing production commit path remains unchanged with the flag OFF.
  */
 export async function commitTurn(input: CommitRequest) {
+  // Enforce the isolated workbook boundary before any commit path can read
+  // or write Google, even if the general ALLOW_WRITES flag was set by mistake.
+  const isolated = config.files.TEMP_RUNTIME === PREVIEW_TEST_TEMP_RUNTIME_ID;
+  if (isolated) {
+    const preview = testPreviewTimeline(Deno.env.get("DENO_TIMELINE") ?? "");
+    // Check every document actually requested by this commit BEFORE Sheets
+    // is modified. The Google transport independently blocks other TEST
+    // workbook targets, including every direct Docs call.
+    const allowedDocs = new Set<string>(Object.values(PREVIEW_TEST_DOC_IDS));
+    const pinned = config.npcHeatTestWorkbookId === PREVIEW_TEST_TEMP_RUNTIME_ID &&
+      (input.docAppends ?? []).every(d => allowedDocs.has(config.files[d.documentKey]));
+    if (!preview || !pinned) throw Error("TEST_WRITER_CONTEXT_NOT_ISOLATED");
+    if (!input.dryRun && !config.npcHeatTestWriterEnabled)
+      throw Error("TEST_WORKBOOK_WRITES_REQUIRE_TEST_WRITER");
+    if (!input.dryRun && (!config.allowWrites || config.allowRawCommits || !config.enableKv))
+      throw Error("TEST_WRITER_WRITES_AND_KV_GATE_FAILED");
+  }
+  if (config.npcHeatTestWriterEnabled && !isolated)
+    throw Error("TEST_WRITER_CANNOT_TARGET_NON_TEST_WORKBOOK");
   if (!config.npcHeatTestWriterEnabled) return await executeCommitTurn(input);
   requireIsolatedHeatWriter({
     enabled: true, workbookId: config.files.TEMP_RUNTIME,
