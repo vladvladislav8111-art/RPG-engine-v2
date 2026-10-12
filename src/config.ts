@@ -22,6 +22,9 @@ export const config = {
   apiKey: env("RUNTIME_API_KEY"),
   allowWrites: (rawEnv("ALLOW_WRITES") ?? "false").toLowerCase() === "true",
   allowRawCommits: (rawEnv("ALLOW_RAW_COMMITS") ?? "false").toLowerCase() === "true",
+  // Synthetic Preview only; hard-guarded to a separate TEST workbook & TEST save IDs.
+  npcHeatTestWriterEnabled: (rawEnv("RPG_NPC_HEAT_TEST_WRITER_ENABLED") ?? "false").toLowerCase() === "true",
+  npcHeatTestWorkbookId: rawEnv("RPG_NPC_HEAT_TEST_WORKBOOK_ID") ?? "",
   enableKv: (rawEnv("ENABLE_KV") ?? (runtime === "deno" ? "true" : "false")).toLowerCase() === "true",
   worldSimV3Enabled: (rawEnv("WORLD_SIM_V3_ENABLED") ?? "true").toLowerCase() === "true",
   google: {
