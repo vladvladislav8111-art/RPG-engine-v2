@@ -116,8 +116,12 @@ export function readNpcHeatIndex(row:Record<string,unknown>|undefined,
   const recent=last!=null&&now!=null&&now>=last&&now-last<1440;
   const key=importance.toUpperCase()==="KEY";
   const profile=Math.max(0,Math.min(4,Math.floor(Number(row["Profile Tier"]??0)||0)));
+  const indexSaveId=String(row["Source Save ID"]??"");
+  // Only the row written against this exact committed save may supply an
+  // event stimulus. A stale index is NEVER proof the NPC witnessed new news.
+  const sourceCurrent=!!liveSaveId&&indexSaveId===liveSaveId;
   let lastStimulus:null|Record<string,unknown>=null;
-  if(recent&&now!=null&&last!=null&&now-last<=60){
+  if(sourceCurrent&&recent&&now!=null&&last!=null&&now-last<=60){
     try{
       const parsed=JSON.parse(String(row["Last Stimulus JSON"]??"null"));
       if(parsed&&parsed.kind==="NEW_INFORMATION"&&parsed.sourceRef&&parsed.sourceTxId&&
@@ -125,10 +129,7 @@ export function readNpcHeatIndex(row:Record<string,unknown>|undefined,
         now-minute(parsed.day,parsed.time)!<=60)lastStimulus=parsed;
     }catch{/* Invalid optional hint is never an attested stimulus. */}
   }
-  const indexSaveId=String(row["Source Save ID"]??"");
-  // A row verified on a previous save remains historical evidence, but cannot
-  // impersonate a source-current read projection after another commit.
-  const sourceCurrent=indexSaveId===liveSaveId;
+  // An old row can still describe a KEY identity, but never fresh knowledge.
   return {schema:"NPC_HEAT_RUNTIME_INDEX_V1" as const,actorId:row["NPC ID"],
     profileTier:key?5:profile,activeTier:key?5:sourceCurrent&&recent?profile:0,
     sourceSaveId:indexSaveId,sourceCurrent,sourceTxId:row["Last Evidence TX"],recent,

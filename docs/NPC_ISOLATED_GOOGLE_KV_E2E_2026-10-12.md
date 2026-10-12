@@ -20,3 +20,12 @@ Provider smoke TX: TEST-HEAT-E2E-001, actor: npc.test.only.
 - Live TEMP schema migration and feature-flag activation have not been authorized. Strict progression, ACK, EC06 remain gated.
 
 No new Site/Plugin/backend was created, and no PR was merged or deployed to main.
+
+## 2026-10-12 verification follow-up — *isolated* provider and read-only baseline
+
+- Isolated workbook ACL is currently **private to its owner**; the Deno service-account identity has **not** been confirmed as a recipient. An authenticated Deno engine-to-Google E2E is therefore **blocked**, not passed.
+- Created `CONCURRENCY_TEST` tab in the test-only workbook. Two **parallel** Google Sheets API requests wrote distinct values to the same isolated cell: both returned success, final observed value was `TEST_WRITER_B`. This demonstrates lost updates without any write arbitration. The test did **not** call the Deno writer or touch gameplay data.
+- Read-only current production baseline (before PR #51): MICRO/HUD `get_turn_context` 2168 ms wall / 1699 ms engine; targeted Vesha NPC + social context 2303 ms wall / 1568 ms engine, repeated 2115 ms wall / 1560 ms engine. No comparative PR #51 runtime deployment or authoritative after-metric exists. MICRO still loaded four scene NPCs in current production; it is not evidence of heat speedup.
+- Regression safeguard: a stale `NPC_ATTENTION_CURRENT.Source Save ID` now blocks both active-depth authority and fresh NPC motive stimulus, even if the historical index entry is less than an hour old. Existing KEY status itself is never demoted by cache freshness.
+
+**Status:** This audit cannot authorize production promotion. Full isolated Deno service-account + Google Docs/Sheets + *shared remote* Deno KV E2E and a proven fencing/recovery strategy remain open. Keep both index and optional writer lock flags **off** until then.

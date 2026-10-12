@@ -27,6 +27,9 @@ Deno.test("NPC heat journals only grounded actor events, deduplicates replay, an
     "Last Evidence TX":"TEST-T1","Source Save ID":"TEST-S1",
     "Last Stimulus JSON":JSON.stringify(profile.lastStimulus)});
   assertEquals(readNpcHeatIndex(row,67,"17:30:00","RECURRING","TEST-S1")?.activeTier,1);
+  assertEquals(readNpcHeatIndex(row,67,"17:30:00","RECURRING","TEST-S1")?.lastStimulus?.sourceRef,"memory:memory.1");
+  assertEquals(readNpcHeatIndex(row,67,"17:30:00","RECURRING","TEST-S2")?.lastStimulus,null);
+  assertEquals(readNpcHeatIndex(row,67,"17:30:00","KEY","TEST-S2")?.lastStimulus,null);
   assertEquals(readNpcHeatIndex(row,68,"17:23:00","RECURRING","TEST-S2")?.activeTier,0);
   assertEquals(readNpcHeatIndex(row,67,"17:30:00","RECURRING","TEST-S2")?.activeTier,0);
   assertEquals(readNpcHeatIndex(row,67,"17:30:00","RECURRING","TEST-S2")?.sourceSaveId,"TEST-S1");
