@@ -1,5 +1,6 @@
 import { commitTurn, prepareCommit } from "./commit.ts";
 import { config } from "./config.ts";
+import { previewWriterReadiness, previewWriterReadinessGate } from "./preview_writer_readiness.ts";
 import { bridgeFeatureStatus } from "./bridge_integration.ts";
 import { getTurnContext } from "./context.ts";
 import { sheetsBatchGet } from "./google.ts";
@@ -188,6 +189,21 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
           ? await previewKvHold(session) : await previewKvContend(session));
       }
       return json({error:"not_found"},404);
+    }
+
+
+    if(pathname==="/preview/writer-readiness" && req.method==="GET"){
+      const timeline=(globalThis as unknown as {
+        Deno?:{env?:{get?:(n:string)=>string|undefined}}
+      }).Deno?.env?.get?.("DENO_TIMELINE")??"";
+      if(!previewWriterReadinessGate({
+        timeline,tempId:config.files.TEMP_RUNTIME,
+        docs:config.files,allowWrites:config.allowWrites,
+        rawWrites:config.allowRawCommits,
+        heatWriter:config.npcHeatTestWriterEnabled,kvEnabled:config.enableKv,
+      }))return json({error:"not_found"},404);
+      if(!authorized(req))return json({error:"unauthorized"},401);
+      return json(await previewWriterReadiness());
     }
 
     if (pathname === "/mcp") {
