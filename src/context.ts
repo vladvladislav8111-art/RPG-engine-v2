@@ -776,7 +776,7 @@ export async function getTurnContext(input: TurnContextRequest) {
       // READ_ONLY_PROPOSALS only. No new sheets/docs, no contacts inferred,
       // no new emotion/relationship fact, no runtime event or committed act.
       // Co-presence is based on CONTROL-validated ACTIVE_CONTEXT participants.
-      initiativePlan: /^npc\\.[a-z0-9_.-]+$/i.test(id) &&
+      initiativePlan: /^npc\.[a-z0-9_.-]+$/i.test(id) &&
           (input.plannedElapsedSeconds === undefined ||
            (Number.isSafeInteger(input.plannedElapsedSeconds) &&
             input.plannedElapsedSeconds >= 0 && input.plannedElapsedSeconds <= 604800))
