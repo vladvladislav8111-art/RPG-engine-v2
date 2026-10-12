@@ -14,6 +14,7 @@ export const TABLES = {
   OPPORTUNITIES_CURRENT: { range: "OPPORTUNITIES_CURRENT!A1:W500", keyHeader: "Offer ID" },
   PROJECTS_CURRENT: { range: "PROJECTS_CURRENT!A1:N500", keyHeader: "Project ID" },
   NPC_CURRENT: { range: "NPC_CURRENT!A1:N500", keyHeader: "NPC ID" },
+  NPC_ATTENTION_CURRENT: { range: "NPC_ATTENTION_CURRENT!A1:K500", keyHeader: "NPC ID" },
   NPC_KNOWLEDGE: { range: "NPC_KNOWLEDGE!A1:J2000", keyHeader: "Fact ID" },
   NPC_ACTIVITY_RULES: { range: "NPC_ACTIVITY_RULES!A1:L200", keyHeader: "NPC ID" },
   NPC_RELATIONSHIPS_CURRENT: { range: "NPC_RELATIONSHIPS_CURRENT!A1:Q500", keyHeader: "Relationship ID" },

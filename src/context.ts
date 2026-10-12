@@ -20,6 +20,8 @@ import { buildNpcAutonomyPlan } from "./npc_autonomy_planner.ts";
 import { planNpcInitiativeV4 } from "./npc_initiative_v4.ts";
 import { reviewNpcRoutineCadence } from "./npc_cadence_review.ts";
 import { shouldLoadSceneActors, sourceReadBudgetNotice } from "./context_hotpath_budget.ts";
+import { readNpcHeatIndex } from "./npc_attention_ledger.ts";
+import { planAttentionReadBudget } from "./npc_attention_load_router.ts";
 import { bridgeTurnIntegrationPlan } from "./bridge_integration.ts";
 import { buildSystemNotificationCenter } from "./system_notification_center.ts";
 import { availableCurrentOpportunities, parseLiveClock } from "./world_sim_v3/source_bridge.ts";
@@ -260,6 +262,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   // authoritative CONTROL scene/location. The cache cannot override the save.
   const sceneRouting = await sheetsBatchGet(config.files.TEMP_RUNTIME, [
     "CONTROL!A1:D12", "ACTIVE_CONTEXT!A1:F15", "SYSTEM_CONTACTS_CURRENT!A1:J200",
+    ...(config.npcAttentionIndexEnabled?[TABLES.NPC_ATTENTION_CURRENT.range]:[]),
   ]);
   const routingControlRows = sceneRouting["CONTROL!A1:D12"] ?? [];
   const routedSceneActorIds = resolveSceneActorIds(
@@ -269,6 +272,9 @@ export async function getTurnContext(input: TurnContextRequest) {
   const tagSet = new Set((input.tags ?? []).map((t) => t.toUpperCase()));
   const wantsSystemInbox = hasAny(tagSet, ["NOTIFICATIONS", "INBOX", "SYSTEM_INBOX", "ALERTS"]);
   const sourceContacts = rowsToObjects(sceneRouting["SYSTEM_CONTACTS_CURRENT!A1:J200"] ?? []);
+  const npcAttentionIndexRows=config.npcAttentionIndexEnabled
+    ?rowsToObjects(sceneRouting[TABLES.NPC_ATTENTION_CURRENT.range]??[]):[];
+  const npcAttentionByActor=new Map(npcAttentionIndexRows.map(r=>[String(r["NPC ID"]??""),r]));
   const sceneLoadPolicy = shouldLoadSceneActors({
     turnClass: input.turnClass, tags: input.tags ?? [],
     explicitActorIds: input.actorIds, actorRefs: input.actorRefs,
@@ -494,6 +500,17 @@ export async function getTurnContext(input: TurnContextRequest) {
     ...requestedActorIds,
     ...actorResolution.filter((r) => r.status === "RESOLVED").flatMap((r) => r.actorIds),
   ])];
+  const npcAttentionSnapshots=config.npcAttentionIndexEnabled
+    ?rawNpcCurrent.map(r=>readNpcHeatIndex(npcAttentionByActor.get(String(r["NPC ID"]??"")),
+       Number(worldDay),String(worldTime),String(r["Importance"]??""),saveId))
+       .filter((x):x is NonNullable<typeof x>=>x!==null):[];
+  const npcAttentionReadPlan=config.npcAttentionIndexEnabled
+    ?planAttentionReadBudget({saveId,sceneActorIds:routedSceneActorIds,
+       explicitlyRequestedActorIds:resolvedActorIds,
+       snapshots:npcAttentionSnapshots.map(x=>({actorId:String(x.actorId),
+         activeTier:x.activeTier,importance:String(rawNpcCurrent.find(r=>
+           r["NPC ID"]===x.actorId)?.["Importance"]??""),sourceSaveId:saveId}))})
+    :null;
   const activeNpcIds = new Set(rawNpcCurrent.map((r) => String(r["NPC ID"] ?? "")).filter(Boolean));
   const identityNpcIds = new Set(identityPregenRows.map((r) => String(r["NPC ID"] ?? "")).filter(Boolean));
   const dormantActorIds = resolvedActorIds.filter((id) => !activeNpcIds.has(id) && identityNpcIds.has(id));
@@ -803,11 +820,23 @@ export async function getTurnContext(input: TurnContextRequest) {
           }
         : null,
       autonomy: { activityRule, activeWorldClocks, freshness },
+      npcAttention: config.npcAttentionIndexEnabled
+        ?readNpcHeatIndex(npcAttentionByActor.get(id),Number(worldDay),
+          String(worldTime),String(current?.["Importance"]??""),saveId):null,
       initiativePlan: planNpcInitiativeV4({
         actorId: id, current, activityRule,
         relationshipToShura: relationshipRows.find(r =>
           String(r["Actor ID"] ?? "") === id && String(r["Toward ID"] ?? "") === "player.shura") ?? null,
         knowledge: actorKnowledge.filter(r => String(r["NPC ID"] ?? "") === id),
+        observedStimuli:(()=>{
+          const heat=config.npcAttentionIndexEnabled
+            ?readNpcHeatIndex(npcAttentionByActor.get(id),Number(worldDay),String(worldTime),
+              String(current?.["Importance"]??""),saveId):null;
+          const stimulus=heat?.lastStimulus;
+          return stimulus?[{sourceRef:String(stimulus.sourceRef),
+            kind:"NEW_INFORMATION" as const,witnessedByNpc:true,currentDecisionWindow:true,
+            ...(stimulus.targetActorId?{targetActorId:String(stimulus.targetActorId)}:{})}]:[];
+        })(),
         socialMemories: filterByParticipants(socialMemoryRows, [id]),
         openThreads: filterByParticipants(openThreadRows, [id]),
         elapsedSeconds: input.plannedElapsedSeconds ?? 0,
@@ -936,6 +965,7 @@ export async function getTurnContext(input: TurnContextRequest) {
         autoSourceRouting:true,
       },
       worldTickPlan:prospectiveWorldTickPlan,
+      npcAttentionReadPlan,
       npcRoutineCadence:prospectiveNpcCadence,
       contextReadBudget: sourceReadBudgetNotice({
         turnClass:input.turnClass,tags:input.tags??[],

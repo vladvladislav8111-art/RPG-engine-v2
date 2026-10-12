@@ -79,6 +79,8 @@ export function planNpcInnerMotivesV4(input: NpcInnerMotivesInput) {
   const npcCurrentValid = !!(current && goal && identity &&
     value(current, 'NPC ID') !== 'player.shura' &&
     (!value(current, 'NPC ID') || value(current, 'NPC ID') === input.actorId));
+  // No new motive becomes an eligible decision in a zero-time meta/inspection turn.
+  // Source-backed fresh evidence is considered only with a real prospective time window.
   const timeCanPass = input.elapsedSeconds > 0;
   const accepted = new Set(input.consumedStimulusRefs ?? []);
   const colocated = new Set(input.verifiedCoPresentActorIds ?? []);

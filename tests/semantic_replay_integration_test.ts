@@ -2,6 +2,7 @@ import { assert, assertEquals, assertRejects } from "jsr:@std/assert";
 import { config } from "../src/config.ts";
 import { commitTurn, prepareCommit } from "../src/commit.ts";
 import type { CommitRequest } from "../src/types.ts";
+import { NPC_HEAT_INDEX_COLUMNS } from "../src/npc_attention_ledger.ts";
 
 // A synthetic in-memory Sheets/Docs transport. Deno CI has no --allow-net;
 // unexpected URLs throw and can never fall through to a live Google service.
@@ -12,6 +13,7 @@ Deno.test("semantic writer: dry-run, XP once, durable replay, collision and docu
   const bytes = new Uint8Array(await crypto.subtle.exportKey("pkcs8",keys.privateKey));
   config.google.privateKey = "-----BEGIN PRIVATE KEY-----\n" + btoa(String.fromCharCode(...bytes)) + "\n-----END PRIVATE KEY-----";
   config.allowWrites = true; config.enableKv = false;
+  config.npcAttentionIndexEnabled = true;
   config.files.TEMP_RUNTIME = "synthetic-runtime";
   config.files.LIVE_SESSION_LOG = "synthetic-journal";
   const data: Record<string, unknown[][]> = {
@@ -20,6 +22,9 @@ Deno.test("semantic writer: dry-run, XP once, durable replay, collision and docu
     SESSION_LOG:[["Turn ID","TX ID","Save ID","Inworld start","Inworld end","Scene ID","Action summary","Deltas JSON","New canon JSON","World advances JSON","Notes","Committed at","Ruleset version","State hash","Source","Version"]],
     PROGRESSION_EVENTS:[["TX ID","Inworld time","Event type","Modifiers JSON","Old XP","Delta","New XP","Old level","New level","Notes"]],
     PENDING_CHOICES:[["Choice ID","Status","Options JSON"]],
+    NPC_CURRENT:[["NPC ID","Display","Age","Importance","Role","Current/last-known location","Current goal/activity","Identity anchors"],
+      ["npc.synthetic","Synthetic","","RECURRING","test","loc.test","test work","tested NPC"]],
+    NPC_ATTENTION_CURRENT:[Array.from(NPC_HEAT_INDEX_COLUMNS)],
   };
   let writes=0, docWrites=0, docText="", failDoc=true;
   const reads:string[][]=[];
@@ -57,7 +62,7 @@ Deno.test("semantic writer: dry-run, XP once, durable replay, collision and docu
   }) as typeof fetch;
   const input:CommitRequest={turnId:"test-turn",txId:"test-replay-tx",expectedSaveId:"TEST-S0",saveTo:"TEST-S1",
     docAppends:[{documentKey:"LIVE_SESSION_LOG",text:"Synthetic achievement"}],
-    semantic:{elapsedSeconds:0,resourceDeltas:[{resource:"Money copper",delta:3}],
+    semantic:{elapsedSeconds:0,sceneActorIds:["npc.synthetic"],resourceDeltas:[{resource:"Money copper",delta:3}],
       generalXpEvents:[{sourceType:"discovery",reason:"Synthetic source-backed discovery",sourceRef:"test.evidence",exactXpOverride:5}],
       session:{inworldStart:"Day1 12:00:00",actionSummary:"Synthetic test only"}}};
   try {
@@ -68,10 +73,15 @@ Deno.test("semantic writer: dry-run, XP once, durable replay, collision and docu
     assertEquals(writes,1);assertEquals(data.CONTROL[1][1],"TEST-S1");
     assertEquals(data.PLAYER_RESOURCES[4][1],5);assertEquals(data.PLAYER_RESOURCES[5][1],13);
     assertEquals(data.PROGRESSION_EVENTS.length,2);assertEquals(data.SESSION_LOG.length,2);
+    assert(String(data.SESSION_LOG[1][9]).includes("engineNpcAttentionReceipts"));
+    assertEquals(data.NPC_ATTENTION_CURRENT.length,2);
+    assertEquals(data.NPC_ATTENTION_CURRENT[1][0],"npc.synthetic");
+    assertEquals(data.NPC_ATTENTION_CURRENT[1][2],1);
     const committed=structuredClone(data);
     // Simulate a cold start and stricter feature gates after deployment.
     (globalThis as unknown as {__rpgRuntimeMemoryCache:Map<string,unknown>}).__rpgRuntimeMemoryCache.clear();
     config.turnProgressionReviewStrict=true;config.systemNotificationAckEnabled=false;
+    config.npcAttentionIndexEnabled=false;
     reads.length=0;
     const retry=await commitTurn(input);
     assertEquals(retry.idempotentReplay,true);assertEquals(writes,1);assertEquals(docWrites,1);

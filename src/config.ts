@@ -24,6 +24,8 @@ export const config = {
   allowRawCommits: (rawEnv("ALLOW_RAW_COMMITS") ?? "false").toLowerCase() === "true",
   enableKv: (rawEnv("ENABLE_KV") ?? (runtime === "deno" ? "true" : "false")).toLowerCase() === "true",
   worldSimV3Enabled: (rawEnv("WORLD_SIM_V3_ENABLED") ?? "true").toLowerCase() === "true",
+  // Requires an owner-created NPC_ATTENTION_CURRENT tab and isolated writer E2E before activation.
+  npcAttentionIndexEnabled: (rawEnv("RPG_NPC_ATTENTION_INDEX_ENABLED") ?? "false").toLowerCase() === "true",
   // Off until the owner-approved ACK tab exists in the one authoritative TEMP workbook.
   systemNotificationAckEnabled: (rawEnv("RPG_SYSTEM_NOTIFICATION_ACK_ENABLED") ?? "false").toLowerCase() === "true",
   // Enable after the existing Bridge is updated to supply source-backed zero/award reviews.

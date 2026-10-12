@@ -41,6 +41,7 @@ import { proposeSystemLevelEvents } from "./system_notifications.ts";
 import { buildSystemNotificationCenter, validateNotificationAck } from "./system_notification_center.ts";
 import { validateMilestoneOptions, resolveMilestoneOption } from "./milestone_choices.ts";
 import { auditPreparedTurn } from "./turn_fast_integrity_audit.ts";
+import { deriveNpcAttentionReceipts, journalNpcAttentionReceipts, projectNpcHeatIndex, NPC_HEAT_INDEX_COLUMNS } from "./npc_attention_ledger.ts";
 import { validateTurnCoverage } from "./turn_progression_coverage.ts";
 import { validateRumorTransmission } from "./world_information.ts";
 import { validateMajorWorldEvent } from "./world_events.ts";
@@ -252,6 +253,9 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     touched.add("SYSTEM_MODULES_CURRENT");
   }
   if ((semantic.relationshipEvents?.length ?? 0) > 0) touched.add("NPC_RELATIONSHIPS_CURRENT");
+  if ((semantic.sceneActorIds?.length??0)>0||(semantic.socialMemoryEvents?.length??0)>0||
+      (semantic.relationshipEvents?.length??0)>0) touched.add("NPC_CURRENT");
+  if (config.npcAttentionIndexEnabled) touched.add("NPC_ATTENTION_CURRENT");
   if ((semantic.socialMemoryEvents?.length ?? 0) > 0) touched.add("SOCIAL_MEMORY_CURRENT");
   if ((semantic.threadEvents?.length ?? 0) > 0) touched.add("OPEN_THREADS_CURRENT");
   if ((semantic.chatEvents?.length ?? 0) > 0 || (semantic.notificationAckEvents?.length ?? 0) > 0) {
@@ -2082,6 +2086,56 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     }
   }
 
+
+  // Source-bound NPC heat receipts are part of the same durable SESSION_LOG
+  // transaction. Optional materialized read index has NO separate writer.
+  const npcCurrentForAttention=sheets[TABLES.NPC_CURRENT.range]??[];
+  const knownNpcIds=npcCurrentForAttention.slice(1).map(row=>
+    String(row[headerIndex(npcCurrentForAttention,"NPC ID")]??"")).filter(Boolean);
+  const npcAttentionReceipts=knownNpcIds.length
+    ? deriveNpcAttentionReceipts({txId:input.txId,day:resolvedDay,time:resolvedTime,
+        sceneId:semantic.session.sceneId??c.sceneId??String(controlValue("current_scene_id")??""),
+        semantic,knownNpcIds}) : [];
+  if(config.npcAttentionIndexEnabled){
+    const indexRows=sheets[TABLES.NPC_ATTENTION_CURRENT.range]??[];
+    const actual=headers(indexRows);
+    if(NPC_HEAT_INDEX_COLUMNS.some((name,i)=>actual[i]!==name))
+      throw Error("NPC_HEAT_INDEX_SCHEMA_NOT_INSTALLED_OR_INVALID");
+    const previous=journalNpcAttentionReceipts(sessionRows);
+    const all=journalNpcAttentionReceipts([
+      sessionRows[0],
+      ...sessionRows.slice(1),
+      (()=>{const receiptRow=Array(headers(sessionRows).length).fill("");
+        receiptRow[headerIndex(sessionRows,"TX ID")]=input.txId;
+        receiptRow[headerIndex(sessionRows,"World advances JSON")]=JSON.stringify({
+          engineNpcAttentionReceipts:npcAttentionReceipts});return receiptRow;})(),
+    ]);
+    // Reconcile duplicates and collisions against the durable committed source,
+    // not an untrusted caller-supplied warmth value.
+    if(previous.length>all.length)throw Error("NPC_HEAT_HISTORY_REGRESSION");
+    for(const id of new Set(npcAttentionReceipts.map(r=>r.actorId))){
+      const currentNpc=npcCurrentForAttention.slice(1).find(row=>
+        String(row[headerIndex(npcCurrentForAttention,"NPC ID")]??"")===id);
+      if(!currentNpc)throw Error("NPC_HEAT_ACTOR_NOT_MATERIALIZED");
+      const importance=String(currentNpc[headerIndex(npcCurrentForAttention,"Importance")]??"");
+      const profile=projectNpcHeatIndex({actorId:id,importance,day:resolvedDay,
+        time:resolvedTime,saveId:input.saveTo,newReceipts:npcAttentionReceipts,
+        allReceipts:all});
+      const position=findDataRow(indexRows,"NPC ID",id);
+      const row=position>=0?cloneRow(indexRows,position):Array(headers(indexRows).length).fill("");
+      for(const [column,value] of Object.entries({
+        "NPC ID":id,"Earned Tier":profile.earnedTier,"Profile Tier":profile.profileTier,
+        "Last Relevant Day":profile.lastDay,"Last Relevant Time":profile.lastTime,
+        "Distinct Meaningful Days":profile.meaningfulDays,
+        "Meaningful Social Days":profile.socialDays,
+        "Last Evidence TX":profile.lastTx,"Source Save ID":input.saveTo,
+        "Last Stimulus JSON":JSON.stringify(profile.lastStimulus),"Version":1,
+      }))setByHeader(indexRows,row,column,value as Scalar);
+      if(position>=0)writeRow("NPC_ATTENTION_CURRENT",indexRows,position,row);
+      else appendRow("NPC_ATTENTION_CURRENT",indexRows,row);
+    }
+  }
+
   patchControl("save_id", input.saveTo);
   patchControl("state", "ACTIVE_COMMITTED");
 
@@ -2108,8 +2162,8 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   const gmWorldAdvances = semantic.session.worldAdvances;
   const worldAdvanceLog = gmWorldAdvances && typeof gmWorldAdvances === "object" &&
       !Array.isArray(gmWorldAdvances)
-    ? { ...(gmWorldAdvances as Record<string, unknown>), engineContinuity: worldAutomationOutcomes, systemNotifications }
-    : { gmWorldAdvances: gmWorldAdvances ?? {}, engineContinuity: worldAutomationOutcomes, systemNotifications };
+    ? { ...(gmWorldAdvances as Record<string, unknown>), engineContinuity: worldAutomationOutcomes, systemNotifications, engineNpcAttentionReceipts:npcAttentionReceipts }
+    : { gmWorldAdvances: gmWorldAdvances ?? {}, engineContinuity: worldAutomationOutcomes, systemNotifications, engineNpcAttentionReceipts:npcAttentionReceipts };
   setByHeader(sessionRows, sessionRow, "World advances JSON", JSON.stringify(worldAdvanceLog));
   setByHeader(sessionRows, sessionRow, "Notes", semantic.session.notes ?? "");
   setByHeader(sessionRows, sessionRow, "Committed at", new Date().toISOString());
@@ -2192,6 +2246,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       resources: resourceOutcomes,
       pendingChoices,
       worldAutomation: worldAutomationOutcomes,
+      npcAttention: {receiptCount:npcAttentionReceipts.length,indexUpdated:config.npcAttentionIndexEnabled},
     },
     postState: {
       saveId: input.saveTo,
