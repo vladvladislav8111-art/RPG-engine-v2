@@ -8,7 +8,7 @@ const evidence={
  v2ReceiptCount:1,v2ReceiptActorValid:true,v2EnvelopeValid:true,
 };
 const lock={
- versionstamp:"0000000001",held:true,ownerIsFixedTx:true,
+ versionstamp:"0000000001" as string|null,held:true,ownerIsFixedTx:true,
  cacheState:"RECOVERY_REQUIRED",
 };
 const pack=(change:Partial<typeof evidence>={},
