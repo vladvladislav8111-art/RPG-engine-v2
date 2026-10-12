@@ -106,11 +106,13 @@ Deno.test("scoped cache state cannot override invalid receipts or held lock",()=
 Deno.test("read-only recovery uses only KV get, not atomic/write/delete",async()=>{
  const requests:string[]=[];
  const kv={
-  get:async (key:readonly (string|number|boolean|bigint|Uint8Array)[])=>{
+  get:async <T>(key:readonly (string|number|boolean|bigint|Uint8Array)[]):Promise<{
+    value:T|null;versionstamp:string|null;
+  }>=>{
    requests.push(key.join("|"));
    if(String(key[1])==="semantic-writer-lock")
     return {value:null,versionstamp:null};
-   return {value:{state:"COMMITTED"},versionstamp:"0100"};
+   return {value:{state:"COMMITTED"} as T,versionstamp:"0100"};
   },
   atomic:()=>{throw Error("FORBIDDEN_KV_MUTATOR");},
   set:()=>{throw Error("FORBIDDEN_KV_SET");},
