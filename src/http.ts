@@ -1,5 +1,7 @@
 import { commitTurn, prepareCommit } from "./commit.ts";
 import { config } from "./config.ts";
+import { fixedWriterE2EGate,runFixedWriterE2E } from "./preview_writer_e2e.ts";
+import { PREVIEW_WRITER_E2E_HTML } from "./preview_writer_e2e_ui.ts";
 import { previewWriterReadiness, previewWriterReadinessGate,
   PREVIEW_WRITER_READINESS_PAGE } from "./preview_writer_readiness.ts";
 import { testPreviewStorage } from "./preview_test_storage.ts";
@@ -194,6 +196,35 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
     }
 
 
+
+    if(pathname==="/preview/writer-e2e" && req.method==="GET"){
+      const timeline=(globalThis as unknown as {
+        Deno?:{env?:{get?:(n:string)=>string|undefined}}
+      }).Deno?.env?.get?.("DENO_TIMELINE")??"";
+      // The setup page itself is static; it cannot read or write Google.
+      if(!testPreviewStorage(timeline,config.files.TEMP_RUNTIME))
+        return json({error:"not_found"},404);
+      return new Response(PREVIEW_WRITER_E2E_HTML,{headers:{
+        "content-type":"text/html; charset=utf-8",
+        "cache-control":"no-store",
+        "referrer-policy":"no-referrer",
+        "content-security-policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      }});
+    }
+    if(pathname==="/preview/writer-e2e/run" && req.method==="POST"){
+      const timeline=(globalThis as unknown as {
+        Deno?:{env?:{get?:(n:string)=>string|undefined}}
+      }).Deno?.env?.get?.("DENO_TIMELINE")??"";
+      if(!fixedWriterE2EGate({timeline,workbookId:config.files.TEMP_RUNTIME,
+        isolatedWorkbookId:config.npcHeatTestWorkbookId,docs:config.files,
+        allowWrites:config.allowWrites,allowRawCommits:config.allowRawCommits,
+        testWriterEnabled:config.npcHeatTestWriterEnabled,kvEnabled:config.enableKv}))
+        return json({error:"not_found"},404);
+      if(!authorized(req))return json({error:"unauthorized"},401);
+      if(Number(req.headers.get("content-length")??"0")>0)
+        return json({error:"no_caller_payload_permitted"},400);
+      return json(await runFixedWriterE2E());
+    }
     if(pathname==="/preview/writer-setup" && req.method==="GET"){
       const timeline=(globalThis as unknown as {
         Deno?:{env?:{get?:(n:string)=>string|undefined}}
