@@ -15,6 +15,7 @@ import { buildNpcBehavioralContext } from "./npc_behavior.ts";
 import { chooseMemoryRoute } from "./context_memory_router.ts";
 import { planIndependentWorldTick } from "./world_tick_dispatcher.ts";
 import { buildNpcAutonomyPlan } from "./npc_autonomy_planner.ts";
+import { planNpcInitiativeV4 } from "./npc_initiative_v4.ts";
 import { bridgeTurnIntegrationPlan } from "./bridge_integration.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
@@ -772,6 +773,27 @@ export async function getTurnContext(input: TurnContextRequest) {
           }
         : null,
       autonomy: { activityRule, activeWorldClocks, freshness },
+      // READ_ONLY_PROPOSALS only. No new sheets/docs, no contacts inferred,
+      // no new emotion/relationship fact, no runtime event or committed act.
+      // Co-presence is based on CONTROL-validated ACTIVE_CONTEXT participants.
+      initiativePlan: /^npc\\.[a-z0-9_.-]+$/i.test(id) &&
+          (input.plannedElapsedSeconds === undefined ||
+           (Number.isSafeInteger(input.plannedElapsedSeconds) &&
+            input.plannedElapsedSeconds >= 0 && input.plannedElapsedSeconds <= 604800))
+        ? planNpcInitiativeV4({
+            actorId: id, current, activityRule,
+            relationshipToShura: relationshipRows.find((r) =>
+              String(r["Actor ID"] ?? "") === id &&
+              String(r["Toward ID"] ?? "") === "player.shura") ?? null,
+            socialMemories: filterByParticipants(socialMemoryRows, [id]),
+            knowledge: actorKnowledge.filter((r) => String(r["NPC ID"] ?? "") === id),
+            openThreads: filterByParticipants(openThreadRows, [id]),
+            elapsedSeconds: input.plannedElapsedSeconds ?? 0,
+            verifiedCoPresenceWithShura: routedSceneActorIds.includes(id),
+            verifiedLiveCommunicationChannel: false,
+            discretionaryWindowConfirmed: false,
+            observedStimuli: [],
+          }) : null,
       independentLifePlan: buildNpcAutonomyPlan({
         actorId:id,worldDay:Number(worldDay),worldTime:String(worldTime),current,activityRule,
         knownFacts:actorKnowledge.filter(r=>String(r["NPC ID"]??"")===id),
