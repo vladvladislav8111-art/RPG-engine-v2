@@ -6,6 +6,7 @@ import {previewCraftV4,type CraftV4PreviewInput} from "../crafting_v4.ts";
 import {planWorkV1,type WorkPlanInput} from "../task_work_v1.ts";
 import type {Capability} from "../proficiency.ts";
 import {masterOrderTimeReductionPercent} from "../effective_characteristics.ts";
+import {simulateMarketPulse,type MarketPulseInput} from "../market_opportunity_pulse.ts";
 
 export type RuntimeClock={saveId:string;day:number;time:string;locationId:string;sceneId:string};
 export type PreparedTurnHint={
@@ -192,6 +193,20 @@ export function attachAuthoritativeWorldSources(input:{
         }
       }
     }catch(err){item.result=deny('SKILL_EVALUATION_REJECTED',err instanceof Error?err.message:'Invalid source');}
+  }
+  if(job.operation==='offer_board'&&job.payload.marketPulseV1!==undefined){
+    if(job.payload.boardMode!==undefined||!isRecord(job.payload.marketPulseV1)){
+      item.result=deny('MARKET_PULSE_BAD_ENVELOPE','Expected marketPulseV1 payload only');
+      continue;
+    }
+    const p=job.payload.marketPulseV1 as MarketPulseInput;
+    const minute=Number(clock.time.slice(0,2))*60+Number(clock.time.slice(3,5));
+    if(p.day!==clock.day||p.minuteOfDay!==minute){
+      item.result=deny('MARKET_PULSE_STALE_CLOCK','Day and time must match the committed save');
+      continue;
+    }
+    item.result=simulateMarketPulse(p);
+    continue;
   }
   if(job.operation==='offer_board'&&job.payload.boardMode==='CURRENT_SOURCE_ONLY'){
     item.result=input.opportunityRows
