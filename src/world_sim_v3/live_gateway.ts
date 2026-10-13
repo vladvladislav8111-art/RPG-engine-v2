@@ -5,7 +5,7 @@ import {dispatchWorldV3Batch,type WorldV3BatchRequest} from './runtime_facade.ts
 import {attachAuthoritativeWorldSources,parseLiveClock} from './source_bridge.ts';
 export async function simulateWorldV3BatchLive(req:WorldV3BatchRequest){
  const liveBoard=Array.isArray(req.jobs)&&req.jobs.some(j=>j.operation==='offer_board'&&j.payload?.boardMode==='CURRENT_SOURCE_ONLY');
- const liveSkills=Array.isArray(req.jobs)&&req.jobs.some(j=>j.operation==='capability_check'||(j.operation==='craft_advance'&&j.payload?.taskKind!==undefined));
+ const liveSkills=Array.isArray(req.jobs)&&req.jobs.some(j=>j.operation==='capability_check'||(j.operation==='craft_advance'&&j.payload?.taskKind!==undefined)||j.operation==='task_plan'||(j.operation==='workshop_capacity'&&j.payload?.taskPlanV1!==undefined));
  const ranges=['CONTROL!A1:D15',...(liveBoard?['OPPORTUNITIES_CURRENT!A1:W500']:[]),...(liveSkills?['COMPETENCES!A1:L100','SPECIALIZATIONS!A1:I200','CHARACTERISTICS!A1:H100']:[])];
  const source=await sheetsBatchGet(config.files.TEMP_RUNTIME,ranges);
  const clock=parseLiveClock(source['CONTROL!A1:D15']??[]);
