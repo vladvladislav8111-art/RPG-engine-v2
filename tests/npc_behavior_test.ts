@@ -15,7 +15,7 @@ Deno.test("NPC behavioral frame keeps personal agenda and sourced memories", () 
       {"NPC ID":"npc.other","Fact ID":"secret","Knowledge/belief":"hidden plot","Confidence/status":"GM"},
     ],
     relationships:[{"Actor ID":"npc.selarin.pool_2003","Toward ID":"player.shura","Warmth":"warm","Trust":"cautious"}],
-    memories:[{"Memory ID":"memory.vesha_shura_book_portrait","Participants":"npc.selarin.pool_2003;player.shura","Meaning":"He gifted an original portrait","Importance":"IMPORTANT"}],
+    memories:[{"Memory ID":"memory.vesha_shura_book_portrait","Participants":"npc.selarin.pool_2003;player.shura","Who understands":"npc.selarin.pool_2003;player.shura","Origin event":"T045","Status":"ACTIVE","Meaning":"He gifted an original portrait","Importance":"IMPORTANT"}],
     openThreads:[{"Thread ID":"thread.reply.bow","Participants":"npc.selarin.pool_2003;player.shura","Summary":"Vesha asked whether Shura likes that the bow works","Waiting on":"player.shura","Trigger/due":"next reply"}],
     recentChat:[],
     activeWorldClocks:[],

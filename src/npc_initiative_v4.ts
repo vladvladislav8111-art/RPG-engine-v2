@@ -3,6 +3,7 @@
  * consent, promise, job or writer authorization. GM/V3 must decide and commit.
  */
 import {planNpcInnerMotivesV4, type NpcStimulus} from "./npc_inner_motives_v4.ts";
+import { npcKnowsMemory } from "./npc_life_v4/memory.ts";
 
 export type NpcRow = Record<string, unknown>;
 export type NpcInitiativeInput = {
@@ -63,8 +64,7 @@ export function planNpcInitiativeV4(i: NpcInitiativeInput) {
   const relationshipEvidence = field(relation, 'Evidence refs')
     .split(/[;,]/).map(x => x.trim()).filter(Boolean);
   const memories = (i.socialMemories ?? []).filter(m =>
-    field(m, 'Status').toUpperCase() === 'ACTIVE' &&
-    field(m, 'Participants').split(';').includes(i.actorId) &&
+    npcKnowsMemory(m, i.actorId) &&
     field(m, 'Participants').split(';').includes('player.shura'));
   const memoryEvidence = memories.map(m => field(m, 'Origin event') || field(m, 'Source'));
   const relationshipEvidenceRefs = grounded([...relationshipEvidence, ...memoryEvidence]);

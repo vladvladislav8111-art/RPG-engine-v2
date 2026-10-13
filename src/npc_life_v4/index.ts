@@ -6,3 +6,4 @@ export * from './attention.ts';
 export * from './context.ts';
 export * from './profiles.ts';
 export * from './proofs.ts';
+export * from './memory.ts';

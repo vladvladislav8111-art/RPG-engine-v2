@@ -1,4 +1,5 @@
 import { summarizeNpcLifeContext } from "./npc_life_v4/context.ts";
+import { recallNpcMemories } from "./npc_life_v4/memory.ts";
 
 type NpcRecord = Record<string, unknown>;
 
@@ -17,6 +18,7 @@ export function buildNpcBehavioralContext(input: {
   recentChat: NpcRecord[];
   activeWorldClocks: NpcRecord[];
   activityRule?: NpcRecord | null;
+  contextTags?: readonly string[];
 }) {
   const { actorId, current } = input;
   if (!current || str(current["NPC ID"]) !== actorId) {
@@ -32,18 +34,17 @@ export function buildNpcBehavioralContext(input: {
     acquiredFrom: r["Source"],
     learnedAt: r["Learned/updated"],
   }));
-  const memoryAnchors = input.memories
-    .filter((r) => String(r["Participants"] ?? "").split(";").includes(actorId))
-    .sort((a,b) => {
-      const rank = (r: NpcRecord) => ({ANCHOR:3,IMPORTANT:2,ROUTINE:1}[str(r["Importance"]).toUpperCase()] ?? 0);
-      return rank(b)-rank(a);
-    })
-    .slice(0, 12)
-    .map((r) => ({
-      memoryId:r["Memory ID"],meaning:r["Meaning"],
-      emotionalTone:r["Emotional tone"],originEvent:r["Origin event"],
-      whoUnderstands:r["Who understands"],lastUsed:r["Last used"],
-    }));
+  const npcMemoryRecall = recallNpcMemories({
+    actorId, memories: input.memories, currentGoal: str(current["Current goal/activity"]),
+    openThreads: input.openThreads, recentChat: input.recentChat,
+    contextTags: input.contextTags, limit: 12,
+  });
+  const memoryAnchors = npcMemoryRecall.selected.map((memory) => ({
+    memoryId: memory.memoryId, meaning: memory.meaning,
+    emotionalTone: memory.emotionalTone, originEvent: memory.originEvent,
+    source: memory.source, whoUnderstands: memory.whoUnderstands.join(";"),
+    lastUsed: memory.lastUsed, relevanceReasons: memory.reasons,
+  }));
   const commitments = input.openThreads
     .filter((r) => String(r["Participants"] ?? "").split(";").includes(actorId))
     .map((r) => ({
@@ -76,6 +77,7 @@ export function buildNpcBehavioralContext(input: {
     socialBoundaries: current["Notes"] ?? null,
     directedRelations,
     memoryAnchors,
+    npcMemoryRecall,
     commitments,
     knownFacts,
     lastContact,
@@ -102,7 +104,7 @@ export function buildNpcBehavioralContext(input: {
       "NPC decides independently from their own goal, time, priorities and character; player cannot compel agreement.",
       "NPC learns ONLY from knownFacts, directly observed events and source-backed hearsay; do not reveal GM private truth.",
       "Distinguish trust, warmth and obligations; affection alone does not grant consent, employment, secrets or physical access.",
-      "Recent chat, known memories and open threads may shape speech, but no guaranteed conversation or automatic response.",
+      "Source-known memory selection may shape speech; no new event or guaranteed NPC reply.",
       "NPC may disagree, delay, be unavailable, challenge contradictions or leave to pursue their own commitments.",
     ],
   };

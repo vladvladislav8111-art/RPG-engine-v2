@@ -24,6 +24,7 @@ import { auditNpcHeatJournalIncludingTestV2 } from "./npc_heat_v2_reader.ts";
 import { chooseMemoryRoute } from "./context_memory_router.ts";
 import { planIndependentWorldTick } from "./world_tick_dispatcher.ts";
 import { buildNpcAutonomyPlan } from "./npc_autonomy_planner.ts";
+import { npcKnowsMemory } from "./npc_life_v4/memory.ts";
 import { bridgeTurnIntegrationPlan } from "./bridge_integration.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
@@ -851,6 +852,8 @@ export async function getTurnContext(input: TurnContextRequest) {
     const durableIdentity =
       identityPregenRows.find((r) => String(r["NPC ID"] ?? "") === id) ?? null;
     const archivedKnowledge = dormantArchiveRows.filter((r) => String(r["NPC ID"] ?? "") === id);
+    const actorKnownMemories = filterByParticipants(socialMemoryRows, [id])
+      .filter((row) => npcKnowsMemory(row, id));
     actors[id] = {
       current,
       contextHeat: heatShadow.actors[id] ?? null,
@@ -860,7 +863,7 @@ export async function getTurnContext(input: TurnContextRequest) {
           String(r["Actor ID"] ?? "") === id && String(r["Toward ID"] ?? "") === "player.shura") ?? null,
         knowledge: actorKnowledge.filter(r => String(r["NPC ID"] ?? "") === id),
         observedStimuli: [], // Historical committed TX receipts are not loaded.
-        socialMemories: filterByParticipants(socialMemoryRows, [id]),
+        socialMemories: actorKnownMemories,
         openThreads: filterByParticipants(openThreadRows, [id]),
         elapsedSeconds: input.plannedElapsedSeconds ?? 0,
         verifiedCoPresenceWithShura: sceneActorsForContext.includes(id),
@@ -874,7 +877,7 @@ export async function getTurnContext(input: TurnContextRequest) {
       durableIdentity,
       knowledge: actorKnowledge.filter((r) => String(r["NPC ID"] ?? "") === id),
       relationships: filterRelationships(relationshipRows, [id]),
-      socialMemory: filterByParticipants(socialMemoryRows, [id]),
+      socialMemory: actorKnownMemories,
       openThreads: filterByParticipants(openThreadRows, [id]),
       recentChat: actorRecentChat[id] ?? [],
       archivedKnowledge,
@@ -892,7 +895,7 @@ export async function getTurnContext(input: TurnContextRequest) {
         actorId:id,worldDay:Number(worldDay),worldTime:String(worldTime),current,activityRule,
         knownFacts:actorKnowledge.filter(r=>String(r["NPC ID"]??"")===id),
         directedRelationships:filterRelationships(relationshipRows,[id]),
-        socialMemory:filterByParticipants(socialMemoryRows,[id]),
+        socialMemory:actorKnownMemories,
         openThreads:filterByParticipants(openThreadRows,[id]),activeWorldClocks,
       }),
       behavioralContext: buildNpcBehavioralContext({
@@ -900,11 +903,12 @@ export async function getTurnContext(input: TurnContextRequest) {
         current,
         knowledge: actorKnowledge.filter((r) => String(r["NPC ID"] ?? "") === id),
         relationships: filterRelationships(relationshipRows, [id]),
-        memories: filterByParticipants(socialMemoryRows, [id]),
+        memories: actorKnownMemories,
         openThreads: filterByParticipants(openThreadRows, [id]),
         recentChat: actorRecentChat[id] ?? [],
         activeWorldClocks,
         activityRule,
+        contextTags: input.tags ?? [],
       }),
     };
     actorContextGate[id] = evaluateNpcContextGate({

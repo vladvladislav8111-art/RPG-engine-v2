@@ -40,6 +40,7 @@ import { computeSurvivalChange, survivalStaminaModifiers, type SurvivalActivity 
 import { makeTurnToken } from "./turn_token.ts";
 import { resolveSelarinWeatherRecords, sheetObjects } from "./weather.ts";
 import { validateChatEventShape, validateRelationshipEventShape } from "./social_context.ts";
+import { validateNewNpcSocialMemory } from "./npc_life_v4/memory.ts";
 import { worldContinuityReview } from "./world_continuity.ts";
 import { reviewWorldProcesses } from "./world_process.ts";
 import { validateWorkDemand } from "./work_demand.ts";
@@ -1778,9 +1779,18 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     }
 
     if (index < 0 && operation === "UPSERT") {
-      if (!(event.participants?.length)) throw new Error(`new social memory requires participants: ${event.memoryId}`);
-      if (!event.originEvent?.trim()) throw new Error(`new social memory requires originEvent: ${event.memoryId}`);
-      if (!event.meaning?.trim()) throw new Error(`new social memory requires meaning: ${event.memoryId}`);
+      validateNewNpcSocialMemory(event);
+    }
+    // Existing records can change knowers only by explicitly sourced owner list.
+    if (index >= 0 && event.whoUnderstands !== undefined) {
+      const currentParticipants = String(socialMemoryRows[index][headerIndex(socialMemoryRows, "Participants")] ?? "")
+        .split(/[;,|]/).map((v) => v.trim()).filter(Boolean);
+      const participants = event.participants?.length ? event.participants : currentParticipants;
+      const understood = event.whoUnderstands;
+      if (!understood.length || new Set(understood).size !== understood.length ||
+          understood.some((who) => !participants.includes(who))) {
+        throw new Error("social memory explicit knowers must be unique participants: " + event.memoryId);
+      }
     }
 
     const row = index >= 0 ? cloneRow(socialMemoryRows, index) : Array(headers(socialMemoryRows).length).fill("");
@@ -1796,7 +1806,6 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
     if (event.originEvent != null) setByHeader(socialMemoryRows, row, "Origin event", event.originEvent);
     if (event.meaning != null) setByHeader(socialMemoryRows, row, "Meaning", event.meaning);
     if (event.whoUnderstands?.length) setByHeader(socialMemoryRows, row, "Who understands", encodeIds(event.whoUnderstands));
-    else if (index < 0 && event.participants?.length) setByHeader(socialMemoryRows, row, "Who understands", encodeIds(event.participants));
     if (event.emotionalTone != null) setByHeader(socialMemoryRows, row, "Emotional tone", event.emotionalTone);
     setByHeader(socialMemoryRows, row, "Recurrence", oldRecurrence + recurrenceDelta);
     setByHeader(socialMemoryRows, row, "Last used", event.lastUsed ?? resolvedInworldEnd);
