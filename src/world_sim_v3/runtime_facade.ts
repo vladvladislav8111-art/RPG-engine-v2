@@ -15,6 +15,7 @@ import {planCustodyTransfer} from './inventory.ts';
 import {proposeMaterializedOfferBoard,generateOffer} from './opportunities.ts';
 import {planAchievementAward,planTitleAward,planProgressCycle,planSystemObjectiveReward,planExplicitSupPurchase,applicableTitleEffects} from './progression.ts';
 import {ACHIEVEMENTS_V3,TITLES_V3,ACHIEVEMENT_CATALOG_COUNTS} from './achievement_catalog.ts';
+import {reviewPerception,type PerceptionReviewRequest} from '../perception_review.ts';
 import {reviewNpcLife,reviewKeyPromotion,proposeDirectedRelationship,proposePersonalityEvolution,chooseNpcAttention,crossCheckContactReceipts} from '../npc_life_v4/index.ts';
 
 export const WORLD_V3_OPERATIONS=[
@@ -79,7 +80,12 @@ function execute(job:WorldV3Job):SimOutcome<unknown>{
    if(!array(p.provenance)||p.provenance.length>128||!p.provenance.every(row=>array(row)&&row.length===2&&cleanId(row[0])&&rec(row[1])))throw Error('WORLD_V3_PROVENANCE');
    return relayKnowledge({facts:p.facts as Fact[],message:as<Parameters<typeof relayKnowledge>[0]['message']>(p.message as Record<string,unknown>),provenance:new Map(p.provenance as [string,Evidence][])});
  }
- case 'world_review':return planWorldReview({...as<Parameters<typeof planWorldReview>[0]>(p),evidenceIds:setOf(p.evidenceIds,'evidenceIds')});
+ case 'world_review':
+  if(p.perceptionV1!==undefined){
+    if(Object.keys(p).length!==1||!rec(p.perceptionV1))return deny('PERCEPTION_INVALID_ENVELOPE','Expected only perceptionV1 request');
+    return pass(reviewPerception(p.perceptionV1 as PerceptionReviewRequest));
+  }
+  return planWorldReview({...as<Parameters<typeof planWorldReview>[0]>(p),evidenceIds:setOf(p.evidenceIds,'evidenceIds')});
  case 'world_resolution':return validateWorldResolution({...as<Parameters<typeof validateWorldResolution>[0]>(p),requiredKnowledgeRefs:setOf(p.requiredKnowledgeRefs,'requiredKnowledgeRefs')});
  case 'inventory_transfer':return planCustodyTransfer(p.lots as Parameters<typeof planCustodyTransfer>[0],p.req as Parameters<typeof planCustodyTransfer>[1]);
  case 'generate_offer':return generateOffer(as<Parameters<typeof generateOffer>[0]>(p));
