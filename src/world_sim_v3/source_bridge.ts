@@ -1,6 +1,7 @@
 /** Source-grounded V3 planning aids; NEVER a commit, authority token, or payout. */
 import {deny,pass,type SimOutcome} from './types.ts';
 import type {SemanticSimulationProposal} from './orchestrator.ts';
+import {evaluateCapability,readAuthoritativeRatings,TASK_PROFILES,type TaskKind,type SkillRows} from '../proficiency.ts';
 
 export type RuntimeClock={saveId:string;day:number;time:string;locationId:string;sceneId:string};
 export type PreparedTurnHint={
@@ -18,7 +19,7 @@ export function parseLiveClock(controlRows:unknown[][]):RuntimeClock{
  const saveId=String(entries.get('save_id')??''),time=String(entries.get('world_time')??'');
  const day=Number(entries.get('world_day'));
  const locationId=String(entries.get('current_location_id')??''),sceneId=String(entries.get('current_scene_id')??'');
- if(!/^V2-S[0-9]+$/.test(saveId)||!Number.isSafeInteger(day)||day<1||!/^([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/.test(time)||!locationId||!sceneId)throw Error('CONTROL_INVALID_CLOCK');
+ if(!/^V2-S[0-9]+(?:-[A-Z0-9]+)*$/.test(saveId)||!Number.isSafeInteger(day)||day<1||!/^([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/.test(time)||!locationId||!sceneId)throw Error('CONTROL_INVALID_CLOCK');
  return {saveId,day,time,locationId,sceneId};
 }
 export function clockMinute(c:RuntimeClock):number{const [h,m]=c.time.split(':').map(Number);return c.day*1440+h*60+m;}
@@ -66,6 +67,7 @@ import type {WorldV3BatchRequest,WorldV3BatchResult} from './runtime_facade.ts';
 export function attachAuthoritativeWorldSources(input:{
  request:WorldV3BatchRequest;result:WorldV3BatchResult;clock:RuntimeClock;
  opportunityRows?:unknown[][];
+ skillRows?:SkillRows;
 }):WorldV3BatchResult&{sourceBridge:{clockVerified:true;clock:{day:number;time:string};financialAuthority:false}}{
  const {request,result,clock}=input;
  if(request.expectedSaveId!==clock.saveId||result.expectedSaveId!==clock.saveId)throw Error('WORLD_V3_STALE_SAVE');
@@ -79,6 +81,28 @@ export function attachAuthoritativeWorldSources(input:{
     if(!item.result.ok)continue;
     const hint=boundedTurnSemanticHint({clock,proposal:item.result.value as SemanticSimulationProposal,playerActionReference:job.payload.playerActionReference,playerActionSummary:job.payload.playerActionSummary});
     item.result=pass({proposal:item.result.value,semanticAssistance:hint,sourceClockVerified:true,committed:false});
+  }
+  if(job.operation==='capability_check'||(job.operation==='craft_advance'&&job.payload.taskKind!==undefined)){
+    const kind=job.payload.taskKind;
+    if(!input.skillRows){item.result=deny('SKILL_SOURCE_MISSING','No verified live skill rows');continue;}
+    if(typeof kind!=='string'||!Object.prototype.hasOwnProperty.call(TASK_PROFILES,kind)){
+      item.result=deny('UNKNOWN_CRAFT_TASK','Unregistered task kind');continue;
+    }
+    try{
+      const capability=evaluateCapability(kind as TaskKind,readAuthoritativeRatings(input.skillRows),job.payload.difficulty as number);
+      if(job.operation==='capability_check'){item.result=pass(capability);}
+      else{
+        const order=job.payload.order as {makerId?:string;progressMinutes:number;requiredMinutes:number}|undefined;
+        if(!order||order.makerId!=='actor.shura'){item.result=deny('NONPLAYER_SKILL_NOT_VERIFIED','Shura ratings cannot be used for NPC orders');continue;}
+        if(!item.result.ok)continue;
+        const current=item.result.value as {additionalWorkMinutes:number;newProgressMinutes:number};
+        const remaining=Math.max(0,order.requiredMinutes-order.progressMinutes);
+        const effective=Math.min(remaining,Math.floor(current.additionalWorkMinutes*capability.efficiencyFactor));
+        item.result=pass({...current,newProgressMinutes:order.progressMinutes+effective,
+          workEquivalentMinutes:effective,actualStaffedMinutes:current.additionalWorkMinutes,
+          capability,sourceVerifiedSkillOnly:true,requiresGmCausalResolution:true});
+      }
+    }catch(err){item.result=deny('SKILL_EVALUATION_REJECTED',err instanceof Error?err.message:'Invalid source');}
   }
   if(job.operation==='offer_board'&&job.payload.boardMode==='CURRENT_SOURCE_ONLY'){
     item.result=input.opportunityRows

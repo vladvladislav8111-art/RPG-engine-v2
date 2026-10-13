@@ -7,7 +7,7 @@ const field = (r: SourceRow, key: string) => String(r[key] ?? "").trim();
 const active = (r: SourceRow) => field(r, "Status").toUpperCase() === "ACTIVE";
 const contactTags = new Set(["CHAT", "CONTACT", "CONTACTS", "MESSAGE", "MESSAGES", "USER_LINK", "COMMS"]);
 const workTags = new Set(["WORK", "JOB", "BOARD", "ECONOMY", "CRAFT", "PROJECT", "TRADE"]);
-const learningTags = new Set(["WORK", "STUDY", "TRAINING", "CRAFT", "RESEARCH", "COMBAT", "SURVIVAL", "MAGIC", "LANGUAGE", "SKILL"]);
+const learningTags = new Set(["WORK", "STUDY", "TRAINING", "CRAFT", "RESEARCH", "COMBAT", "SURVIVAL", "MAGIC", "LANGUAGE", "SKILL", "ART", "DRAW", "DRAFT", "ENGINEERING", "BOWYER"]);
 const worldTags = new Set(["WORLD", "REST", "TRAVEL", "WORK", "CRAFT", "WAIT", "NPC", "PROJECT", "ECONOMY"]);
 const has = (tags: ReadonlySet<string>, candidates: ReadonlySet<string>) =>
   [...candidates].some((tag) => tags.has(tag));

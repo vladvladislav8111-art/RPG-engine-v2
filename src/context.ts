@@ -167,9 +167,11 @@ function hasAny(tags: Set<string>, wanted: string[]): boolean {
 function relevantCompetenceIds(tags: Set<string>): Set<string> | null {
   const ids = new Set<string>();
   if (hasAny(tags, ["LANGUAGE", "SOCIAL", "SERVICES", "ECONOMY"])) ids.add("competence.society.communication");
-  if (hasAny(tags, ["RESEARCH", "STUDY", "READ", "WRITE"])) ids.add("competence.knowledge.research");
+  if (hasAny(tags, ["RESEARCH", "STUDY", "READ", "WRITE", "DRAFT", "ENGINEERING"])) ids.add("competence.knowledge.research");
+  if (hasAny(tags, ["ART", "DRAW", "ILLUSTRATION"])) ids.add("competence.art.visual_expression");
+  if (hasAny(tags, ["DRAFT", "ENGINEERING", "BLUEPRINT", "BOWYER"])) ids.add("competence.engineering.design");
   if (hasAny(tags, ["COMBAT", "WEAPON", "ARCHERY"])) ids.add("competence.combat.melee");
-  if (hasAny(tags, ["CRAFT", "BUILD", "REPAIR", "COOK"])) ids.add("competence.crafting.practical_creation");
+  if (hasAny(tags, ["CRAFT", "BUILD", "REPAIR", "COOK", "BOWYER", "BOWMAKING"])) ids.add("competence.crafting.practical_creation");
   if (hasAny(tags, ["SURVIVAL", "TRAVEL", "HUNT", "TRACK"])) ids.add("competence.survival.general");
   if (hasAny(tags, ["MAGIC", "MANA"])) ids.add("competence.magic.perception");
   if (hasAny(tags, ["BODY", "PHYSICAL", "TRAVEL"])) ids.add("competence.body.physical_conditioning");
@@ -301,7 +303,7 @@ export async function getTurnContext(input: TurnContextRequest) {
     "THREAT", "OBSERVE", "LOOK",
   ]);
 
-  const needsCompetences = input.turnClass !== "MICRO" || hasAny(tagSet, ["WORK", "LANGUAGE", "SKILL", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY"]);
+  const needsCompetences = input.turnClass !== "MICRO" || hasAny(tagSet, ["WORK", "LANGUAGE", "SKILL", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY", "ART", "DRAW", "DRAFT", "ENGINEERING", "BOWYER"]);
   const runtimeRanges = new Set<string>([
     "CONTROL!A1:D12",
     "PLAYER_RESOURCES!A1:E20",
@@ -328,7 +330,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   addStructured("PENDING_CHOICES"); // Preexisting hot-state milestones; never decide for Shura.
   if (wantsSystemInbox) addStructured("PROGRESSION_EVENTS"); // Only explicit Inbox requests.
 
-  if (hasAny(tagSet, ["SKILL", "WORK", "LANGUAGE", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY", "TRAINING", "SPECIALIZATION", "DEXTERITY", "HANDS"])) {
+  if (hasAny(tagSet, ["SKILL", "WORK", "LANGUAGE", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY", "TRAINING", "SPECIALIZATION", "DEXTERITY", "HANDS", "ART", "DRAW", "ILLUSTRATION", "DRAFT", "ENGINEERING", "BOWYER"])) {
     addStructured("SPECIALIZATIONS");
     addStructured("MILESTONES");
     addStructured("PENDING_CHOICES");
