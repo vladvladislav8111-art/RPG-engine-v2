@@ -2,6 +2,7 @@
 import {deny,pass,type SimOutcome} from './types.ts';
 import type {SemanticSimulationProposal} from './orchestrator.ts';
 import {evaluateCapability,readAuthoritativeRatings,TASK_PROFILES,type TaskKind,type SkillRows} from '../proficiency.ts';
+import {previewCraftV4,type CraftV4PreviewInput} from "../crafting_v4.ts";
 
 export type RuntimeClock={saveId:string;day:number;time:string;locationId:string;sceneId:string};
 export type PreparedTurnHint={
@@ -90,19 +91,48 @@ export function attachAuthoritativeWorldSources(input:{
     }
     try{
       const capability=evaluateCapability(kind as TaskKind,readAuthoritativeRatings(input.skillRows),job.payload.difficulty as number);
-      if(job.operation==='capability_check'){item.result=pass(capability);}
-      else{
-        const order=job.payload.order as {makerId?:string;progressMinutes:number;requiredMinutes:number}|undefined;
+      const config=job.payload.craftV4 as Partial<CraftV4PreviewInput>|undefined;
+      if(config!==undefined&&(typeof config!=='object'||config===null||Array.isArray(config))){
+        item.result=deny('CRAFT_V4_INVALID_PLAN','Structured craftV4 configuration required');continue;
+      }
+      if(job.operation==='capability_check'){
+        item.result=pass(config?{...capability,craftingV4:previewCraftV4({
+          ...config,capability,availableStaffedMinutes:config.availableStaffedMinutes??0,
+          priorStageProgressMinutes:config.priorStageProgressMinutes??0,
+        } as CraftV4PreviewInput)}:capability);
+      }else{
+        const order=job.payload.order as {makerId?:string;recipeId?:string;progressMinutes:number;requiredMinutes:number}|undefined;
         if(!order||order.makerId!=='actor.shura'){item.result=deny('NONPLAYER_SKILL_NOT_VERIFIED','Shura ratings cannot be used for NPC orders');continue;}
         if(!item.result.ok)continue;
         const current=item.result.value as {additionalWorkMinutes:number;newProgressMinutes:number};
-        const remaining=Math.max(0,order.requiredMinutes-order.progressMinutes);
-        const effective=Math.min(remaining,Math.floor(current.additionalWorkMinutes*capability.efficiencyFactor));
-        const complete=order.progressMinutes+effective>=order.requiredMinutes;
-        item.result=pass({...current,newProgressMinutes:order.progressMinutes+effective,
-          nextStatus:complete?'quality_check':'working',requiresIndependentQualityCheck:complete,
-          workEquivalentMinutes:effective,actualStaffedMinutes:current.additionalWorkMinutes,
-          capability,sourceVerifiedSkillOnly:true,requiresGmCausalResolution:true});
+        if(config){
+          // Staged V4 is opt-in. A legacy aggregate order cannot silently change scope.
+          const preview=previewCraftV4({...config,capability,
+            availableStaffedMinutes:current.additionalWorkMinutes,
+            priorStageProgressMinutes:order.progressMinutes} as CraftV4PreviewInput);
+          if(order.recipeId!==preview.recipeId||order.requiredMinutes!==preview.normativeMinutes||
+             (config.priorStageProgressMinutes!==undefined&&config.priorStageProgressMinutes!==order.progressMinutes)){
+            item.result=deny('CRAFT_V4_ORDER_STAGE_MISMATCH','Stage progress and source order must describe identical work');continue;
+          }
+          const stageDone=preview.readyForNextStage;
+          item.result=pass({...current,newProgressMinutes:preview.newStageProgressMinutes,
+            nextStatus:stageDone&&preview.requiresInspection?'quality_check':'working',
+            requiresIndependentQualityCheck:stageDone&&preview.requiresInspection,
+            actualStaffedMinutes:preview.actualStaffedMinutesUsed,
+            workEquivalentMinutes:preview.effectiveWorkMinutes,
+            craftV4:preview,stageComplete:stageDone,
+            sourceVerifiedSkillOnly:true,requiresGmCausalResolution:true,
+            notACommit:true});
+        }else{
+          const remaining=Math.max(0,order.requiredMinutes-order.progressMinutes);
+          const effective=Math.min(remaining,Math.floor(current.additionalWorkMinutes*capability.efficiencyFactor));
+          const complete=order.progressMinutes+effective>=order.requiredMinutes;
+          const actual=effective===0?0:Math.min(current.additionalWorkMinutes,Math.ceil(effective/capability.efficiencyFactor));
+          item.result=pass({...current,newProgressMinutes:order.progressMinutes+effective,
+            nextStatus:complete?'quality_check':'working',requiresIndependentQualityCheck:complete,
+            workEquivalentMinutes:effective,actualStaffedMinutes:actual,
+            capability,sourceVerifiedSkillOnly:true,requiresGmCausalResolution:true});
+        }
       }
     }catch(err){item.result=deny('SKILL_EVALUATION_REJECTED',err instanceof Error?err.message:'Invalid source');}
   }

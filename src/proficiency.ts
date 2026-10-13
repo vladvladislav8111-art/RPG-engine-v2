@@ -1,5 +1,5 @@
 /** Task-specific competency model; caller provided properties are NOT source attestation. */
-export type TaskKind="bow_design"|"bow_fabrication"|"bow_tuning"|"kit_assembly"|"knife_fabrication"|"drawing"|"technical_drafting"|"cooking"|"document_audit"|"trade_negotiation"|"bow_shooting";
+export type TaskKind="bow_design"|"bow_fabrication"|"bow_tuning"|"kit_assembly"|"knife_fabrication"|"wood_carving"|"cordage"|"drawing"|"technical_drafting"|"cooking"|"document_audit"|"trade_negotiation"|"bow_shooting";
 export type TaskProfile={parent:string;specialization:string;characteristic:string;support?:readonly {competenceId:string;name:string;cap:number}[];physicalGate:string};
 const C="competence.crafting.practical_creation",K="competence.knowledge.research",A="competence.art.visual_expression",E="competence.engineering.design";
 export const TASK_PROFILES:Record<TaskKind,TaskProfile>={
@@ -8,6 +8,8 @@ export const TASK_PROFILES:Record<TaskKind,TaskProfile>={
  bow_tuning:{parent:C,specialization:"Лукоделие",characteristic:"Intelligence",support:[{competenceId:C,name:"Сборка и подгонка",cap:4}],physicalGate:"Partial draw never proves full-draw safety."},
  kit_assembly:{parent:C,specialization:"Сборка и подгонка",characteristic:"Dexterity",physicalGate:"Requires already designed components and actual custody."},
  knife_fabrication:{parent:C,specialization:"Ножеделие",characteristic:"Dexterity",support:[{competenceId:C,name:"Металлообработка",cap:4}],physicalGate:"Blade manufacture requires geometry, steel and heat treatment evidence."},
+ wood_carving:{parent:C,specialization:"Резьба по дереву",characteristic:"Dexterity",support:[{competenceId:C,name:"Materials",cap:3}],physicalGate:"Prepared wood, sharp tools and grain direction must be real; does not create a learned recipe."},
+ cordage:{parent:C,specialization:"Изготовление шнуров",characteristic:"Dexterity",support:[{competenceId:C,name:"Лукоделие",cap:3}],physicalGate:"Prepared fibre and tensile requirements must be verified; cord does not automatically qualify as bowstring."},
  drawing:{parent:A,specialization:"Рисование",characteristic:"Dexterity",physicalGate:"Original pictorial composition; not engineering drafting."},
  technical_drafting:{parent:E,specialization:"Техническое черчение",characteristic:"Intelligence",support:[{competenceId:K,name:"Пространственная схематизация",cap:7}],physicalGate:"Requires reproducible dimensions and verification against the object."},
  cooking:{parent:C,specialization:"Cooking",characteristic:"Dexterity",physicalGate:"Ingredients, hygiene and actual food-quality checks remain mandatory."},
@@ -52,7 +54,10 @@ export function evaluateCapability(taskKind:TaskKind,ratings:Ratings,difficulty:
  const support=(p.support??[]).reduce((sum,x)=>sum+Math.min(x.cap,ratings.stars.get(x.competenceId+"::"+x.name)??0),0);
  const score=clamp((level?5+Math.min(20,(level-1)*3):0)+stars*6+support+clamp(attribute-5,-5,7),0,100);
  const margin=score-difficulty,readiness=margin>=10?"PRACTICED":margin>=-15?"DEVELOPING":"INSUFFICIENT";
- const efficiencyFactor=Number(clamp(0.78+score/240,0.65,1.18).toFixed(3));
+ const starSpeeds=[0.65,0.75,0.85,0.95,1.10,1.30,1.55,1.85,2.20,2.60,3.20];
+ const generalFactor=level>0?1+Math.min(12,level-1)*0.03:0.90;
+ const attributeFactor=clamp(1+(attribute-5)*0.03,0.75,1.30);
+ const efficiencyFactor=Number(clamp(starSpeeds[stars]*generalFactor*attributeFactor*(1+0.01*support),0.3,4.5).toFixed(3));
  return {taskKind,competenceId:p.parent,specialization:p.specialization,competenceLevel:level,specializationStars:stars,supportBonus:support,score,difficulty,skillMargin:margin,efficiencyFactor,readiness,primarySpecializationPresent:hasPrimary,physicalGate:p.physicalGate,skillSnapshotVerified:true,inputsUnverified:true,committed:false};
 }
 export function verifySpecializedLearning(e:{competenceId:string;specialization?:string;taskKind?:string;sourceRef?:string;productiveMinutes:number;elapsedSeconds:number}):void{

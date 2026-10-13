@@ -17,7 +17,7 @@ Deno.test("real domain mastery helps its craft, does not auto-produce the item",
  const r=readAuthoritativeRatings(rows),stars=new Map(r.stars);
  stars.set("competence.crafting.practical_creation::Лукоделие",5);
  const bow=evaluateCapability("bow_fabrication",{...r,stars},20),knife=evaluateCapability("knife_fabrication",{...r,stars},20);
- assert.ok(bow.score>knife.score);assert.ok(bow.efficiencyFactor<=1.18);assert.equal(bow.committed,false);
+ assert.ok(bow.score>knife.score);assert.ok(bow.efficiencyFactor>1.25);assert.ok(bow.efficiencyFactor<3);assert.equal(bow.committed,false);
 });
 Deno.test("live rows reject duplicates, orphan ratings and invalid difficulty",()=>{
  assert.throws(()=>readAuthoritativeRatings({...rows,competences:[...rows.competences,rows.competences[1]]}));
