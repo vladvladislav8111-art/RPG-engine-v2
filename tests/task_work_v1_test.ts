@@ -34,9 +34,9 @@ Deno.test("without approved shortcut the worker must do the real baseline verifi
 });
 Deno.test("sequential versus independent work: single actor cannot work two things at once",()=>{
  const plan:WorkPlanInput={planId:"plan.test.independent",stages:[
-  {id:"a",label:"A",actorId:"actor.shura",kind:"active",dependsOn:[],fixedMinutes:0,variableMinutes:10,physicalMinimumMinutes:0},
-  {id:"b",label:"B",actorId:"actor.shura",kind:"active",dependsOn:[],fixedMinutes:0,variableMinutes:10,physicalMinimumMinutes:0},
-  {id:"c",label:"C",actorId:"npc.worker",kind:"active",dependsOn:[],fixedMinutes:0,variableMinutes:20,physicalMinimumMinutes:0},
+  {id:"stage.a",label:"A",actorId:"actor.shura",kind:"active",dependsOn:[],fixedMinutes:0,variableMinutes:10,physicalMinimumMinutes:0},
+  {id:"stage.b",label:"B",actorId:"actor.shura",kind:"active",dependsOn:[],fixedMinutes:0,variableMinutes:10,physicalMinimumMinutes:0},
+  {id:"stage.c",label:"C",actorId:"npc.worker",kind:"active",dependsOn:[],fixedMinutes:0,variableMinutes:20,physicalMinimumMinutes:0},
  ]};
  const r=planWorkV1(plan);
  assert.equal(r.projectedLowerBoundMinutes,20);
@@ -58,7 +58,7 @@ Deno.test("passive natural process is not accelerated and gives no player work o
 });
 Deno.test("cannot skip physically required time or full legal coverage with unverified selectivity",()=>{
  const p:WorkPlanInput={planId:"plan.test.floor",stages:[
-  {id:"a",label:"Physical",actorId:"actor.shura",kind:"verification",dependsOn:[],
+  {id:"stage.a",label:"Physical",actorId:"actor.shura",kind:"verification",dependsOn:[],
    fixedMinutes:5,variableMinutes:55,physicalMinimumMinutes:25,mandatoryFullCoverage:true,
    method:{kind:"selective",methodId:"method.test.selection",sourceRef:"test.method.reference1",checkedFraction:.1,coveragePreserved:false}},
  ]};
