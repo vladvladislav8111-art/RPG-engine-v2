@@ -1,4 +1,4 @@
-export const RULESET_VERSION = "2.12.1-specialization-domain-2026-10-11";
+export const RULESET_VERSION = "2.13.0-competence-craft-2026-10-13";
 
 export type LearningBand = "tiny" | "useful" | "substantial" | "breakthrough" | "exceptional";
 

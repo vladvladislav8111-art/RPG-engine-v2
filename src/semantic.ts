@@ -16,6 +16,7 @@ import {
   RULESET_VERSION,
   advanceClock,
   advanceCompetence,
+  competenceThreshold,
   advanceGeneralXp,
   computeCompetenceAward,
   computeGeneralXpAward,
@@ -46,6 +47,8 @@ import { validateRumorTransmission } from "./world_information.ts";
 import { validateMajorWorldEvent } from "./world_events.ts";
 import { auditMaterialTransformation } from "./physical_integrity.ts";
 import { parseCanonicalSpecializations, runtimeDomainForCompetence, validateSpecializationAcquisition } from "./specialization_catalog.ts";
+import { validateCompetenceDiscovery } from "./competence_catalog.ts";
+import { verifySpecializedLearning } from "./proficiency.ts";
 import { materialRefsInCanon, permanentMaterialLocksInCanon, passportToSheetRecord, validatePhysicalPassport } from "./physical_passport.ts";
 import type {
   CommitRequest,
@@ -1473,6 +1476,28 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   // Newly possible specialties are not implicitly owned. Creation and the first
   // learning award happen inside the SAME validated semantic transaction.
   // No historic practice is back-credited, and no class/milestone is selected.
+  const competenceUnlockOutcomes: unknown[] = [];
+  // Only player-directed current practice can introduce a new canonical parent root.
+  const ownedRoots = new Set(competenceRows.slice(1).map(row => String(row[headerIndex(competenceRows, "Competence ID")] ?? "")).filter(Boolean));
+  for (const proposal of semantic.competenceUnlockEvents ?? []) {
+    const entry = validateCompetenceDiscovery({ proposal, learningEvents: semantic.learningEvents ?? [],
+      elapsedSeconds: Number(semantic.elapsedSeconds ?? 0), ownedIds: ownedRoots });
+    ownedRoots.add(entry.id);
+    const row = Array(headers(competenceRows).length).fill("");
+    setByHeader(competenceRows, row, "Competence ID", entry.id);
+    setByHeader(competenceRows, row, "Pillar", entry.pillar);
+    setByHeader(competenceRows, row, "Display", entry.display);
+    setByHeader(competenceRows, row, "Level", 1);
+    setByHeader(competenceRows, row, "Status", "active");
+    setByHeader(competenceRows, row, "Current meaning", entry.meaning);
+    setByHeader(competenceRows, row, "Carried XP", 0);
+    setByHeader(competenceRows, row, "Next threshold", competenceThreshold(1) ?? 300);
+    setByHeader(competenceRows, row, "Last delta", "Canonical acquisition; evidence: " + proposal.sourceRef);
+    setByHeader(competenceRows, row, "Last TX", input.txId);
+    setByHeader(competenceRows, row, "Deferred XP", 0);
+    appendRow("COMPETENCES", competenceRows, row);
+    competenceUnlockOutcomes.push({ competenceId: entry.id, sourceRef: proposal.sourceRef, level: 1 });
+  }
   const specializationUnlockOutcomes: unknown[] = [];
   const catalog = (semantic.specializationUnlockEvents?.length ?? 0) > 0
     ? parseCanonicalSpecializations(canonicalSpecializationRows)
@@ -1537,6 +1562,13 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
 
   for (let eventIndex = 0; eventIndex < (semantic.learningEvents ?? []).length; eventIndex++) {
     const event = semantic.learningEvents![eventIndex];
+    verifySpecializedLearning({ ...event, elapsedSeconds: Number(semantic.elapsedSeconds ?? 0) });
+    if (event.taskKind && event.sourceRef) {
+      const marker = "skillRef=" + event.sourceRef;
+      if ((semantic.learningEvents ?? []).slice(0, eventIndex).some(e => e.sourceRef === event.sourceRef) ||
+        progressionRows.slice(1).some(row => row.some(cell => String(cell ?? "").includes(marker))))
+        throw new Error("SPECIALIZATION_EVIDENCE_ALREADY_USED: " + event.sourceRef);
+    }
     const i = findDataRow(competenceRows, "Competence ID", event.competenceId);
     if (i < 0) throw new Error(`unknown competence: ${event.competenceId}`);
     const row = cloneRow(competenceRows, i);
@@ -1660,7 +1692,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       progressionRows,
       erow,
       "Notes",
-      `${event.reason ?? ""}${pendingBefore || (advanced.deferredXp ?? 0) > 0 ? ` | deferredXP=${advanced.deferredXp ?? delta}; totalDeferred=${newDeferred}` : ""}`,
+      `${event.reason ?? ""}${event.sourceRef ? " | skillRef=" + event.sourceRef + "; taskKind=" + (event.taskKind ?? "") : ""}${pendingBefore || (advanced.deferredXp ?? 0) > 0 ? ` | deferredXP=${advanced.deferredXp ?? delta}; totalDeferred=${newDeferred}` : ""}`,
     );
     appendRow("PROGRESSION_EVENTS", progressionRows, erow);
     learningOutcomes.push({
@@ -2023,6 +2055,7 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
       choiceResolutions: choiceResolutionOutcomes,
       learning: learningOutcomes,
       specializationUnlocks: specializationUnlockOutcomes,
+      competenceUnlocks: competenceUnlockOutcomes,
       adaptation: adaptationOutcomes,
       inventory: inventoryOutcomes,
       inventorySummary,

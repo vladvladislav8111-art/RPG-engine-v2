@@ -145,6 +145,8 @@ export type SemanticLearningEvent = {
   modifiers?: LearningModifiers;
   exactXpOverride?: number;
   specializationQuality?: SpecializationQuality;
+  taskKind?: string;
+  sourceRef?: string;
   exactSpecializationProgressOverride?: number;
   reason?: string;
 };
@@ -436,6 +438,7 @@ export type SemanticCommitPlan = {
   generalXpEvents?: SemanticGeneralXpEvent[];
   learningEvents?: SemanticLearningEvent[];
   specializationUnlockEvents?: import("./specialization_catalog.ts").UnlockProposal[];
+  competenceUnlockEvents?: import("./competence_catalog.ts").CompetenceDiscovery[];
   adaptationEvents?: SemanticAdaptationEvent[];
   relationshipEvents?: SemanticRelationshipEvent[];
   socialMemoryEvents?: SemanticSocialMemoryEvent[];

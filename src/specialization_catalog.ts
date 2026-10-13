@@ -90,6 +90,8 @@ export function runtimeDomainForCompetence(competenceId: string): string {
     "competence.knowledge.research": "knowledge",
     "competence.society.communication": "society",
     "competence.magic.perception": "magic",
+    "competence.art.visual_expression": "art",
+    "competence.engineering.design": "engineering",
   };
   const domain = mapping[competenceId];
   if (!domain) throw new Error("Unsupported canonical competence domain: " + competenceId);
