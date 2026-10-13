@@ -98,7 +98,9 @@ export function attachAuthoritativeWorldSources(input:{
         const current=item.result.value as {additionalWorkMinutes:number;newProgressMinutes:number};
         const remaining=Math.max(0,order.requiredMinutes-order.progressMinutes);
         const effective=Math.min(remaining,Math.floor(current.additionalWorkMinutes*capability.efficiencyFactor));
+        const complete=order.progressMinutes+effective>=order.requiredMinutes;
         item.result=pass({...current,newProgressMinutes:order.progressMinutes+effective,
+          nextStatus:complete?'quality_check':'working',requiresIndependentQualityCheck:complete,
           workEquivalentMinutes:effective,actualStaffedMinutes:current.additionalWorkMinutes,
           capability,sourceVerifiedSkillOnly:true,requiresGmCausalResolution:true});
       }

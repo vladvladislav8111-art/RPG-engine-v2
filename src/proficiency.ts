@@ -30,14 +30,14 @@ function numericColumn(rows:unknown[][],key:string,value:string):Map<string,numb
 export function readAuthoritativeRatings(rows:SkillRows):Ratings{
  const levels=numericColumn(rows.competences,"Competence ID","Level");
  const characteristics=numericColumn(rows.characteristics,"Characteristic","Value");
- const starRaw=numericColumn(rows.specializations,"Specialization","Stars");
- const header=rows.specializations[0].map(String),compIndex=header.indexOf("Competence ID"),nameIndex=header.indexOf("Specialization");
- if(compIndex<0||nameIndex<0)throw Error("SKILL_SPECIALIZATION_COLUMNS");
+ if(!rows.specializations?.length||!Array.isArray(rows.specializations[0]))throw Error("SKILL_SPECIALIZATIONS_MISSING");
+ const header=rows.specializations[0].map(String),compIndex=header.indexOf("Competence ID"),nameIndex=header.indexOf("Specialization"),starIndex=header.indexOf("Stars");
+ if(compIndex<0||nameIndex<0||starIndex<0)throw Error("SKILL_SPECIALIZATION_COLUMNS");
  const stars=new Map<string,number>();
  for(const row of rows.specializations.slice(1)){
   const name=String(row[nameIndex]??""),id=String(row[compIndex]??"");if(!name)continue;
   const key=id+"::"+name;if(!levels.has(id)||stars.has(key))throw Error("SKILL_ORPHAN_OR_DUPLICATE");
-  const val=starRaw.get(name)??0;if(val>10)throw Error("SKILL_STARS_INVALID");stars.set(key,val);
+  const val=Number(String(row[starIndex]??"").replace(",","."));if(!Number.isSafeInteger(val)||val<0||val>10)throw Error("SKILL_STARS_INVALID");stars.set(key,val);
  }
  return {levels,stars,characteristics};
 }

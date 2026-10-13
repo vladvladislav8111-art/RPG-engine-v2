@@ -39,3 +39,36 @@ Deno.test("caller fabricated stars cannot be accepted without live source",()=>{
  const b=dispatchWorldV3Batch({expectedSaveId:"V2-S0001",jobs:[{id:"skill",operation:"capability_check",payload:{taskKind:"bow_fabrication",difficulty:20,stars:10}}]},"V2-S0001");
  assert.equal(b.results[0].result.ok,false);assert.equal(b.committed,false);
 });
+
+Deno.test("same-named specializations remain domain-scoped, no cross-domain star leaking",()=>{
+ const extended={...rows,competences:[...rows.competences,["competence.art.visual_expression",2]],specializations:[...rows.specializations,["competence.art.visual_expression","Сборка и подгонка",1]],characteristics:rows.characteristics};
+ const r=readAuthoritativeRatings(extended);
+ assert.equal(r.stars.get("competence.art.visual_expression::Сборка и подгонка"),1);
+ assert.equal(evaluateCapability("kit_assembly",r,30).specializationStars,9);
+});
+Deno.test("verified craft progress cannot flag quality check before effective work is complete",async()=>{
+ const {attachAuthoritativeWorldSources}=await import("../src/world_sim_v3/source_bridge.ts");
+ const save="V2-S0001",clock={saveId:save,day:60,time:"12:00:00",locationId:"loc.test",sceneId:"scene.test"};
+ const order={id:"order.test",makerId:"actor.shura",buyerId:"npc.buyer",recipeId:"recipe.a",
+  paidReceiptId:"receipt.1",status:"working" as const,progressMinutes:40,requiredMinutes:100,
+  materials:[],resultTemplateId:"item.a",resultQuantity:1,deliveryCustodianId:"actor.shura"};
+ const payload={taskKind:"bow_fabrication",difficulty:80,order,interval:{start:0,end:60},
+  makerSchedule:[{weekday:0,startMinute:0,endMinute:1440}],
+  holidays:[],makerAvailable:true,lots:[],maxStaffedMinutes:60,weekdayAnchor:0};
+ const req={expectedSaveId:save,jobs:[{id:"craft.1",operation:"craft_advance" as const,payload}]};
+ const raw=dispatchWorldV3Batch(req,save);
+ const result=attachAuthoritativeWorldSources({request:req,result:raw,clock,skillRows:rows}).results[0].result;
+ assert.equal(result.ok,true);
+ if(result.ok){const v=result.value as {newProgressMinutes:number;nextStatus:string;requiresIndependentQualityCheck:boolean;capability:{primarySpecializationPresent:boolean}};
+  assert.ok(v.newProgressMinutes<100);assert.equal(v.nextStatus,"working");
+  assert.equal(v.requiresIndependentQualityCheck,false);assert.equal(v.capability.primarySpecializationPresent,false);}
+});
+Deno.test("missing live skill data refuses capability preview instead of trusting model numbers",async()=>{
+ const {attachAuthoritativeWorldSources}=await import("../src/world_sim_v3/source_bridge.ts");
+ const save="V2-S0001",clock={saveId:save,day:60,time:"12:00:00",locationId:"loc.test",sceneId:"scene.test"};
+ const req={expectedSaveId:save,jobs:[{id:"test.skill",operation:"capability_check" as const,payload:{taskKind:"bow_fabrication",difficulty:20}}]};
+ const raw=dispatchWorldV3Batch(req,save);
+ assert.equal(attachAuthoritativeWorldSources({request:req,result:raw,clock}).results[0].result.ok,false);
+ const good=attachAuthoritativeWorldSources({request:req,result:raw,clock,skillRows:rows}).results[0].result;
+ assert.equal(good.ok,true);if(good.ok)assert.equal((good.value as {specializationStars:number}).specializationStars,0);
+});
