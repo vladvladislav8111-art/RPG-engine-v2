@@ -18,7 +18,7 @@ import {ACHIEVEMENTS_V3,TITLES_V3,ACHIEVEMENT_CATALOG_COUNTS} from './achievemen
 import {reviewNpcLife,reviewKeyPromotion,proposeDirectedRelationship,proposePersonalityEvolution,chooseNpcAttention,crossCheckContactReceipts} from '../npc_life_v4/index.ts';
 
 export const WORLD_V3_OPERATIONS=[
- 'turn','npc_presence','npc_decision','craft_advance','craft_qc','workshop_capacity','capability_check',
+ 'turn','npc_presence','npc_decision','craft_advance','craft_qc','workshop_capacity','capability_check','task_plan',
  'combat','travel','knowledge_relay','world_review','world_resolution',
  'inventory_transfer','generate_offer','offer_board','achievement','title',
  'progress_cycle','objective_reward','sup_purchase','title_effects',
@@ -69,8 +69,10 @@ function execute(job:WorldV3Job):SimOutcome<unknown>{
 
  case 'craft_advance':return advanceCraftOrder({...as<Parameters<typeof advanceCraftOrder>[0]>(p),holidays:setOfNumbers(p.holidays)});
  case 'capability_check':return deny('LIVE_SKILL_SOURCE_REQUIRED','Capability must use authoritative TEMP_RUNTIME ratings, not caller numbers');
+ case 'task_plan':return deny('LIVE_TASK_SKILLS_REQUIRED','Task planning must use source-verified skill ratings, not claimed speeds');
  case 'craft_qc':return approveCraftCompletion(p.order as Parameters<typeof approveCraftCompletion>[0],p.quality as Parameters<typeof approveCraftCompletion>[1]);
- case 'workshop_capacity':return allocateWorkshopCapacity(as<Parameters<typeof allocateWorkshopCapacity>[0]>(p.slots as Record<string,unknown>),p.staffMinutes as number);
+ case 'workshop_capacity':if(p.taskPlanV1!==undefined)return deny('LIVE_TASK_SKILLS_REQUIRED','Bounded work planning needs the live source bridge');
+  return allocateWorkshopCapacity(as<Parameters<typeof allocateWorkshopCapacity>[0]>(p.slots as Record<string,unknown>),p.staffMinutes as number);
  case 'combat':return adjudicateAttack(as<Parameters<typeof adjudicateAttack>[0]>(p));
  case 'travel':return estimateRoute(as<Parameters<typeof estimateRoute>[0]>(p));
  case 'knowledge_relay':{

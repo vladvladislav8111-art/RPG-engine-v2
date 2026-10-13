@@ -3,6 +3,8 @@ import {deny,pass,type SimOutcome} from './types.ts';
 import type {SemanticSimulationProposal} from './orchestrator.ts';
 import {evaluateCapability,readAuthoritativeRatings,TASK_PROFILES,type TaskKind,type SkillRows} from '../proficiency.ts';
 import {previewCraftV4,type CraftV4PreviewInput} from "../crafting_v4.ts";
+import {planWorkV1,type WorkPlanInput} from "../task_work_v1.ts";
+import type {Capability} from "../proficiency.ts";
 
 export type RuntimeClock={saveId:string;day:number;time:string;locationId:string;sceneId:string};
 export type PreparedTurnHint={
@@ -82,6 +84,28 @@ export function attachAuthoritativeWorldSources(input:{
     if(!item.result.ok)continue;
     const hint=boundedTurnSemanticHint({clock,proposal:item.result.value as SemanticSimulationProposal,playerActionReference:job.payload.playerActionReference,playerActionSummary:job.payload.playerActionSummary});
     item.result=pass({proposal:item.result.value,semanticAssistance:hint,sourceClockVerified:true,committed:false});
+  }
+  if(job.operation==='task_plan'||(job.operation==='workshop_capacity'&&job.payload.taskPlanV1!==undefined)){
+    const plan=job.operation==='task_plan'?job.payload.plan:job.payload.taskPlanV1;
+    if(!isRecord(plan)||!Array.isArray(plan.stages)){
+      item.result=deny('WORK_V1_BAD_PLAN','A bounded plan with stages is required');continue;
+    }
+    if(!input.skillRows){item.result=deny('SKILL_SOURCE_MISSING','Live work planning requires TEMP_RUNTIME skill snapshot');continue;}
+    try{
+      const ratings=readAuthoritativeRatings(input.skillRows);
+      const skills=new Map<string,Capability>();
+      for(const stage of plan.stages){
+        if(!isRecord(stage))throw Error('WORK_V1_INVALID_STAGE');
+        if(stage.actorId==='actor.shura'&&stage.taskKind!==undefined){
+          if(typeof stage.taskKind!=='string'||!Object.prototype.hasOwnProperty.call(TASK_PROFILES,stage.taskKind))
+             throw Error('WORK_V1_UNKNOWN_TASK_KIND');
+          const cap=evaluateCapability(stage.taskKind as TaskKind,ratings,stage.difficulty as number);
+          skills.set(stage.id as string,cap);
+        }
+      }
+      item.result=pass({...planWorkV1(plan as WorkPlanInput,skills),sourceVerifiedSkillsOnly:true});
+    }catch(err){item.result=deny('WORK_V1_REJECTED',err instanceof Error?err.message:'Invalid plan');}
+    continue;
   }
   if(job.operation==='capability_check'||(job.operation==='craft_advance'&&job.payload.taskKind!==undefined)){
     const kind=job.payload.taskKind;

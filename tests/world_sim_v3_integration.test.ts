@@ -5,8 +5,8 @@ import {ACHIEVEMENTS_V3,TITLES_V3} from '../src/world_sim_v3/achievement_catalog
 const save='V2-S0721';
 const one=(operation:WorldV3Job['operation'],payload:Record<string,unknown>)=>dispatchWorldV3Batch({expectedSaveId:save,jobs:[{id:'calc.1',operation,payload}]},save).results[0].result;
 test('all supported domains are routable through a one-request, immutable calculation facade',()=>{
- assert.equal(WORLD_V3_OPERATIONS.length,21);
- assert.equal(new Set(WORLD_V3_OPERATIONS).size,21);
+ assert.equal(WORLD_V3_OPERATIONS.length,22);
+ assert.equal(new Set(WORLD_V3_OPERATIONS).size,22);
  assert.equal(WORLD_V3_OPERATIONS.includes('capability_check'),true);
  const q=dispatchWorldV3Batch({expectedSaveId:save,jobs:[
   {id:'npc',operation:'npc_presence',payload:{npcId:'npc.test.person',at:100,shifts:[],commitments:[]}},
