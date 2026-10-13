@@ -43,6 +43,7 @@ import { validateChatEventShape, validateRelationshipEventShape } from "./social
 import { worldContinuityReview } from "./world_continuity.ts";
 import { reviewWorldProcesses } from "./world_process.ts";
 import { validateWorkDemand } from "./work_demand.ts";
+import {assertNewWorkPayments} from "./work_payment_proof_v1.ts";
 import { validateRumorTransmission } from "./world_information.ts";
 import { validateMajorWorldEvent } from "./world_events.ts";
 import { auditMaterialTransformation } from "./physical_integrity.ts";
@@ -315,6 +316,38 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   }
   if (semantic.turnToken && semantic.turnToken !== token) {
     throw new Error(`turn token stale: expected current ${token}, got ${semantic.turnToken}`);
+  }
+
+  // Economic fail-closed guard: newly completed PAID jobs cannot emerge from
+  // an invented source row and mint positive Money. Idempotent replay above remains safe.
+  const newPaidClosures = [
+    ...(semantic.rowUpserts??[]).filter(x=>x.table==="OPPORTUNITIES_CURRENT").map(x=>({
+      offerId:x.key,employerId:String(x.values["Employer"]??""),
+      state:String(x.values["State"]??""),pay:String(x.values["Pay"]??"")})),
+    ...(semantic.rowUpdates??[]).filter(x=>x.table==="OPPORTUNITIES_CURRENT").map(x=>({
+      offerId:x.key,employerId:String(x.patch["Employer"]??""),
+      state:String(x.patch["State"]??""),pay:String(x.patch["Pay"]??"")})),
+  ].filter(x=>/PAID/i.test(x.state+" "+x.pay)&&/COMPLETED|CLOSED|RESOLVED/i.test(x.state));
+  if(newPaidClosures.length && (semantic.resourceDeltas??[]).some(x=>x.resource==="Money"&&x.delta>0)){
+    const priorRows=sheets[TABLES.OPPORTUNITIES_CURRENT.range]??[];
+    const opportunityHeader=priorRows[0]??[];
+    const getValue=(row:unknown[],key:string)=>String(row[opportunityHeader.indexOf(key)]??"");
+    const alreadyOpen=priorRows.slice(1).filter(row=>
+      /^(OPEN|AVAILABLE)/i.test(getValue(row,"State"))&&
+      /^(OPEN|AVAILABLE)/i.test(getValue(row,"Lifecycle State"))&&
+      Number(getValue(row,"Slots Remaining"))>0
+    ).map(row=>getValue(row,"Offer ID"));
+    const paidDelta=(semantic.resourceDeltas??[]).filter(x=>x.resource==="Money")
+      .reduce((n,x)=>n+x.delta,0);
+    const sameTurn=(semantic.workDemandEvents??[]).map(x=>x.offerId);
+    const closures=newPaidClosures.map(x=>{
+      if(x.employerId)return x;
+      const before=priorRows.slice(1).find(r=>getValue(r,"Offer ID")===x.offerId);
+      return {...x,employerId:before?getValue(before,"Employer"):""};
+    });
+    assertNewWorkPayments({closes:closures,proofs:semantic.workSettlementProofs??[],
+      openedOfferIds:alreadyOpen,authorizedSameTurnOfferIds:sameTurn,
+      positiveMoneyCreditsC:Math.max(0,paidDelta)});
   }
 
   const currentDay = asNumber(controlValue("world_day"), "world_day");

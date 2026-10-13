@@ -1,4 +1,5 @@
 import { cacheGet, cacheSet } from "./cache.ts";
+import {mandatoryGmPacket,summarizeBridgeTiming} from "./gm_turn_policy_v1.ts";
 import { loadBoundedActorTables, loadBoundedArchiveRows, scanActorContextIndex } from "./bounded_context.ts";
 import { config } from "./config.ts";
 import { docsGet, fileModifiedTime, sheetsBatchGet } from "./google.ts";
@@ -260,11 +261,14 @@ function filterByLocation(records: Array<Record<string, unknown>>, locationId: s
 
 export async function getTurnContext(input: TurnContextRequest) {
   const started = performance.now();
+  // Only timings of Deno server execution; no measurements of ChatGPT inference.
+  const phaseMarks: Array<{phase:string;elapsedMs:number}> = [];
   // The current scene actors are derived routing hints, bounded to the latest
   // authoritative CONTROL scene/location. The cache cannot override the save.
   const sceneRouting = await sheetsBatchGet(config.files.TEMP_RUNTIME, [
     "CONTROL!A1:D12", "ACTIVE_CONTEXT!A1:F15", "SYSTEM_CONTACTS_CURRENT!A1:J200",
   ]);
+  phaseMarks.push({phase:"routing_sheets",elapsedMs:performance.now()-started});
   const routingControlRows = sceneRouting["CONTROL!A1:D12"] ?? [];
   const routedSceneActorIds = resolveSceneActorIds(
     routingControlRows, sceneRouting["ACTIVE_CONTEXT!A1:F15"] ?? [],
@@ -446,6 +450,7 @@ export async function getTurnContext(input: TurnContextRequest) {
 
   const uniqueDocKeys = Array.from(new Set(docQueries.map((q) => q.documentKey)));
 
+  const sourceBatchStarted=performance.now();
   const [base, lookupResults, docs, pregens, actorIndexScan, continuityRanges] = await Promise.all([
     sheetsBatchGet(config.files.TEMP_RUNTIME, [...runtimeRanges]),
     Promise.all(lookups.map(cachedLookup)),
@@ -455,6 +460,8 @@ export async function getTurnContext(input: TurnContextRequest) {
     sheetsBatchGet(config.files.TEMP_RUNTIME, CONTINUITY_SPARSE_RANGES),
   ]);
 
+  phaseMarks.push({phase:"bulk_source_fanout",elapsedMs:performance.now()-sourceBatchStarted});
+  const npcReadStarted=performance.now();
   const control = base["CONTROL!A1:D12"] ?? [];
   const saveId = String(findControl(control, "save_id") ?? "");
   if (routeSaveId && routeSaveId !== saveId) throw new Error("context scene routing snapshot changed during read; retry");
@@ -505,6 +512,8 @@ export async function getTurnContext(input: TurnContextRequest) {
       )
     : null;
 
+  phaseMarks.push({phase:"npc_bounded_context",elapsedMs:performance.now()-npcReadStarted});
+  const composeStarted=performance.now();
   const archiveRegistryRows = rowsToObjects(
     pregens.find((p) => p.key === "archiveRegistry")?.rows ?? [],
   );
@@ -1010,6 +1019,10 @@ export async function getTurnContext(input: TurnContextRequest) {
       npcRoutineCadence: prospectiveNpcCadence,
       gmTurnBrief,
       gmTurnTriage,
+      gmOperationalPolicy:mandatoryGmPacket(input.tags??[],input.plannedElapsedSeconds??0),
+      serverTiming:summarizeBridgeTiming([
+        ...phaseMarks,{phase:"context_compose",elapsedMs:performance.now()-composeStarted}
+      ],performance.now()-started),
       systemNotifications,
       contextReadBudget,
       bridgeIntegration:bridgeTurnIntegrationPlan({
