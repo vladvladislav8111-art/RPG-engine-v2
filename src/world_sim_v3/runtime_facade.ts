@@ -4,6 +4,7 @@
  * A successful result never writes nor authorizes writing to RPG runtime.
  */
 import {pass,deny,type SimOutcome,type Evidence,type Fact} from './types.ts';
+import {auditGmTurn,type GmOpsInput} from '../gm_ops_v1.ts';
 import {proposeWorldTurn} from './orchestrator.ts';
 import {evaluateNpcPresence,validateNpcIndependentDecision} from './npc.ts';
 import {advanceCraftOrder,approveCraftCompletion,allocateWorkshopCapacity} from './craft.ts';
@@ -19,7 +20,7 @@ import {reviewNpcLife,reviewKeyPromotion,proposeDirectedRelationship,proposePers
 
 export const WORLD_V3_OPERATIONS=[
  'turn','npc_presence','npc_decision','craft_advance','craft_qc','workshop_capacity','capability_check','task_plan',
- 'combat','travel','knowledge_relay','world_review','world_resolution',
+ 'gm_turn_audit','combat','travel','knowledge_relay','world_review','world_resolution',
  'inventory_transfer','generate_offer','offer_board','achievement','title',
  'progress_cycle','objective_reward','sup_purchase','title_effects',
 ] as const;
@@ -73,6 +74,7 @@ function execute(job:WorldV3Job):SimOutcome<unknown>{
  case 'craft_qc':return approveCraftCompletion(p.order as Parameters<typeof approveCraftCompletion>[0],p.quality as Parameters<typeof approveCraftCompletion>[1]);
  case 'workshop_capacity':if(p.taskPlanV1!==undefined)return deny('LIVE_TASK_SKILLS_REQUIRED','Bounded work planning needs the live source bridge');
   return allocateWorkshopCapacity(as<Parameters<typeof allocateWorkshopCapacity>[0]>(p.slots as Record<string,unknown>),p.staffMinutes as number);
+ case 'gm_turn_audit':return pass(auditGmTurn(as<GmOpsInput>(p)));
  case 'combat':return adjudicateAttack(as<Parameters<typeof adjudicateAttack>[0]>(p));
  case 'travel':return estimateRoute(as<Parameters<typeof estimateRoute>[0]>(p));
  case 'knowledge_relay':{
