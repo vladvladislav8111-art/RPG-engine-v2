@@ -16,7 +16,9 @@ Deno.test("cargo stage attribution counts only Shura work, not 2h of loading",()
  assert.equal(p.otherActorMinutes["npc.porters"],70);
  assert.equal(p.projectedLowerBoundMinutes,82);
  assert.equal(p.stages[1].durationMinutes,8);
+ assert.equal(p.stages[1].effectiveSpeed,1); // do not double count replaced steps
  assert.equal(p.stages[2].durationMinutes,4);
+ assert.equal(p.stages[2].effectiveSpeed,1);
  assert.equal(p.claimedMethodsAttested,false);
  assert.equal(p.requiresIndependentMethodValidation,true);
  assert.equal(p.committed,false);

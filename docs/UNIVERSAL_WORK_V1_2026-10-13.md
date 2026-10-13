@@ -28,3 +28,8 @@ The computed makespan is a dependency-and-actor lower bound, not an ETA. Staff s
 Source-integrated general work calculation is offered as a new V3 task_plan operation, plus an optional taskPlanV1 submode on existing workshop_capacity for compatibility with the existing published Bridge schema. The latter preserves workshop_capacity's original behavior when no taskPlanV1 is provided.
 
 This document is a proposal pending Deno CI checks and safe merge to main. Do not change Shura's current save or accepted NPC contracts by applying these sample timings retroactively.
+
+## Direct market work, never gated by empty offers board
+The market board tracks known posted or accepted contracts, not the work potential of a living market. For proactive Shura work searches, resolve independently reachable merchants, new goods and source documents, willingness, genuine demand and finite payment sources. Never call an empty offer_board a global refusal. 160-240 traders is a scale estimate, NOT 160-240 available paid assignments.
+
+Precise personal minutes are based on actual document complexity and methods. Review of three plain numeric lines must not inherit 28-44 minute generic clerk norms without physical evidence. Keep separate: player active work, NPC inspection, queue/search/travel and technological waits. Conditional sources (system HUD, formula, method) must be verified; no silent grants or receipts.

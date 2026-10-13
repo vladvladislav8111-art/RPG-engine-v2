@@ -58,11 +58,11 @@ export function planWorkV1(input:WorkPlanInput,sourceSkills:ReadonlyMap<string,C
  if(!input||!id(input.planId)||!Array.isArray(input.stages)||input.stages.length<1||input.stages.length>32){
    throw Error("WORK_V1_INVALID_PLAN");
  }
- const seen=new Set<string>();const labels=new Set<string>();
+ const seen=new Set<string>();
  for(const s of input.stages){
    if(!s||!id(s.id)||seen.has(s.id)||!id(s.actorId)||typeof s.label!=="string"||!s.label.trim()||s.label.length>180)
      throw Error("WORK_V1_INVALID_STAGE");
-   seen.add(s.id);labels.add(s.id);
+   seen.add(s.id);
  }
  // Use caller's explicit topological order: no silent reorder of sequential narrative.
  const completed=new Map<string,WorkStageProjection>(),actorAvailable=new Map<string,number>(),
@@ -124,11 +124,13 @@ export function planWorkV1(input:WorkPlanInput,sourceSkills:ReadonlyMap<string,C
      throw Error("WORK_V1_UNTAGGED_DIFFICULTY");
    }
    if(!shura&&s.taskKind)throw Error("WORK_V1_NPC_RATING_NOT_ATTESTED");
-   if(shura&&s.taskKind&&(!Number.isSafeInteger(s.difficulty)||s.difficulty<1||s.difficulty>100))
+   if(shura&&s.taskKind&&(typeof s.difficulty!=='number'||!Number.isSafeInteger(s.difficulty)||s.difficulty<1||s.difficulty>100))
       throw Error("WORK_V1_DIFFICULTY_REQUIRED");
    // Only source-verified Shura skills modify elapsed time; NPCs stay baseline.
    // A hard physical floor is real elapsed activity, not simply a normative workload.
-   const duration=passive?baseline:Math.max(floor,Math.ceil(work/speed));
+   // Replacement is already optimized actual minutes; never discount a second time.
+   const appliedSpeed=shortcut&&method?.kind==="replacement"?1:speed;
+   const duration=passive?baseline:Math.max(floor,Math.ceil(work/appliedSpeed));
    const dependencyEnd=Math.max(0,...s.dependsOn.map(d=>completed.get(d)!.finishesAtMinute));
    const starts=passive?dependencyEnd:Math.max(dependencyEnd,actorAvailable.get(s.actorId)??0);
    const finishes=starts+duration;
@@ -138,7 +140,7 @@ export function planWorkV1(input:WorkPlanInput,sourceSkills:ReadonlyMap<string,C
    }
    const detail:WorkStageProjection={
      id:s.id,label:s.label,actorId:s.actorId,kind:s.kind,baselineMinutes:baseline,
-     proposedWorkMinutes:work,effectiveSpeed:speed,durationMinutes:duration,
+     proposedWorkMinutes:work,effectiveSpeed:appliedSpeed,durationMinutes:duration,
      startsAtMinute:starts,finishesAtMinute:finishes,skillSourceVerified:skillVerified,
      shortcutConditional:shortcut,methodId,methodSourceRef,
      inputEvidenceNeedsReview:sourceNeeds,

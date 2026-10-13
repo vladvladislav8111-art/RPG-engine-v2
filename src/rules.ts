@@ -1,4 +1,4 @@
-export const RULESET_VERSION = "2.14.0-crafting-v4-2026-10-13";
+export const RULESET_VERSION = "2.15.0-universal-work-v1-2026-10-13";
 
 export type LearningBand = "tiny" | "useful" | "substantial" | "breakthrough" | "exceptional";
 
