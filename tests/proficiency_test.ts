@@ -72,3 +72,11 @@ Deno.test("missing live skill data refuses capability preview instead of trustin
  const good=attachAuthoritativeWorldSources({request:req,result:raw,clock,skillRows:rows}).results[0].result;
  assert.equal(good.ok,true);if(good.ok)assert.equal((good.value as {specializationStars:number}).specializationStars,0);
 });
+
+Deno.test("bow design belongs to bow-making rather than being conflated with technical drafting",()=>{
+ const r=readAuthoritativeRatings(rows);
+ assert.equal(evaluateCapability("bow_design",r,35).specialization,"Лукоделие");
+ assert.equal(evaluateCapability("technical_drafting",r,35).specialization,"Техническое черчение");
+ const s=new Map(r.stars);s.set("competence.crafting.practical_creation::Лукоделие",6);
+ assert.ok(evaluateCapability("bow_design",{...r,stars:s},35).score>evaluateCapability("bow_design",r,35).score);
+});

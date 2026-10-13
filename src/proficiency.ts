@@ -3,7 +3,7 @@ export type TaskKind="bow_design"|"bow_fabrication"|"bow_tuning"|"kit_assembly"|
 export type TaskProfile={parent:string;specialization:string;characteristic:string;support?:readonly {competenceId:string;name:string;cap:number}[];physicalGate:string};
 const C="competence.crafting.practical_creation",K="competence.knowledge.research",A="competence.art.visual_expression",E="competence.engineering.design";
 export const TASK_PROFILES:Record<TaskKind,TaskProfile>={
- bow_design:{parent:E,specialization:"Техническое черчение",characteristic:"Intelligence",support:[{competenceId:K,name:"Пространственная схематизация",cap:7}],physicalGate:"Drawing alone does not prove a safe bow design."},
+ bow_design:{parent:C,specialization:"Лукоделие",characteristic:"Intelligence",support:[{competenceId:E,name:"Техническое черчение",cap:5},{competenceId:K,name:"Пространственная схематизация",cap:3}],physicalGate:"Bow geometry, load path and component constraints must be verified; schematic alone is not a safe bow."},
  bow_fabrication:{parent:C,specialization:"Лукоделие",characteristic:"Dexterity",support:[{competenceId:C,name:"Сборка и подгонка",cap:4},{competenceId:C,name:"Materials",cap:3}],physicalGate:"Requires authentic materials, limb fabrication, measured safe draw and real tests."},
  bow_tuning:{parent:C,specialization:"Лукоделие",characteristic:"Intelligence",support:[{competenceId:C,name:"Сборка и подгонка",cap:4}],physicalGate:"Partial draw never proves full-draw safety."},
  kit_assembly:{parent:C,specialization:"Сборка и подгонка",characteristic:"Dexterity",physicalGate:"Requires already designed components and actual custody."},
