@@ -24,6 +24,7 @@ import { auditNpcHeatJournalIncludingTestV2 } from "./npc_heat_v2_reader.ts";
 import { chooseMemoryRoute } from "./context_memory_router.ts";
 import { planIndependentWorldTick } from "./world_tick_dispatcher.ts";
 import { buildNpcAutonomyPlan } from "./npc_autonomy_planner.ts";
+import { buildEffectiveCharacteristicFrame } from "./effective_characteristics.ts";
 import { npcKnowsMemory } from "./npc_life_v4/memory.ts";
 import { bridgeTurnIntegrationPlan } from "./bridge_integration.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
@@ -305,6 +306,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   ]);
 
   const needsCompetences = input.turnClass !== "MICRO" || hasAny(tagSet, ["WORK", "LANGUAGE", "SKILL", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY", "ART", "DRAW", "DRAFT", "ENGINEERING", "BOWYER"]);
+  const needsEffectiveContext = input.turnClass !== "MICRO";
   const runtimeRanges = new Set<string>([
     "CONTROL!A1:D12",
     "PLAYER_RESOURCES!A1:E20",
@@ -331,7 +333,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   addStructured("PENDING_CHOICES"); // Preexisting hot-state milestones; never decide for Shura.
   if (wantsSystemInbox) addStructured("PROGRESSION_EVENTS"); // Only explicit Inbox requests.
 
-  if (hasAny(tagSet, ["SKILL", "WORK", "LANGUAGE", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY", "TRAINING", "SPECIALIZATION", "DEXTERITY", "HANDS", "ART", "DRAW", "ILLUSTRATION", "DRAFT", "ENGINEERING", "BOWYER"])) {
+  if (needsEffectiveContext || hasAny(tagSet, ["SKILL", "WORK", "LANGUAGE", "COMBAT", "MAGIC", "CRAFT", "SURVIVAL", "STUDY", "TRAINING", "SPECIALIZATION", "DEXTERITY", "HANDS", "ART", "DRAW", "ILLUSTRATION", "DRAFT", "ENGINEERING", "BOWYER"])) {
     addStructured("SPECIALIZATIONS");
     addStructured("MILESTONES");
     addStructured("PENDING_CHOICES");
@@ -365,7 +367,7 @@ export async function getTurnContext(input: TurnContextRequest) {
   }
   if (hasAny(tagSet, ["TRAVEL", "MAP", "EXPLORATION"])) addStructured("MAP_KNOWLEDGE_CURRENT");
   if (hasAny(tagSet, ["COMBAT", "INJURY", "POISON", "MEDICINE"])) addStructured("BODY_INJURIES_CURRENT");
-  if (hasAny(tagSet, ["PHYSICAL", "BODY", "COMBAT", "INJURY", "POISON", "REST", "TRAVEL", "WORK", "SURVIVAL"])) addStructured("CHARACTERISTICS");
+  if (needsEffectiveContext || hasAny(tagSet, ["PHYSICAL", "BODY", "COMBAT", "INJURY", "POISON", "REST", "TRAVEL", "WORK", "SURVIVAL"])) addStructured("CHARACTERISTICS");
   if (hasAny(tagSet, ["CHARACTERISTIC", "PROGRESSION", "TRAINING", "PHYSICAL", "BODY"])) addStructured("CHARACTERISTIC_ADAPTATION");
   if (hasAny(tagSet, ["WORLD", "CLOCK", "WAIT", "REST", "TRAVEL", "WORK", "STUDY", "CRAFT"])) addStructured("WORLD_CLOCKS");
   if (hasAny(tagSet, ["WEATHER", "TRAVEL", "EXPLORATION", "SURVIVAL"])) addStructured("WEATHER_CURRENT");
@@ -560,7 +562,7 @@ export async function getTurnContext(input: TurnContextRequest) {
     }
     if (name === "WORLD_CLOCKS") records = records.filter((r) => String(r["State"] ?? "").toUpperCase().includes("ACTIVE"));
     if (name === "SPECIALIZATIONS" || name === "MILESTONES") {
-      const relevant = relevantCompetenceIds(tagSet);
+      const relevant = needsEffectiveContext ? null : relevantCompetenceIds(tagSet);
       if (relevant) {
         const field = name === "SPECIALIZATIONS" ? "Competence ID" : "Parent competence";
         records = records.filter((r) => relevant.has(String(r[field] ?? "")));
@@ -994,6 +996,21 @@ export async function getTurnContext(input: TurnContextRequest) {
   const resourceDetails = resourceDetailsMap(base["PLAYER_RESOURCES!A1:E20"] ?? []);
   const satiety = Number((resourceDetails["Satiety"] as any)?.current ?? 0);
   const hydration = Number((resourceDetails["Hydration"] as any)?.current ?? 0);
+  const maxFor = (resource: string): number | null => {
+    const value = (resourceDetails[resource] as { max?: unknown } | undefined)?.max;
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+  };
+  const effectiveCharacteristics = needsEffectiveContext
+    ? buildEffectiveCharacteristicFrame({
+      characteristics: (structured.CHARACTERISTICS as Array<Record<string, unknown>> | undefined) ?? [],
+      competences: rowsToObjects(base[TABLES.COMPETENCES.range] ?? []),
+      specializations: (structured.SPECIALIZATIONS as Array<Record<string, unknown>> | undefined) ?? [],
+      milestones: (structured.MILESTONES as Array<Record<string, unknown>> | undefined) ?? [],
+      level: Number(resources["General Level"] ?? 0),
+      tags: input.tags ?? [],
+      committedMax: { HP: maxFor("HP"), Stamina: maxFor("Stamina"), Mana: maxFor("Mana") },
+    })
+    : null;
 
   return {
     turnId: input.turnId,
@@ -1009,6 +1026,7 @@ export async function getTurnContext(input: TurnContextRequest) {
       sceneId,
       resources,
       resourceDetails,
+      effectiveCharacteristics,
       worldContinuity,
       worldActionDocket,
       npcRoutineCadence: prospectiveNpcCadence,

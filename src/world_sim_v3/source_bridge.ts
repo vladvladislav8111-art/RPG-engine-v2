@@ -5,6 +5,7 @@ import {evaluateCapability,readAuthoritativeRatings,TASK_PROFILES,type TaskKind,
 import {previewCraftV4,type CraftV4PreviewInput} from "../crafting_v4.ts";
 import {planWorkV1,type WorkPlanInput} from "../task_work_v1.ts";
 import type {Capability} from "../proficiency.ts";
+import {masterOrderTimeReductionPercent} from "../effective_characteristics.ts";
 
 export type RuntimeClock={saveId:string;day:number;time:string;locationId:string;sceneId:string};
 export type PreparedTurnHint={
@@ -67,6 +68,33 @@ export function availableCurrentOpportunities(input:{clock:RuntimeClock;rows:unk
 
 import type {WorldV3BatchRequest,WorldV3BatchResult} from './runtime_facade.ts';
 /** Source enrichment is kept pure and testable; caller performs the actual bounded live Sheet read. */
+
+/** SOURCE-VERIFIED passive ownership, but NOT task familiarity.
+ * Never apply time savings before actual repeat/setup evidence is confirmed.
+ */
+function conditionalMasterOrder(rows:SkillRows,ratings:ReturnType<typeof readAuthoritativeRatings>,
+ taskKind:TaskKind){
+ if(taskKind!=="kit_assembly")return null;
+ const table=rows.milestones??[];
+ if(!table.length)return null;
+ const h=table[0]?.map(x=>String(x??""))??[],idIx=h.indexOf("Milestone ID"),statusIx=h.indexOf("Status");
+ if(idIx<0||statusIx<0)throw Error("SKILL_MILESTONE_SOURCE_COLUMNS");
+ const found=table.slice(1).filter(row=>String(row[idIx]??"")==="milestone.crafting.master_order.lv3");
+ if(found.length>1)throw Error("SKILL_MILESTONE_DUPLICATE");
+ const active=found.length===1&&String(found[0][statusIx]??"").toUpperCase()==="ACTIVE";
+ if(!active)return null;
+ const lv=ratings.levels.get("competence.crafting.practical_creation")??0;
+ const i=ratings.characteristics.get("Intelligence"),c=ratings.characteristics.get("Coordination");
+ if(i===undefined||c===undefined)throw Error("SKILL_MILESTONE_CHARACTERISTICS_NOT_LOADED");
+ const pct=masterOrderTimeReductionPercent({
+  craftingLevel:lv,intelligence:i,coordination:c,milestoneActive:active});
+ return {milestoneId:"milestone.crafting.master_order.lv3",source:"MILESTONES",
+  timeReductionPercent:pct,appliesOnlyTo:"familiar repeated simple assembly/setup",
+  taskFamiliarityAttested:false as const,automaticallyCharged:false as const,
+  cannotSpeedUp:["curing","drying","inspection","travel","new design"],
+  gmMustValidateActualRepeatedOperation:true as const};
+}
+
 export function attachAuthoritativeWorldSources(input:{
  request:WorldV3BatchRequest;result:WorldV3BatchResult;clock:RuntimeClock;
  opportunityRows?:unknown[][];
@@ -94,6 +122,7 @@ export function attachAuthoritativeWorldSources(input:{
     try{
       const ratings=readAuthoritativeRatings(input.skillRows);
       const skills=new Map<string,Capability>();
+      const conditionalMilestones: Array<{stageId:string;milestone:ReturnType<typeof conditionalMasterOrder>}> = [];
       for(const stage of plan.stages){
         if(!isRecord(stage))throw Error('WORK_V1_INVALID_STAGE');
         if(stage.actorId==='actor.shura'&&stage.taskKind!==undefined){
@@ -101,9 +130,11 @@ export function attachAuthoritativeWorldSources(input:{
              throw Error('WORK_V1_UNKNOWN_TASK_KIND');
           const cap=evaluateCapability(stage.taskKind as TaskKind,ratings,stage.difficulty as number);
           skills.set(stage.id as string,cap);
+          const candidate=conditionalMasterOrder(input.skillRows,ratings,stage.taskKind as TaskKind);
+          if(candidate)conditionalMilestones.push({stageId:stage.id as string,milestone:candidate});
         }
       }
-      item.result=pass({...planWorkV1(plan as WorkPlanInput,skills),sourceVerifiedSkillsOnly:true});
+      item.result=pass({...planWorkV1(plan as WorkPlanInput,skills),sourceVerifiedSkillsOnly:true,conditionalMilestones});
     }catch(err){item.result=deny('WORK_V1_REJECTED',err instanceof Error?err.message:'Invalid plan');}
     continue;
   }
@@ -114,16 +145,18 @@ export function attachAuthoritativeWorldSources(input:{
       item.result=deny('UNKNOWN_CRAFT_TASK','Unregistered task kind');continue;
     }
     try{
-      const capability=evaluateCapability(kind as TaskKind,readAuthoritativeRatings(input.skillRows),job.payload.difficulty as number);
+      const ratings=readAuthoritativeRatings(input.skillRows);
+      const capability=evaluateCapability(kind as TaskKind,ratings,job.payload.difficulty as number);
+      const conditionalPassive=conditionalMasterOrder(input.skillRows,ratings,kind as TaskKind);
       const config=job.payload.craftV4 as Partial<CraftV4PreviewInput>|undefined;
       if(config!==undefined&&(typeof config!=='object'||config===null||Array.isArray(config))){
         item.result=deny('CRAFT_V4_INVALID_PLAN','Structured craftV4 configuration required');continue;
       }
       if(job.operation==='capability_check'){
-        item.result=pass(config?{...capability,craftingV4:previewCraftV4({
+        item.result=pass(config?{...capability,conditionalPassive,craftingV4:previewCraftV4({
           ...config,capability,availableStaffedMinutes:config.availableStaffedMinutes??0,
           priorStageProgressMinutes:config.priorStageProgressMinutes??0,
-        } as CraftV4PreviewInput)}:capability);
+        } as CraftV4PreviewInput)}:{...capability,conditionalPassive});
       }else{
         const order=job.payload.order as {makerId?:string;recipeId?:string;progressMinutes:number;requiredMinutes:number}|undefined;
         if(!order||order.makerId!=='actor.shura'){item.result=deny('NONPLAYER_SKILL_NOT_VERIFIED','Shura ratings cannot be used for NPC orders');continue;}
@@ -139,7 +172,7 @@ export function attachAuthoritativeWorldSources(input:{
             item.result=deny('CRAFT_V4_ORDER_STAGE_MISMATCH','Stage progress and source order must describe identical work');continue;
           }
           const stageDone=preview.readyForNextStage;
-          item.result=pass({...current,newProgressMinutes:preview.newStageProgressMinutes,
+          item.result=pass({...current,conditionalPassive,newProgressMinutes:preview.newStageProgressMinutes,
             nextStatus:stageDone&&preview.requiresInspection?'quality_check':'working',
             requiresIndependentQualityCheck:stageDone&&preview.requiresInspection,
             actualStaffedMinutes:preview.actualStaffedMinutesUsed,
@@ -152,7 +185,7 @@ export function attachAuthoritativeWorldSources(input:{
           const effective=Math.min(remaining,Math.floor(current.additionalWorkMinutes*capability.efficiencyFactor));
           const complete=order.progressMinutes+effective>=order.requiredMinutes;
           const actual=effective===0?0:Math.min(current.additionalWorkMinutes,Math.ceil(effective/capability.efficiencyFactor));
-          item.result=pass({...current,newProgressMinutes:order.progressMinutes+effective,
+          item.result=pass({...current,conditionalPassive,newProgressMinutes:order.progressMinutes+effective,
             nextStatus:complete?'quality_check':'working',requiresIndependentQualityCheck:complete,
             workEquivalentMinutes:effective,actualStaffedMinutes:actual,
             capability,sourceVerifiedSkillOnly:true,requiresGmCausalResolution:true});
