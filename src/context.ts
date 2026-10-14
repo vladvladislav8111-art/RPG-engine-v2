@@ -27,6 +27,7 @@ import { buildNpcAutonomyPlan } from "./npc_autonomy_planner.ts";
 import { buildEffectiveCharacteristicFrame } from "./effective_characteristics.ts";
 import { npcKnowsMemory } from "./npc_life_v4/memory.ts";
 import { bridgeTurnIntegrationPlan } from "./bridge_integration.ts";
+import { buildGmInstructionPack, SESSION_BRIEF_RANGE } from "./gm_instruction_pack.ts";
 import { actorSnapshotFreshness, evaluateNpcContextGate, filterByParticipants, filterRelationships, recentActorChat, recordsContainingActorId, resolveActorRefs, selectNpcCurrentRows } from "./social_context.ts";
 import { parseTarenLexicon, proposeTarenLexeme } from "./taren.ts";
 import type { DocKey, SheetLookup, TurnContextRequest } from "./types.ts";
@@ -311,6 +312,7 @@ export async function getTurnContext(input: TurnContextRequest) {
     "CONTROL!A1:D12",
     "PLAYER_RESOURCES!A1:E20",
     "PLAYER_CONDITIONS!A1:F100",
+    SESSION_BRIEF_RANGE, // bounded committed-history memo, not mutable duplicate state
     ...(needsCompetences ? [TABLES.COMPETENCES.range] : []),
   ]);
 
@@ -1012,7 +1014,19 @@ export async function getTurnContext(input: TurnContextRequest) {
     })
     : null;
 
+  const gmInstructionPack = buildGmInstructionPack({
+    saveId, day:worldDay, worldTime, locationId,
+    locationDisplay:String(locationDisplay ?? ""), sceneId:String(sceneId ?? ""),
+    turnClass: input.turnClass, tags:input.tags ?? [],
+    sessionLogRows:base[SESSION_BRIEF_RANGE] ?? [],
+    pendingChoices:pendingChoiceRows, triageBlockers:gmTurnTriage.blockers,
+    actorContextRequired:requireNpcContextGate,
+    actorContextReady:npcContextGate.readyForSubstantiveReply,
+    worldDueCount:worldActionDocket.items.filter(x =>
+      ["DUE","OVERDUE"].includes(String(x.reviewStatus ?? "").toUpperCase())).length,
+  });
   return {
+    gmInstructionPack, // FIRST: compact GM instructions and source-backed memory
     turnId: input.turnId,
     elapsedMs: Math.round(performance.now() - started),
     packet: {
@@ -1109,6 +1123,7 @@ export async function getTurnContext(input: TurnContextRequest) {
         "TEMP:CORE",
         "TEMP:SCENE_ROUTING",
         "TEMP:WORLD_CONTINUITY_SPARSE",
+        "TEMP:SESSION_LOG:BOUNDED_GM_RECAP",
         ...(needsCompetences ? ["TEMP:COMPETENCES"] : []),
         ...(actorIndexScan?.readPlan ?? []),
         ...(boundedActorLoad?.readPlan ?? []),

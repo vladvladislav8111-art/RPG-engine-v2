@@ -6,6 +6,7 @@
  * checked canonical knowledge, accurate inputs and actual permission to use them.
  */
 import type {Capability,TaskKind} from "./proficiency.ts";
+import {scheduleWorkTimeV2,type WorkTimeModelV2} from "./task_work_time_v2.ts";
 
 export type WorkKind="active"|"verification"|"passive";
 export type WorkMethod =
@@ -18,8 +19,13 @@ export type WorkStage={
   method?:WorkMethod;
   mandatoryFullCoverage?:boolean;
   verifiedInputsRequired?:string[];
+  /** V2 calendar claims require a real source for every baseline. */
+  workloadSourceRef?:string;
+  resourceIds?:string[];
+  notBeforeMinute?:number;
+  mustFinishByMinute?:number;
 };
-export type WorkPlanInput={planId:string;stages:WorkStage[]};
+export type WorkPlanInput={planId:string;stages:WorkStage[];timeModelV2?:WorkTimeModelV2};
 export type WorkStageProjection={
  id:string;label:string;actorId:string;kind:WorkKind;baselineMinutes:number;
  proposedWorkMinutes:number;effectiveSpeed:number;durationMinutes:number;
@@ -27,6 +33,8 @@ export type WorkStageProjection={
  shortcutConditional:boolean;methodId:string|null;methodSourceRef:string|null;
  inputEvidenceNeedsReview:readonly string[];
  qualityPotential:number|null;requiresIndependentValidation:boolean;
+ activeIntervals?:readonly {startMinute:number;endMinute:number}[];
+ calendarIdleMinutes?:number;preStartDelayMinutes?:number;
 };
 export type WorkPlanProjection={
  planId:string;baselineSequentialMinutes:number;projectedLowerBoundMinutes:number;
@@ -37,6 +45,7 @@ export type WorkPlanProjection={
  inputWorkloadAttested:false;requiresActualScheduling:true;
  requiresIndependentMethodValidation:boolean;requiresGmCausalResolution:true;
  playerChoiceMade:false;committed:false;
+ timeModelV2?:ReturnType<typeof scheduleWorkTimeV2>;
 };
 const id=(x:unknown):x is string=>typeof x==="string"&&/^[A-Za-z0-9._:-]{3,180}$/.test(x);
 function count(x:unknown,max:number,name:string):number{
@@ -147,7 +156,25 @@ export function planWorkV1(input:WorkPlanInput,sourceSkills:ReadonlyMap<string,C
      qualityPotential,requiresIndependentValidation:shortcut||sourceNeeds.length>0};
    stages.push(detail);completed.set(s.id,detail);
  }
- const projectedLowerBoundMinutes=Math.max(...stages.map(s=>s.finishesAtMinute));
+ const unconstrainedLowerBoundMinutes=Math.max(...stages.map(s=>s.finishesAtMinute));
+ const calendar=input.timeModelV2? scheduleWorkTimeV2(input.timeModelV2,stages.map(s=>{
+    const raw=input.stages.find(x=>x.id===s.id)!;
+    return {id:s.id,actorId:s.actorId,kind:s.kind,durationMinutes:s.durationMinutes,
+      dependsOn:raw.dependsOn,notBeforeMinute:raw.notBeforeMinute,
+      mustFinishByMinute:raw.mustFinishByMinute,resourceIds:raw.resourceIds,
+      workloadSourceRef:raw.workloadSourceRef};
+ }),unconstrainedLowerBoundMinutes):undefined;
+ if(calendar){
+   for(const stage of stages){
+     const scheduled=calendar.stages.find(x=>x.id===stage.id)!;
+     stage.startsAtMinute=scheduled.startsAtMinute;
+     stage.finishesAtMinute=scheduled.finishesAtMinute;
+     stage.activeIntervals=scheduled.activeIntervals;
+     stage.calendarIdleMinutes=scheduled.calendarIdleMinutes;
+     stage.preStartDelayMinutes=scheduled.preStartDelayMinutes;
+   }
+ }
+ const projectedLowerBoundMinutes=calendar?.scheduledEndMinute??unconstrainedLowerBoundMinutes;
  const otherActorMinutes:Record<string,number>={};
  for(const [actor,minutes] of Object.entries(actorMinutes))if(actor!=="actor.shura")otherActorMinutes[actor]=minutes;
  return {planId:input.planId,baselineSequentialMinutes,projectedLowerBoundMinutes,
@@ -156,7 +183,8 @@ export function planWorkV1(input:WorkPlanInput,sourceSkills:ReadonlyMap<string,C
    stages,criticalPathIsLowerBound:true,claimedMethodsAttested:false,
    otherActorAvailabilityAttested:false,inputWorkloadAttested:false,
    requiresActualScheduling:true,requiresIndependentMethodValidation:needsIndependent,
-   requiresGmCausalResolution:true,playerChoiceMade:false,committed:false};
+   requiresGmCausalResolution:true,playerChoiceMade:false,committed:false,
+   ...(calendar?{timeModelV2:calendar}: {})};
 }
 
 /** Calibration-only workload. Not an opportunity, contract, real NPC shift or Shura choice. */
