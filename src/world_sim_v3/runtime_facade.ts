@@ -89,7 +89,8 @@ function execute(job:WorldV3Job):SimOutcome<unknown>{
  case 'world_resolution':return validateWorldResolution({...as<Parameters<typeof validateWorldResolution>[0]>(p),requiredKnowledgeRefs:setOf(p.requiredKnowledgeRefs,'requiredKnowledgeRefs')});
  case 'inventory_transfer':return planCustodyTransfer(p.lots as Parameters<typeof planCustodyTransfer>[0],p.req as Parameters<typeof planCustodyTransfer>[1]);
  case 'generate_offer':return generateOffer(as<Parameters<typeof generateOffer>[0]>(p));
- case 'offer_board':return proposeMaterializedOfferBoard(as<Parameters<typeof proposeMaterializedOfferBoard>[0]>(p));
+ case 'offer_board':if(p.marketPulseV1!==undefined)return deny('MARKET_CLOCK_SOURCE_REQUIRED','Wait for authoritative clock in source bridge');
+  return proposeMaterializedOfferBoard(as<Parameters<typeof proposeMaterializedOfferBoard>[0]>(p));
  case 'achievement':{
    const def=ACHIEVEMENTS_V3.find(d=>d.id===p.definitionId);
    if(!def)return deny('UNKNOWN_DRAFT_ACHIEVEMENT','No such catalog entry');
