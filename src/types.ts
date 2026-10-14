@@ -419,7 +419,15 @@ export type SemanticSessionRecord = {
   source?: string;
 };
 
+export type SemanticWorkSettlementProof = {
+  offerId:string;employerId:string;originalSourceRef:string;acceptedSourceRef:string;
+  methodSourceRef:string;amountC:number;reservedFromEmployerC:number;acceptanceMinute:number;
+};
 export type SemanticCommitPlan = {
+  /** Required for paid offer closures with a player money credit. */
+  workSettlementProofs?:SemanticWorkSettlementProof[];
+  /** Separately evidenced expenses, for gross wages vs net money delta. */
+  workSettlementExpensesC?:number;
   turnToken?: string;
   elapsedSeconds?: number;
   control?: SemanticControl;

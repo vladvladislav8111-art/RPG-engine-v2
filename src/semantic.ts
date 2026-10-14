@@ -44,6 +44,7 @@ import { validateNewNpcSocialMemory } from "./npc_life_v4/memory.ts";
 import { worldContinuityReview } from "./world_continuity.ts";
 import { reviewWorldProcesses } from "./world_process.ts";
 import { validateWorkDemand } from "./work_demand.ts";
+import {assertNewWorkPayments} from "./work_payment_proof_v1.ts";
 import { validateRumorTransmission } from "./world_information.ts";
 import { validateMajorWorldEvent } from "./world_events.ts";
 import { auditMaterialTransformation } from "./physical_integrity.ts";
@@ -316,6 +317,42 @@ export async function prepareSemanticCommit(input: CommitRequest & { semantic: S
   }
   if (semantic.turnToken && semantic.turnToken !== token) {
     throw new Error(`turn token stale: expected current ${token}, got ${semantic.turnToken}`);
+  }
+
+  // Fail closed: newly PAID work requires a real prior open offer or validated
+  // same-turn demand, an owner acceptance receipt, and net/gross reconciliation.
+  // Existing idempotent transaction replays return before this check.
+  const paidCloses=[
+    ...(semantic.rowUpserts??[]).filter(x=>x.table==="OPPORTUNITIES_CURRENT").map(x=>({
+      offerId:x.key,employerId:String(x.values["Employer"]??""),
+      state:String(x.values["State"]??""),pay:String(x.values["Pay"]??"")})),
+    ...(semantic.rowUpdates??[]).filter(x=>x.table==="OPPORTUNITIES_CURRENT").map(x=>({
+      offerId:x.key,employerId:String(x.patch["Employer"]??""),
+      state:String(x.patch["State"]??""),pay:String(x.patch["Pay"]??"")})),
+  ].filter(x=>/PAID/i.test(x.state+" "+x.pay)&&/COMPLETED|CLOSED|RESOLVED/i.test(x.state));
+  if(paidCloses.length){
+    const prior=sheets[TABLES.OPPORTUNITIES_CURRENT.range]??[];
+    const names=prior[0]??[];
+    const value=(r:unknown[],key:string)=>String(r[names.indexOf(key)]??"");
+    const existingOpen=prior.slice(1).filter(r=>
+      /^(OPEN|AVAILABLE)/i.test(value(r,"State"))&&
+      /^(OPEN|AVAILABLE)/i.test(value(r,"Lifecycle State"))&&
+      Number(value(r,"Slots Remaining"))>0
+    ).map(r=>value(r,"Offer ID"));
+    const employerResolved=paidCloses.map(c=>{
+      if(c.employerId)return c;
+      const priorRow=prior.slice(1).find(r=>value(r,"Offer ID")===c.offerId);
+      return {...c,employerId:priorRow?value(priorRow,"Employer"):""};
+    });
+    if((semantic.resourceSets??[]).some(x=>x.resource==="Money"))
+      throw Error("WORK_RESOURCE_SET_NOT_SUPPORTED_FOR_PAYOUT");
+    const netMoney=(semantic.resourceDeltas??[]).filter(x=>x.resource==="Money")
+      .reduce((n,x)=>n+x.delta,0);
+    assertNewWorkPayments({closes:employerResolved,
+      proofs:semantic.workSettlementProofs??[],
+      openedOfferIds:existingOpen,
+      authorizedSameTurnOfferIds:(semantic.workDemandEvents??[]).map(x=>x.offerId),
+      moneyNetC:netMoney,expensesC:semantic.workSettlementExpensesC??0});
   }
 
   const currentDay = asNumber(controlValue("world_day"), "world_day");
