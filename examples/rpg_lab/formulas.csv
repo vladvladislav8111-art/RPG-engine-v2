@@ -1,0 +1,3 @@
+id,expression
+fire_damage,max(0,attack*1.5-defense)
+healing,min(healPower*2,missingHp)

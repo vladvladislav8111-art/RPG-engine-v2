@@ -19,6 +19,7 @@ import {reviewPerception,type PerceptionReviewRequest} from '../perception_revie
 import {reviewNpcLife,reviewKeyPromotion,proposeDirectedRelationship,proposePersonalityEvolution,chooseNpcAttention,crossCheckContactReceipts} from '../npc_life_v4/index.ts';
 import {reviewNpcPragmaticsV1} from '../npc_pragmatics_v1.ts';
 import {reviewNpcPersonalityContinuityV1} from '../npc_personality_continuity_v1.ts';
+import {evaluateLabPack,type LabPack,type LabJob} from '../rpg_lab_v1/engine.ts';
 
 export const WORLD_V3_OPERATIONS=[
  'turn','npc_presence','npc_decision','craft_advance','craft_qc','workshop_capacity','capability_check','task_plan',
@@ -85,6 +86,11 @@ function execute(job:WorldV3Job):SimOutcome<unknown>{
    return relayKnowledge({facts:p.facts as Fact[],message:as<Parameters<typeof relayKnowledge>[0]['message']>(p.message as Record<string,unknown>),provenance:new Map(p.provenance as [string,Evidence][])});
  }
  case 'world_review':
+  if(p.rpgLabV1!==undefined){
+    if(Object.keys(p).length!==1||!rec(p.rpgLabV1)||!rec(p.rpgLabV1.pack)||!array(p.rpgLabV1.jobs))
+      return deny('RPG_LAB_BAD_ENVELOPE','Expected rpgLabV1 with isolated pack and jobs only');
+    return pass(evaluateLabPack(p.rpgLabV1.pack as LabPack,p.rpgLabV1.jobs as LabJob[]));
+  }
   if(p.perceptionV1!==undefined){
     if(Object.keys(p).length!==1||!rec(p.perceptionV1))return deny('PERCEPTION_INVALID_ENVELOPE','Expected only perceptionV1 request');
     return pass(reviewPerception(p.perceptionV1 as PerceptionReviewRequest));

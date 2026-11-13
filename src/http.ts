@@ -23,6 +23,8 @@ import {
   PREVIEW_KV_SETUP_PAGE, isPreviewTimeline, previewKvGateChecks,
 } from "./preview_kv_probe.ts";
 import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
+import {handleRpgLabHttp} from "./rpg_lab_v1/http.ts";
+import {RPG_LAB_UI_V1} from "./rpg_lab_v1/ui.ts";
 import type { WorldV3BatchRequest } from "./world_sim_v3/runtime_facade.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import type { CommitRequest, TurnContextRequest } from "./types.ts";
@@ -349,12 +351,22 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
       return json(await previewWriterReadiness());
     }
 
+    if (pathname === "/rpg-lab/v1/ui" && req.method === "GET") {
+      return new Response(RPG_LAB_UI_V1,{headers:{
+        "content-type":"text/html; charset=utf-8","cache-control":"no-store",
+        "x-content-type-options":"nosniff","referrer-policy":"no-referrer",
+        "content-security-policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'",
+      }});
+    }
+
     if (pathname === "/mcp") {
       if (!authorized(req)) return json({ error: "unauthorized" }, 401);
       return await handleMcp(req);
     }
 
     if (!authorized(req)) return json({ error: "unauthorized" }, 401);
+
+    if (pathname.startsWith("/rpg-lab/v1/")) return await handleRpgLabHttp(req,url);
 
     if (pathname === "/simulate/world-v3" && req.method === "POST") {
       if (!config.worldSimV3Enabled) return json({ ok: false, error: "world_sim_v3_disabled" }, 503);
