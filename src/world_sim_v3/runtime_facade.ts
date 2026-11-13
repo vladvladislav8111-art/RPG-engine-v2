@@ -17,6 +17,8 @@ import {planAchievementAward,planTitleAward,planProgressCycle,planSystemObjectiv
 import {ACHIEVEMENTS_V3,TITLES_V3,ACHIEVEMENT_CATALOG_COUNTS} from './achievement_catalog.ts';
 import {reviewPerception,type PerceptionReviewRequest} from '../perception_review.ts';
 import {reviewNpcLife,reviewKeyPromotion,proposeDirectedRelationship,proposePersonalityEvolution,chooseNpcAttention,crossCheckContactReceipts} from '../npc_life_v4/index.ts';
+import {reviewNpcPragmaticsV1} from '../npc_pragmatics_v1.ts';
+import {reviewNpcPersonalityContinuityV1} from '../npc_personality_continuity_v1.ts';
 
 export const WORLD_V3_OPERATIONS=[
  'turn','npc_presence','npc_decision','craft_advance','craft_qc','workshop_capacity','capability_check','task_plan',
@@ -53,7 +55,7 @@ function execute(job:WorldV3Job):SimOutcome<unknown>{
    if(p.lifeV4!==undefined){
      if(!rec(p.lifeV4)||!rec(p.lifeV4.input))return deny('NPC_LIFE_V4_INVALID','Expected lifeV4 {kind,input}');
      const data=p.lifeV4.input as Record<string,unknown>;
-     let result:ReturnType<typeof reviewNpcLife>|ReturnType<typeof reviewKeyPromotion>|ReturnType<typeof proposeDirectedRelationship>|ReturnType<typeof proposePersonalityEvolution>|ReturnType<typeof chooseNpcAttention>|ReturnType<typeof crossCheckContactReceipts>;
+     let result:ReturnType<typeof reviewNpcLife>|ReturnType<typeof reviewKeyPromotion>|ReturnType<typeof proposeDirectedRelationship>|ReturnType<typeof proposePersonalityEvolution>|ReturnType<typeof chooseNpcAttention>|ReturnType<typeof crossCheckContactReceipts>|ReturnType<typeof reviewNpcPragmaticsV1>|ReturnType<typeof reviewNpcPersonalityContinuityV1>;
      switch(p.lifeV4.kind){
        case 'life_review':result=reviewNpcLife(as<Parameters<typeof reviewNpcLife>[0]>(data));break;
        case 'promotion_review':result=reviewKeyPromotion(as<Parameters<typeof reviewKeyPromotion>[0]>(data));break;
@@ -61,6 +63,8 @@ function execute(job:WorldV3Job):SimOutcome<unknown>{
        case 'social_change':result=proposeDirectedRelationship(data.event as Parameters<typeof proposeDirectedRelationship>[0],data.existing as Parameters<typeof proposeDirectedRelationship>[1]);break;
        case 'personality_evolution':result=proposePersonalityEvolution(as<Parameters<typeof proposePersonalityEvolution>[0]>(data));break;
        case 'attention_review':result=chooseNpcAttention(as<Parameters<typeof chooseNpcAttention>[0]>(data));break;
+       case 'pragmatics_review':result=reviewNpcPragmaticsV1(as<Parameters<typeof reviewNpcPragmaticsV1>[0]>(data));break;
+       case 'continuity_review':result=reviewNpcPersonalityContinuityV1(as<Parameters<typeof reviewNpcPersonalityContinuityV1>[0]>(data));break;
        default:return deny('NPC_LIFE_V4_UNKNOWN_KIND','Invalid Life V4 sub-operation');
      }
      return result.ok?pass(result):deny(result.code,result.reason);
