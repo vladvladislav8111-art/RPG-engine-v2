@@ -20,7 +20,7 @@ export type LabPack={
  progression:{xpThresholdFormula?:string;thresholds?:number[]};
 };
 export type LabJob={id:string;kind:string;args:Record<string,unknown>};
-const ID=/^[A-Za-z0-9_.:-]{3,80}$/;
+const ID=/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/;
 const safeObj=(x:unknown):x is Record<string,unknown>=>!!x&&typeof x==="object"&&!Array.isArray(x);
 const entries=(x:unknown,max:number):[string,unknown][]=>{
  if(!safeObj(x))throw Error("LAB_OBJECT_EXPECTED");

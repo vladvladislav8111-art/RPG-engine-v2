@@ -1,7 +1,7 @@
 /** Import JSON/CSV rules into one isolated project. Never reads arbitrary local paths. */
 import {validateLabPack,type LabPack} from "./engine.ts";
 export type LabFileImport={format:"json"|"csv";table?:string;content:string};
-const validId=(s:string)=>/^[A-Za-z0-9_.:-]{3,80}$/.test(s)&&!["constructor","prototype","__proto__"].includes(s);
+const validId=(s:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(s)&&!["constructor","prototype","__proto__"].includes(s);
 export function parseLabCsv(content:string):Record<string,string>[]{
  if(content.length>90000)throw Error("LAB_CSV_TOO_LARGE");
  const rows:string[][]=[];let row:string[]=[],cell="",quoted=false;

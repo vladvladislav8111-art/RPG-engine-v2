@@ -10,7 +10,7 @@ export type LabSession={
  discovered:string[];npcs:Record<string,LabNpcState>;
  events:{sourceRef:string;summary:string;time:string;knownBy:string[]}[];
 };
-const id=(v:unknown)=>typeof v==="string"&&/^[A-Za-z0-9_.:-]{3,80}$/.test(v)&&!["constructor","prototype","__proto__"].includes(v);
+const id=(v:unknown)=>typeof v==="string"&&/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(v)&&!["constructor","prototype","__proto__"].includes(v);
 const list=(v:unknown,max:number)=>Array.isArray(v)&&v.length<=max&&v.every(id);
 const map=(v:unknown,max:number)=>v&&typeof v==="object"&&!Array.isArray(v)&&Object.keys(v).length<=max&&Object.keys(v).every(id);
 const n=(v:unknown)=>typeof v==="number"&&Number.isFinite(v)&&v>=0&&v<=1e12;
