@@ -48,3 +48,20 @@ examples/rpg_lab/formulas.csv and loot.csv: editable import examples.
 
 ## Release gate
 Deno checks and full regression suite required before the single production merge; after deploy verify current Runtime Bridge and isolated Lab endpoints separately. Existing Shura gameplay state should not be used for tests.
+
+## Lightweight saved project lookup through existing Bridge (V1.1)
+After the project is created in RPG Lab UI, the existing simulate_world_v3 tool can read it by ID. No new tool installation or pasted formula pack is needed.
+Example:
+{
+  "expectedSaveId":"<fresh Runtime Bridge saveId>",
+  "jobs":[{
+    "id":"lab.quick",
+    "operation":"world_review",
+    "payload":{"rpgLabV1":{
+      "projectId":"demo_world",
+      "expectedRevision":1,
+      "jobs":[{"id":"calc.1","kind":"formula","args":{"formulaId":"damage","variables":{"attack":24,"defense":7}}}]
+    }}
+  }]
+}
+Bridge resolves the project from the isolated Lab KV namespace, checks optional revision, and runs normal read-only calculations. No Shura gameplay values, items or progress are changed. If the saved pack expands beyond the 64 KiB World V3 limit, use the authenticated direct Lab evaluate endpoint.

@@ -1,0 +1,28 @@
+{
+  "expectedSaveId": "REPLACE_WITH_RUNTIME_HEALTH_SAVEID",
+  "jobs": [
+    {
+      "id": "lab.quick",
+      "operation": "world_review",
+      "payload": {
+        "rpgLabV1": {
+          "projectId": "demo_world",
+          "expectedRevision": 1,
+          "jobs": [
+            {
+              "id": "calc.1",
+              "kind": "formula",
+              "args": {
+                "formulaId": "damage",
+                "variables": {
+                  "attack": 24,
+                  "defense": 7
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

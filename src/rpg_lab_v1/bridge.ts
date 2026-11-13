@@ -1,0 +1,32 @@
+/** Resolve a saved RPG Lab project before the existing read-only World V3 dispatcher.
+ * The loader is injected so pure tests cannot touch Deno KV or Shura data.
+ */
+import type {WorldV3BatchRequest} from "../world_sim_v3/runtime_facade.ts";
+import type {LabPack} from "./engine.ts";
+export type LabPackLoader=(projectId:string,expectedRevision?:number)=>Promise<{pack:LabPack;revision:number}>;
+const projectId=/^[A-Za-z0-9_-]{3,64}$/;
+const record=(x:unknown):x is Record<string,unknown>=>!!x&&typeof x==="object"&&!Array.isArray(x);
+export async function hydrateLabBridgeRequest(req:WorldV3BatchRequest,load:LabPackLoader):Promise<WorldV3BatchRequest>{
+ if(!req||!Array.isArray(req.jobs)||req.jobs.length>12)throw Error("LAB_BRIDGE_INVALID_BATCH");
+ const jobs=[];
+ for(const job of req.jobs){
+  const payload=job.payload;
+  if(job.operation!=="world_review"||!record(payload)||!record(payload.rpgLabV1)){
+   jobs.push(job);continue;
+  }
+  const lab=payload.rpgLabV1;
+  if(lab.pack!==undefined){jobs.push(job);continue;}
+  const project=lab.projectId;
+  if(typeof project!=="string"||!projectId.test(project)||!Array.isArray(lab.jobs))
+   throw Error("LAB_BRIDGE_PROJECT_REF_INVALID");
+  const expected=lab.expectedRevision;
+  if(expected!==undefined&&(typeof expected!=="number"||!Number.isSafeInteger(expected)||expected<1))
+   throw Error("LAB_BRIDGE_EXPECTED_REVISION_INVALID");
+  const loaded=await load(project,expected as number|undefined);
+  if(loaded.pack.projectId!==project)throw Error("LAB_BRIDGE_PROJECT_MISMATCH");
+  jobs.push({...job,payload:{rpgLabV1:{pack:loaded.pack,jobs:lab.jobs,packRevision:loaded.revision}}});
+ }
+ const hydrated={...req,jobs};
+ if(JSON.stringify(hydrated).length>64000)throw Error("LAB_BRIDGE_PACK_TOO_LARGE_USE_HTTP");
+ return hydrated;
+}
