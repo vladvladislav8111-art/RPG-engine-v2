@@ -37,7 +37,7 @@ const num=(v:string|undefined,optional=false):number|undefined=>{
  return Number(v);
 };
 function merged(base:LabPack,patch:Record<string,unknown>):LabPack{
- const allowed=new Set(["formulas","resources","lootTables","prices","economy","locations","npcProfiles","progression"]);
+ const allowed=new Set(["formulas","resources","lootTables","prices","economy","locations","npcProfiles","progression","recipes","worldProcesses"]);
  if(!patch||typeof patch!=="object"||Array.isArray(patch))throw Error("LAB_PATCH_INVALID");
  for(const k of Object.keys(patch))if(!allowed.has(k))throw Error("LAB_PATCH_UNKNOWN_SECTION:"+k);
  const copy=structuredClone(base) as LabPack;
@@ -83,6 +83,10 @@ export function importLabFile(base:LabPack|null,projectId:string,input:LabFileIm
   patch.prices=section;
  }else if(table==="loot"){
   const section=structuredClone(base.lootTables);
+  for(const tableId of new Set(rows.map(r=>r.tableId))){
+   if(!validId(tableId))throw Error("LAB_CSV_BAD_LOOT");
+   delete section[tableId]; // Each CSV table definition is a complete, repeatable replacement.
+  }
   for(const r of rows){
    if(!validId(r.tableId)||!validId(r.itemId))throw Error("LAB_CSV_BAD_LOOT");
    const rolls=num(r.rolls);

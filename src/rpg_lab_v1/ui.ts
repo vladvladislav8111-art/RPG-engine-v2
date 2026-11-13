@@ -28,7 +28,7 @@ small{color:#98a9c4}.success{color:#85e6bb}.error{color:#ff9e9e}
 </article>
 <article>
 <h2>2. Файлы и таблицы</h2>
-<label>Файл JSON или CSV</label><input id="upload" type="file" accept=".json,.csv,application/json,text/csv">
+<label>Файл JSON или CSV</label><input id="upload" type="file" accept=".json,.csv,application/json,text/csv" multiple>
 <label>Секция для CSV</label><select id="table"><option value="formulas">Формулы</option><option value="resources">Ресурсы</option><option value="loot">Дроп</option><option value="prices">Цены</option><option value="locations">Локации</option></select>
 <button id="import">Импортировать файл</button>
 <p><small>Изменения версионируются. Формулы можно менять без деплоя; для CSV необходим уже созданный проект.</small></p>
@@ -43,6 +43,15 @@ small{color:#98a9c4}.success{color:#85e6bb}.error{color:#ff9e9e}
 <textarea id="npcData" rows="5">{"name":"Проводник","canonRef":"demo.placeholder","traits":["осторожен"],"goals":["сохранить группу"],"knownFacts":[],"speechStyle":"кратко и по делу","responsePatterns":{}}</textarea>
 <button id="addNpc">Добавить персонажа</button>
 </article></div>
+<article><h2>🔗 Папка Google Drive</h2>
+<p>Подключи одну папку с файлами проекта. Сервисный аккаунт Deno должен иметь к ней доступ. Распознаются вложенные папки первого уровня, JSON, CSV, текстовые документы Google Docs и Google Sheets.</p>
+<div class="grid"><div>
+<label>ID папки Google Drive</label><input id="folderId" placeholder="ID из ссылки на папку">
+<label><input id="driveAuto" type="checkbox" checked style="width:auto"> Автообновление при обращении к проекту (кеш 2 минуты)</label>
+<div><button id="driveConnect">Подключить папку</button><button id="driveSync" class="secondary">Синхронизировать</button></div>
+<div><button id="driveStatus" class="secondary">Проверить связь</button><button id="driveNotes" class="secondary">Список документов</button><button id="driveDisconnect" class="secondary">Отключить папку</button></div>
+</div><div><p><small>JSON/CSV становятся источником правил. Google Docs и текстовые файлы с описаниями доступны как справочные материалы: они не меняют автоматически канонические характеристики NPC.</small></p><p><small>После подключения ручное изменение правил через редактор отключено. Меняй файлы в Google Drive, затем синхронизируй.</small></p></div></div>
+</article>
 <article><h2>3. Редактор правил проекта (JSON)</h2>
 <textarea id="pack" rows="15" spellcheck="false" aria-label="Конфигурация проекта"></textarea>
 <button id="save">Сохранить версию</button><button class="secondary" id="format">Форматировать JSON</button>
@@ -94,13 +103,20 @@ el("save").onclick=()=>act(async()=>{
 });
 el("format").onclick=()=>act(async()=>{el("pack").value=JSON.stringify(JSON.parse(el("pack").value),null,2)});
 el("import").onclick=()=>act(async()=>{
- const f=el("upload").files[0];if(!f)throw Error("Выбери файл");
- if(f.size>90000)throw Error("Файл превышает 90 КБ");
- const format=f.name.toLowerCase().endsWith(".csv")?"csv":"json";
- const r=await api(base+project()+"/import","POST",{expectedRevision:revision,
-  file:{format,table:format==="csv"?el("table").value:undefined,content:await f.text()}});
- revision=r.revision;el("version").textContent=revision;show(r);
+ const files=Array.from(el("upload").files);if(!files.length)throw Error("Выбери файлы");
+ if(files.length>20)throw Error("Максимум 20 файлов за раз");
+ const imported=[];
+ for(const f of files){
+  if(f.size>90000)throw Error("Файл превышает 90 КБ: "+f.name);
+  const format=f.name.toLowerCase().endsWith(".csv")?"csv":"json";
+  const prefix=f.name.split(/[._-]/)[0].toLowerCase();
+  const guessed={formulas:"formulas",resources:"resources",loot:"loot",prices:"prices",locations:"locations"}[prefix];
+  const r=await api(base+project()+"/import","POST",{expectedRevision:revision,
+    file:{format,table:format==="csv"?(guessed||el("table").value):undefined,content:await f.text()}});
+  revision=r.revision;el("version").textContent=revision;imported.push(f.name);
+ }
  const read=await api(base+project(),"GET");el("pack").value=JSON.stringify(read.pack,null,2);
+ show({imported,revision});
 });
 el("run").onclick=()=>act(async()=>{
  const body={expectedRevision:revision,jobs:JSON.parse(el("jobs").value)};
@@ -133,6 +149,29 @@ el("loadSession").onclick=()=>act(async()=>{
 el("saveSession").onclick=()=>act(async()=>{
  const r=await api(sessionPath(),"PUT",{expectedRevision:sessionRevision,session:JSON.parse(el("session").value)});
  sessionRevision=r.revision;el("sessionVersion").textContent=sessionRevision;show(r);
+});
+function driveUrl(suffix){return base+project()+"/drive"+(suffix||"");}
+async function refreshPack(){
+ const r=await api(base+project(),"GET");revision=r.revision;el("version").textContent=revision;
+ el("pack").value=JSON.stringify(r.pack,null,2);
+}
+el("driveConnect").onclick=()=>act(async()=>{
+ const id=el("folderId").value.trim();if(!id)throw Error("Введи ID папки");
+ const result=await api(driveUrl(),"PUT",{folderId:id,autoSync:el("driveAuto").checked,expectedRevision:revision});
+ await refreshPack();show(result);
+});
+el("driveSync").onclick=()=>act(async()=>{
+ const result=await api(driveUrl("/sync"),"POST",{expectedRevision:revision});
+ await refreshPack();show(result);
+});
+el("driveStatus").onclick=()=>act(async()=>{
+ const r=await api(driveUrl(),"GET");
+ if(r.binding){el("folderId").value=r.binding.folderId;el("driveAuto").checked=r.binding.autoSync;}
+ show(r);
+});
+el("driveNotes").onclick=()=>act(async()=>show(await api(driveUrl("/sources"),"GET")));
+el("driveDisconnect").onclick=()=>act(async()=>{
+ const r=await api(driveUrl(),"DELETE",{expectedRevision:revision});show(r);
 });
 el("sample").onclick=()=>act(async()=>{
  const id=el("project").value.trim();
