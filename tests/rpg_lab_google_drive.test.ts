@@ -15,7 +15,7 @@ const source=(id:string,name:string,text:string):DriveFileText=>({
  id,name,text,mimeType:name.endsWith(".csv")?"text/csv":"application/json",modifiedTime:"2026-11-13T10:00:00Z"
 });
 const files=[
- source("drive.file.001","formulas.csv","id,expression\nnewdamage,max(0,attack*1.5-defense)\n"),
+ source("drive.file.001","formulas.csv","id,expression\nnewdamage,\"max(0,attack*1.5-defense)\"\n"),
  source("drive.file.002","loot.goblin.csv","tableId,rolls,itemId,weight,chance,min,max\ngoblin,2,fang,2,0.5,1,2\ngoblin,2,claw,1,0.2,1,1\n"),
  source("drive.file.003","npcProfiles.json",JSON.stringify({"npc.loki":{name:"Локи",canonRef:"canon.sword_oratoria",traits:["азарт"],goals:["заботиться о семье"],knownFacts:[]}})),
  source("drive.file.004","canon.md","Упрощённый тестовый фрагмент мира без автоматической канонизации личности.")
