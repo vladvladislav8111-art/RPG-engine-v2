@@ -95,7 +95,7 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    if(!obj(data))throw Error("LAB_IMPORT_BODY_REQUIRED");
    const current=await kv.get<LabStored>(kvKey);
    const expected=data.expectedRevision;
-   if(!Number.isSafeInteger(expected)||expected<0||expected!==(current.value?.revision??0))throw Error("LAB_REVISION_CONFLICT");
+   if(typeof expected!=="number"||!Number.isSafeInteger(expected)||expected<0||expected!==(current.value?.revision??0))throw Error("LAB_REVISION_CONFLICT");
    let pack:LabPack;
    if(action==="import"){
     pack=importLabFile(current.value?.pack??null,projectId,data.file as LabFileImport);
