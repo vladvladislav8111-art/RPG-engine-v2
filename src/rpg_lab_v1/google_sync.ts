@@ -16,7 +16,7 @@ export type GoogleProjectBinding={
  folderId:string;folderName:string;autoSync:boolean;lastCheckedAt:number;
  signature:string;fileIds:string[];imported:string[];skipped:string[];
 };
-export type GoogleSourceIndex={projectId:string;notes:DriveSourceNote[];modifiedAt:string};
+export type GoogleSourceIndex={projectId:string;notes:DriveSourceNote[];modifiedAt:string|null};
 const valid=(projectId:string)=>{if(!PROJECT.test(projectId))throw Error("LAB_DRIVE_BAD_PROJECT_ID");};
 const signature=(fs:readonly GoogleFileMeta[])=>fs.map(f=>[f.id,f.name,f.mimeType,f.modifiedTime??""].join("|")).sort().join("\n");
 async function downloadAll(files:readonly GoogleFileMeta[]):Promise<{texts:DriveFileText[];skipped:string[]}>{
