@@ -1,0 +1,3 @@
+tableId,rolls,itemId,weight,chance,min,max
+goblin,2,coin,4,0.9,1,5
+goblin,2,fang,1,0.45,1,2

@@ -1,0 +1,84 @@
+[
+  {
+    "id": "formula.1",
+    "kind": "formula",
+    "args": {
+      "formulaId": "damage",
+      "variables": {
+        "attack": 24,
+        "defense": 7
+      }
+    }
+  },
+  {
+    "id": "battle.1",
+    "kind": "encounter",
+    "args": {
+      "damageFormulaId": "damage",
+      "variables": {
+        "attack": 24,
+        "defense": 7
+      },
+      "targetHp": 16,
+      "eventId": "event.kill.1",
+      "lootTableId": "goblin",
+      "seed": "session.1.event.1",
+      "killConfirmed": false,
+      "resourceCurrent": {
+        "stamina": 25
+      },
+      "resourceDeltas": {
+        "stamina": -5
+      }
+    }
+  },
+  {
+    "id": "loot.1",
+    "kind": "loot",
+    "args": {
+      "tableId": "goblin",
+      "eventId": "event.kill.1",
+      "seed": "session.1.event.1",
+      "killConfirmed": true
+    }
+  },
+  {
+    "id": "route.1",
+    "kind": "route",
+    "args": {
+      "from": "town",
+      "to": "floor_2",
+      "discovered": [
+        "town",
+        "dungeon",
+        "floor_1",
+        "floor_2"
+      ]
+    }
+  },
+  {
+    "id": "world.1",
+    "kind": "world_tick",
+    "args": {
+      "fromMinute": 1100,
+      "toMinute": 1500,
+      "discovered": [
+        "town"
+      ]
+    }
+  },
+  {
+    "id": "npc.1",
+    "kind": "npc",
+    "args": {
+      "npcId": "npc.guide",
+      "event": {
+        "kind": "betrayal",
+        "sourceRef": "story.event.1",
+        "witnessedByNpc": true
+      },
+      "knownFactIds": [],
+      "memoryRefs": []
+    }
+  }
+]

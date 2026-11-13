@@ -1,0 +1,161 @@
+{
+  "schema": "RPG_LAB_PACK_V1",
+  "projectId": "demo_world",
+  "worldId": "demo.fantasy",
+  "formulas": {
+    "damage": "max(0,attack-defense)",
+    "harvest": "floor((baseYield+skill*0.4)*tool)",
+    "training": "floor(minutes*focus/10)",
+    "xpNext": "100+level*40",
+    "craftTime": "max(1,floor(baseMinutes/(1+efficiency*0.1)))"
+  },
+  "resources": {
+    "hp": {
+      "min": 0,
+      "max": 100
+    },
+    "stamina": {
+      "min": 0,
+      "max": 60
+    },
+    "mana": {
+      "min": 0,
+      "max": 80
+    }
+  },
+  "lootTables": {
+    "goblin": {
+      "rolls": 2,
+      "entries": [
+        {
+          "itemId": "coin",
+          "weight": 4,
+          "chance": 0.9,
+          "min": 1,
+          "max": 5
+        },
+        {
+          "itemId": "fang",
+          "weight": 1,
+          "chance": 0.45,
+          "min": 1,
+          "max": 2
+        }
+      ]
+    }
+  },
+  "prices": {
+    "potion": {
+      "base": 35,
+      "currency": "gold",
+      "buyMultiplier": 1,
+      "sellMultiplier": 0.5
+    },
+    "iron": {
+      "base": 20,
+      "currency": "gold"
+    }
+  },
+  "recipes": {
+    "simple_sword": {
+      "inputs": {
+        "iron": 2
+      },
+      "outputs": {
+        "sword": 1
+      },
+      "timeFormula": "craftTime",
+      "qcRequired": true
+    }
+  },
+  "economy": {
+    "taxRate": 0.05
+  },
+  "locations": {
+    "town": {
+      "name": "Town",
+      "kind": "city",
+      "neighbors": {
+        "dungeon": 5
+      }
+    },
+    "dungeon": {
+      "name": "Dungeon entrance",
+      "kind": "entrance",
+      "neighbors": {
+        "town": 5,
+        "floor_1": 3
+      }
+    },
+    "floor_1": {
+      "name": "Floor one",
+      "kind": "dungeon_floor",
+      "parentId": "dungeon",
+      "neighbors": {
+        "dungeon": 3,
+        "floor_2": 8
+      }
+    },
+    "floor_2": {
+      "name": "Floor two",
+      "kind": "dungeon_floor",
+      "parentId": "dungeon",
+      "neighbors": {
+        "floor_1": 8
+      }
+    }
+  },
+  "npcProfiles": {
+    "npc.guide": {
+      "name": "Guide",
+      "canonRef": "demo.placeholder",
+      "traits": [
+        "observant",
+        "cautious"
+      ],
+      "goals": [
+        "protect companions",
+        "earn a living"
+      ],
+      "knownFacts": [],
+      "speechStyle": "brief, dry humor",
+      "responsePatterns": {
+        "betrayal": [
+          {
+            "emotion": "shock",
+            "motive": "assess danger and seek shelter"
+          },
+          {
+            "emotion": "anger",
+            "motive": "identify who betrayed the group"
+          }
+        ],
+        "help": [
+          {
+            "emotion": "relief",
+            "motive": "express gratitude if appropriate"
+          }
+        ]
+      }
+    }
+  },
+  "worldProcesses": {
+    "festival": {
+      "dueMinute": 1200,
+      "locationId": "town",
+      "kind": "festival_starts",
+      "visibility": "public",
+      "sourceRef": "demo.clock.festival"
+    },
+    "private_plot": {
+      "dueMinute": 1400,
+      "locationId": "dungeon",
+      "kind": "private_negotiation",
+      "visibility": "hidden",
+      "sourceRef": "demo.clock.private_plot"
+    }
+  },
+  "progression": {
+    "xpThresholdFormula": "xpNext"
+  }
+}
