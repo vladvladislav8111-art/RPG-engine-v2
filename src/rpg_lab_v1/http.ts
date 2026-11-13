@@ -32,6 +32,13 @@ async function limited(req:Request):Promise<unknown>{
 function obj(x:unknown):x is Record<string,unknown>{return !!x&&typeof x==="object"&&!Array.isArray(x);}
 const projectRe=/^[a-zA-Z0-9_-]{3,64}$/;
 const unexpected=(e:unknown)=>e instanceof Error?e.message:"LAB_UNKNOWN_ERROR";
+export async function loadLabProjectFromKv(projectId:string,expectedRevision?:number):Promise<{pack:LabPack;revision:number}>{
+ if(!projectRe.test(projectId))throw Error("LAB_PROJECT_ID_INVALID");
+ const result=await (await storage()).get<LabStored>(keyOf(projectId));
+ if(!result.value)throw Error("LAB_PROJECT_NOT_FOUND");
+ if(expectedRevision!==undefined&&expectedRevision!==result.value.revision)throw Error("LAB_REVISION_CONFLICT");
+ return {pack:validateLabPack(result.value.pack),revision:result.value.revision};
+}
 export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
  try{
   const kv=await storage(),path=url.pathname;

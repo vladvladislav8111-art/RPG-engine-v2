@@ -89,7 +89,7 @@ function execute(job:WorldV3Job):SimOutcome<unknown>{
   if(p.rpgLabV1!==undefined){
     if(Object.keys(p).length!==1||!rec(p.rpgLabV1)||!rec(p.rpgLabV1.pack)||!array(p.rpgLabV1.jobs))
       return deny('RPG_LAB_BAD_ENVELOPE','Expected rpgLabV1 with isolated pack and jobs only');
-    return pass(evaluateLabPack(p.rpgLabV1.pack as LabPack,p.rpgLabV1.jobs as LabJob[]));
+    return pass({...evaluateLabPack(p.rpgLabV1.pack as LabPack,p.rpgLabV1.jobs as LabJob[]),packRevision:p.rpgLabV1.packRevision??null});
   }
   if(p.perceptionV1!==undefined){
     if(Object.keys(p).length!==1||!rec(p.perceptionV1))return deny('PERCEPTION_INVALID_ENVELOPE','Expected only perceptionV1 request');
