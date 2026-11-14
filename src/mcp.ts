@@ -17,7 +17,7 @@ import {
 import { intBetween } from "./rng.ts";
 import { WORLD_V3_OPERATIONS, type WorldV3BatchRequest } from "./world_sim_v3/runtime_facade.ts";
 import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
-import {createLabCampaign,commitLabCampaignEvent} from "./rpg_lab_v1/http.ts";
+import {createLabCampaign,commitLabCampaignEvent,readLabConfirmedEvent} from "./rpg_lab_v1/http.ts";
 import type {LabConfirmedEvent} from "./rpg_lab_v1/events.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import { resolveRoutineAction } from "./routine.ts";
@@ -672,6 +672,24 @@ function buildServer() {
     async input=>{
       try{return toolJson(await createLabCampaign(input));}
       catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_CREATE_FAILED"});}
+    },
+  );
+
+  server.registerTool(
+    "rpg_lab_read_event",
+    {
+      title:"RPG Lab: recover one archived campaign event",
+      description:"READ ONLY. Retrieve the exact confirmed prior turn by its sourceRef from a separate RPG Lab campaign event ledger, even when its summary has rolled out of the active session. Never touches the Shura save.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sourceRef:z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/),
+      }),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await readLabConfirmedEvent(input.projectId,input.sessionId,input.sourceRef));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_EVENT_READ_FAILED"});}
     },
   );
 

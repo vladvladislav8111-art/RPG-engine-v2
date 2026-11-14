@@ -6,6 +6,7 @@ import {applyConfirmedLabEvent,type LabConfirmedEvent} from "../src/rpg_lab_v1/e
 import {validateLabSession,type LabSession} from "../src/rpg_lab_v1/session.ts";
 import {reviewLabSessionMemory} from "../src/rpg_lab_v1/memory_view.ts";
 import {encodeLabSession,decodeLabSession} from "../src/rpg_lab_v1/session_storage.ts";
+import {planLabEventArchive} from "../src/rpg_lab_v1/event_archive.ts";
 import {newLinosState,linosProfile,linosCastCost,previewLinosCast,
  regenerateLinosMp} from "../src/rpg_lab_v1/linos.ts";
 const pack:LabPack={
@@ -180,4 +181,30 @@ test("Linos events, personal feature familiarity, and offscreen actions survive 
  assert.deepEqual(restored,s);
  validateLabSession(restored,pack);
  assert.equal(restored.player.linos!.mp,2380);
+});
+
+test("rolling active event journal keeps 350 turns while preparing immutable archived segments",()=>{
+ let s=fresh();
+ let archived:LabSession["events"]=[];
+ for(let i=0;i<350;i++){
+  const planned=planLabEventArchive(s);
+  if(planned.archive)archived=[...archived,...planned.archive.events];
+  s=applyConfirmedLabEvent(planned.working,pack,evt("evt.turn"+i,"D0 08:00"));
+ }
+ assert.equal(archived.length+s.events.length,350);
+ assert.ok(s.events.length<240);
+ assert.ok((s.archivedEventCount??0)>0);
+ assert.equal(archived[0].sourceRef,"evt.turn0");
+ assert.equal(s.events[s.events.length-1].sourceRef,"evt.turn349");
+});
+test("feature rumor cannot cite an unrelated event of a character who once observed the feature",()=>{
+ let s=fresh();
+ s=applyConfirmedLabEvent(s,pack,evt("evt.eyes","D0 08:01",{
+  knownBy:["npc.finn"],features:[{npcId:"npc.finn",featureId:"linos.extra_eyes",
+   channel:"seen",privacy:"small_group"}]}));
+ s=applyConfirmedLabEvent(s,pack,evt("evt.unrelated","D0 08:02",{knownBy:["npc.finn"]}));
+ assert.throws(()=>applyConfirmedLabEvent(s,pack,evt("evt.false_relay","D0 08:03",{
+  features:[{npcId:"npc.lefiya",featureId:"linos.extra_eyes",channel:"report",
+   sourceActor:"npc.finn",relayedSourceRef:"evt.unrelated",privacy:"small_group"}]
+ })),/LAB_FEATURE_UNVERIFIED_RELAY/);
 });

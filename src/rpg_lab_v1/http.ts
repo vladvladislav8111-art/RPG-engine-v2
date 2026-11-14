@@ -10,6 +10,7 @@ import {encodeLabPack,decodeLabPack,type LabStored} from "./storage_codec.ts";
 import {encodeLabSession,decodeLabSession,type LabSessionStored} from "./session_storage.ts";
 import {reviewLabSessionMemory} from "./memory_view.ts";
 import {newLinosState} from "./linos.ts";
+import {planLabEventArchive} from "./event_archive.ts";
 import {
  connectGoogleProject,syncGoogleProject,autoSyncGoogleProject,getGoogleProjectStatus,
  getGoogleProjectSources,disconnectGoogleProject,
@@ -105,13 +106,44 @@ export async function commitLabCampaignEvent(args:{
  if(!existing.value)throw Error("LAB_SESSION_NOT_FOUND");
  if(existing.value.revision!==expectedRevision)throw Error("LAB_REVISION_CONFLICT");
  const session=await decodeLabSession(existing.value,pack);
- const next=applyConfirmedLabEvent(session,pack,event);
+ if(!event||typeof event.sourceRef!=="string"||
+    !/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(event.sourceRef))
+  throw Error("LAB_EVENT_SOURCE_REF_INVALID");
+ // One immutable per-turn event record preserves original witness and feature
+ // observations after the active rolling journal has been compacted.
+ const refKey=[ROOT,"event_refs",projectId,sessionId,event.sourceRef];
+ const ref=await kv.get(refKey);
+ if(ref.value)throw Error("LAB_EVENT_ALREADY_APPLIED");
+ const planned=planLabEventArchive(session);
+ const next=applyConfirmedLabEvent(planned.working,pack,event);
  const value=await encodeLabSession(next,pack,expectedRevision+1);
- const done=await kv.atomic().check({key,versionstamp:existing.versionstamp}).set(key,value).commit();
+ let tx=kv.atomic()
+  .check({key,versionstamp:existing.versionstamp})
+  .check({key:refKey,versionstamp:ref.versionstamp})
+  .set(key,value)
+  .set(refKey,{revision:expectedRevision+1,event});
+ if(planned.archive){
+  const archiveKey=[ROOT,"event_archive",projectId,sessionId,planned.archive.index];
+  tx=tx.set(archiveKey,planned.archive.events);
+ }
+ const done=await tx.commit();
  if(!done.ok)throw Error("LAB_REVISION_CONFLICT");
  return {ok:true,revision:value.revision,projectId,sessionId,
   sourceRef:event.sourceRef,gameClock:next.gameClock,
   rememberedBy:event.observations?.map(x=>x.npcId)??[],legacySaveTouched:false};
+}
+
+/** Lookup an archived confirmed event by exact sourceRef, without creating a new turn. */
+export async function readLabConfirmedEvent(projectId:string,sessionId:string,sourceRef:string){
+ if(!projectRe.test(projectId)||!projectRe.test(sessionId)||
+  !/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(sourceRef))
+  throw Error("LAB_EVENT_LOOKUP_INVALID");
+ const kv=await storage();
+ const result=await kv.get<{revision:number;event:LabConfirmedEvent}>([
+  ROOT,"event_refs",projectId,sessionId,sourceRef]);
+ if(!result.value)throw Error("LAB_EVENT_NOT_FOUND");
+ return {projectId,sessionId,revision:result.value.revision,
+  event:result.value.event,readOnly:true,legacySaveTouched:false};
 }
 
 export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
@@ -189,6 +221,9 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    return reply({...view,packRevision:storedPack.value.revision,
     sessionRevision:record.value.revision,legacySaveTouched:false});
   }
+  const eventReadPath=/^\/rpg-lab\/v1\/projects\/([A-Za-z0-9_-]{3,64})\/sessions\/([A-Za-z0-9_-]{3,64})\/event_refs\/([A-Za-z_][A-Za-z0-9_.:-]{0,79})$/.exec(path);
+  if(eventReadPath&&req.method==="GET")
+   return reply(await readLabConfirmedEvent(eventReadPath[1],eventReadPath[2],eventReadPath[3]));
   const eventPath=/^\/rpg-lab\/v1\/projects\/([A-Za-z0-9_-]{3,64})\/sessions\/([A-Za-z0-9_-]{3,64})\/events$/.exec(path);
   if(eventPath&&req.method==="POST"){
    const projectId=eventPath[1],sessionId=eventPath[2];

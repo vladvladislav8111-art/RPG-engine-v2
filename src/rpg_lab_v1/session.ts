@@ -15,6 +15,7 @@ export type LabSession={
  discovered:string[];npcs:Record<string,LabNpcState>;
  events:{sourceRef:string;summary:string;time:string;knownBy:string[];locationId?:string;kind?:string}[];
  worldEvents?:{sourceRef:string;time:string;npcId:string;action:string;outcome:string;locationId?:string;privacy:"public"|"hidden"}[];
+ archivedEventCount?:number;
 };
 const id=(v:unknown)=>typeof v==="string"&&/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(v)&&!["constructor","prototype","__proto__"].includes(v);
 const list=(v:unknown,max:number)=>Array.isArray(v)&&v.length<=max&&v.every(id);
@@ -57,6 +58,7 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
   }
   if(new Set(state.memories.map(m=>m.sourceRef)).size!==state.memories.length)throw Error("LAB_SESSION_DUPLICATE_MEMORY");
  }
+ if(s.archivedEventCount!==undefined&&(!Number.isSafeInteger(s.archivedEventCount)||s.archivedEventCount<0||s.archivedEventCount>10000000))throw Error("LAB_SESSION_ARCHIVE_COUNT_INVALID");
  if(!Array.isArray(s.events)||s.events.length>256)throw Error("LAB_SESSION_EVENTS_INVALID");
  for(const ev of s.events){
   if(!id(ev.sourceRef)||!txt(ev.summary,600)||!txt(ev.time,100)||!list(ev.knownBy,128)||
