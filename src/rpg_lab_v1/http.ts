@@ -9,6 +9,7 @@ import {applyConfirmedLabEvent,type LabConfirmedEvent} from "./events.ts";
 import {encodeLabPack,decodeLabPack,type LabStored} from "./storage_codec.ts";
 import {encodeLabSession,decodeLabSession,type LabSessionStored} from "./session_storage.ts";
 import {reviewLabSessionMemory} from "./memory_view.ts";
+import {newLinosState} from "./linos.ts";
 import {
  connectGoogleProject,syncGoogleProject,autoSyncGoogleProject,getGoogleProjectStatus,
  getGoogleProjectSources,disconnectGoogleProject,
@@ -57,6 +58,60 @@ export async function loadLabSessionFromKv(projectId:string,sessionId:string):
  if(!saved.value)throw Error("LAB_SESSION_NOT_FOUND");
  return {pack,packRevision,session:await decodeLabSession(saved.value,pack),sessionRevision:saved.value.revision};
 }
+/** Shared write gate for HTTP and the opt-in ChatGPT MCP tool.
+ * Does not ever open or alter the legacy Shura save keyspace.
+ * Each RPG Lab session is independently versioned with CAS.
+ */
+export async function createLabCampaign(args:{
+ projectId:string;sessionId:string;gameClock:string;locationId?:string;
+}):Promise<{ok:true;revision:number;projectId:string;sessionId:string;legacySaveTouched:false}>{
+ const {projectId,sessionId,gameClock,locationId}=args;
+ if(!projectRe.test(projectId)||!projectRe.test(sessionId)||
+    typeof gameClock!=="string"||gameClock.length<1||gameClock.length>100)
+  throw Error("LAB_NEW_CAMPAIGN_INVALID");
+ const {pack}=await loadLabProjectFromKv(projectId);
+ if(locationId!==undefined&&(!pack.locations[locationId]||!projectRe.test(locationId.replace(/[.:-]/g,"_"))))
+  throw Error("LAB_NEW_CAMPAIGN_LOCATION_INVALID");
+ const session:LabSession={schema:"RPG_LAB_SESSION_V1",projectId,sessionId,gameClock,
+  player:{resources:{},stats:{},inventory:{},
+   ...(locationId?{locationId}:{}),
+   ...(pack.worldId==="danmachi.orario"?{linos:newLinosState()}:{}),
+  },
+  discovered:locationId?[locationId]:[],npcs:{},events:[],worldEvents:[]};
+ validateLabSession(session,pack);
+ const kv=await storage(),key=[ROOT,"sessions",projectId,sessionId];
+ const existing=await kv.get<LabSessionStored>(key);
+ if(existing.value)throw Error("LAB_CAMPAIGN_ALREADY_EXISTS");
+ const value=await encodeLabSession(session,pack,1);
+ const done=await kv.atomic().check({key,versionstamp:existing.versionstamp}).set(key,value).commit();
+ if(!done.ok)throw Error("LAB_REVISION_CONFLICT");
+ return {ok:true,revision:1,projectId,sessionId,legacySaveTouched:false};
+}
+export async function commitLabCampaignEvent(args:{
+ projectId:string;sessionId:string;expectedRevision:number;
+ event:LabConfirmedEvent;expectedPackRevision?:number;
+}):Promise<{ok:true;revision:number;projectId:string;sessionId:string;
+ sourceRef:string;gameClock:string;rememberedBy:string[];legacySaveTouched:false}>{
+ const {projectId,sessionId,expectedRevision,event,expectedPackRevision}=args;
+ if(!projectRe.test(projectId)||!projectRe.test(sessionId)||!Number.isSafeInteger(expectedRevision)||
+  expectedRevision<1)throw Error("LAB_EVENT_SESSION_REF_INVALID");
+ const {pack,revision:packRevision}=await loadLabProjectFromKv(projectId);
+ if(expectedPackRevision!==undefined&&expectedPackRevision!==packRevision)
+  throw Error("LAB_REVISION_CONFLICT");
+ const kv=await storage(),key=[ROOT,"sessions",projectId,sessionId];
+ const existing=await kv.get<LabSessionStored>(key);
+ if(!existing.value)throw Error("LAB_SESSION_NOT_FOUND");
+ if(existing.value.revision!==expectedRevision)throw Error("LAB_REVISION_CONFLICT");
+ const session=await decodeLabSession(existing.value,pack);
+ const next=applyConfirmedLabEvent(session,pack,event);
+ const value=await encodeLabSession(next,pack,expectedRevision+1);
+ const done=await kv.atomic().check({key,versionstamp:existing.versionstamp}).set(key,value).commit();
+ if(!done.ok)throw Error("LAB_REVISION_CONFLICT");
+ return {ok:true,revision:value.revision,projectId,sessionId,
+  sourceRef:event.sourceRef,gameClock:next.gameClock,
+  rememberedBy:event.observations?.map(x=>x.npcId)??[],legacySaveTouched:false};
+}
+
 export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
  try{
   const kv=await storage(),path=url.pathname;
@@ -135,29 +190,14 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
   const eventPath=/^\/rpg-lab\/v1\/projects\/([A-Za-z0-9_-]{3,64})\/sessions\/([A-Za-z0-9_-]{3,64})\/events$/.exec(path);
   if(eventPath&&req.method==="POST"){
    const projectId=eventPath[1],sessionId=eventPath[2];
-   await autoSyncGoogleProject(kv,projectId);
-   const project=await kv.get<LabStored>(keyOf(projectId));
-   if(!project.value)return reply({error:"LAB_PROJECT_NOT_FOUND"},404);
-   const sessionKey=[ROOT,"sessions",projectId,sessionId];
-   const stored=await kv.get<LabSessionStored>(sessionKey);
-   if(!stored.value)return reply({error:"LAB_SESSION_NOT_FOUND"},404);
    const data=await limited(req);
-   if(!obj(data)||!Number.isSafeInteger(data.expectedRevision)||data.expectedRevision!==stored.value.revision)
+   if(!obj(data)||!Number.isSafeInteger(data.expectedRevision))
     throw Error("LAB_REVISION_CONFLICT");
-   if(data.expectedPackRevision!==undefined&&data.expectedPackRevision!==project.value.revision)
-    throw Error("LAB_REVISION_CONFLICT");
-   const event=data.event as LabConfirmedEvent;
-   const pack=await decodeLabPack(project.value);
-   const currentSession=await decodeLabSession(stored.value,pack);
-   const next=applyConfirmedLabEvent(currentSession,pack,event);
-   if(next.sessionId!==sessionId)throw Error("LAB_SESSION_ID_MISMATCH");
-   const value=await encodeLabSession(next,pack,stored.value.revision+1);
-   const done=await kv.atomic().check({key:sessionKey,versionstamp:stored.versionstamp})
-    .set(sessionKey,value).commit();
-   if(!done.ok)throw Error("LAB_REVISION_CONFLICT");
-   return reply({ok:true,saved:true,projectId,sessionId,revision:value.revision,
-    sourceRef:event.sourceRef,rememberedBy:event.observations?.map(o=>o.npcId)??[],
-    gameClock:next.gameClock,legacySaveTouched:false});
+   return reply(await commitLabCampaignEvent({
+    projectId,sessionId,expectedRevision:data.expectedRevision as number,
+    expectedPackRevision:data.expectedPackRevision as number|undefined,
+    event:data.event as LabConfirmedEvent,
+   }));
   }
   const sessionPath=/^\/rpg-lab\/v1\/projects\/([A-Za-z0-9_-]{3,64})\/sessions\/([A-Za-z0-9_-]{3,64})$/.exec(path);
   if(sessionPath){
@@ -237,7 +277,7 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
   return reply({error:"LAB_METHOD_NOT_ALLOWED"},405);
  }catch(e){
   const msg=unexpected(e);
-  const status=msg==="LAB_EVENT_ALREADY_APPLIED"||msg==="LAB_REVISION_CONFLICT"?409:msg==="LAB_KV_DISABLED"?503:msg==="LAB_BODY_TOO_LARGE"?413:msg==="LAB_PROJECT_NOT_FOUND"||msg==="LAB_DRIVE_NOT_BOUND"?404:400;
+  const status=msg==="LAB_EVENT_ALREADY_APPLIED"||msg==="LAB_REVISION_CONFLICT"||msg==="LAB_CAMPAIGN_ALREADY_EXISTS"?409:msg==="LAB_KV_DISABLED"?503:msg==="LAB_BODY_TOO_LARGE"?413:msg==="LAB_PROJECT_NOT_FOUND"||msg==="LAB_DRIVE_NOT_BOUND"?404:400;
   return reply({ok:false,error:msg},status);
  }
 }
