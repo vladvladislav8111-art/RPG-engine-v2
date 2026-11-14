@@ -3,7 +3,7 @@
  */
 import type {LabPack,LabJob} from "./engine.ts";
 export type LabMemory={sourceRef:string;summary:string;learnedAt:string;knownBy:string[];
-  eventTime?:string;locationId?:string;channel?:string;sourceActor?:string;
+  eventTime?:string;locationId?:string;channel?:string;sourceActor?:string;relayedSourceRef?:string;
   confidence?:string;salience?:string;privacy?:string;perceivedFact?:string;
  };
 export type LabNpcState={knownFacts:string[];memories:LabMemory[];currentGoal?:string;relationships?:Record<string,string>};
@@ -41,6 +41,7 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
    for(const field of ["eventTime","sourceActor","confidence","salience","privacy","channel"] as const)
     if(mem[field]!==undefined&&!txt(mem[field],150))throw Error("LAB_SESSION_MEMORY_META_INVALID");
    if(mem.locationId!==undefined&&!id(mem.locationId))throw Error("LAB_SESSION_MEMORY_LOCATION_INVALID");
+   if(mem.relayedSourceRef!==undefined&&!id(mem.relayedSourceRef))throw Error("LAB_SESSION_MEMORY_RELAY_INVALID");
    if(mem.perceivedFact!==undefined&&!txt(mem.perceivedFact,600))throw Error("LAB_SESSION_MEMORY_PERCEPTION_INVALID");
   }
   if(new Set(state.memories.map(m=>m.sourceRef)).size!==state.memories.length)throw Error("LAB_SESSION_DUPLICATE_MEMORY");
@@ -65,6 +66,10 @@ export function withSessionDefaults(jobs:LabJob[],session:LabSession):LabJob[]{
   if(job.kind==="npc"&&args.knownFactIds===undefined){
    const id=typeof args.npcId==="string"?args.npcId:"";
    args.knownFactIds=session.npcs[id]?.knownFacts??[];
+  }
+  if(job.kind==="npc"&&args.memoryRefs===undefined){
+   const npcId=typeof args.npcId==="string"?args.npcId:"";
+   args.memoryRefs=(session.npcs[npcId]?.memories??[]).map(m=>m.sourceRef);
   }
   return {...job,args};
  });

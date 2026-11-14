@@ -86,6 +86,14 @@ function execute(job:WorldV3Job):SimOutcome<unknown>{
    return relayKnowledge({facts:p.facts as Fact[],message:as<Parameters<typeof relayKnowledge>[0]['message']>(p.message as Record<string,unknown>),provenance:new Map(p.provenance as [string,Evidence][])});
  }
  case 'world_review':
+  if(p.rpgLabSessionResolvedV1!==undefined){
+   const view=p.rpgLabSessionResolvedV1;
+   if(Object.keys(p).length!==1||!rec(view)||view.schema!=="RPG_LAB_MEMORY_VIEW_V1"||
+      view.readOnly!==true||view.committed!==false||!array(view.npcSummaries))
+    return deny('LAB_MEMORY_VIEW_BAD_ENVELOPE','Expected a resolved RPG Lab memory view');
+   return pass({...view,committed:false,legacySaveTouched:false,
+    note:'Session memory is subjective and may contain mistaken beliefs; no action committed'});
+  }
   if(p.rpgLabEvaluatedV1!==undefined){
    const result=p.rpgLabEvaluatedV1;
    if(Object.keys(p).length!==1||!rec(result)||result.schema!=="RPG_LAB_RESULT_V1"||
