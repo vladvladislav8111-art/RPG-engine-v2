@@ -38,9 +38,14 @@ export async function decodeLabSession(stored:LabSessionStored,pack:LabPack):Pro
  else {
   if(stored.codec!=="gzip-session-v1"||!(stored.sessionGzip instanceof Uint8Array))
    throw Error("LAB_SESSION_CODEC_UNSUPPORTED");
+  // LabSession validation bounds the serialized JS text to 100k UTF-16 units,
+  // but Cyrillic and other Unicode can occupy up to 3 UTF-8 bytes per unit.
+  // 150k bytes stranded otherwise valid Russian-language saves on NEXT read.
+  // 400k comfortably covers the 100k-unit schema maximum while still
+  // rejecting decompression bombs before JSON parsing.
   const plain=await streamBounded(
    new Blob([stored.sessionGzip.slice().buffer as ArrayBuffer]).stream()
-    .pipeThrough(new DecompressionStream("gzip")),150000);
+    .pipeThrough(new DecompressionStream("gzip")),400000);
   session=JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(plain)) as LabSession;
  }
  validateLabSession(session,pack);
