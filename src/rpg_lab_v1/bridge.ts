@@ -46,6 +46,7 @@ export async function hydrateLabBridgeRequest(req:WorldV3BatchRequest,load:LabPa
    throw Error("LAB_BRIDGE_EXPECTED_REVISION_INVALID");
   const loaded=await load(project,expected as number|undefined);
   if(loaded.pack.projectId!==project)throw Error("LAB_BRIDGE_PROJECT_MISMATCH");
+  if(JSON.stringify(loaded.pack).length>100000)throw Error("LAB_BRIDGE_PACK_TOO_LARGE_USE_HTTP");
   const inline={rpgLabV1:{pack:loaded.pack,jobs:lab.jobs,packRevision:loaded.revision}};
   if(JSON.stringify(inline).length>46000){
    const results=evaluateLabPack(loaded.pack,lab.jobs as LabJob[]);

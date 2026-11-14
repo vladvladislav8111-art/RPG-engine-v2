@@ -25,7 +25,7 @@ export function parseLabCsv(content:string):Record<string,string>[]{
  if(cell||row.length){row.push(cell.trim());rows.push(row);}
  if(rows.length<2)throw Error("LAB_CSV_NO_DATA");
  const header=rows.shift()!.map(h=>h.trim());
- if(header.some(h=>!(/^[\p{L}_][\p{L}\p{N}_.:-]{0,79}$/u.test(h))||["constructor","prototype","__proto__"].includes(h))||new Set(header).size!==header.length)throw Error("LAB_CSV_BAD_HEADER");
+ if(header.some(h=>!(/^[\p{L}_][\p{L}\p{N}_.: -]{0,79}$/u.test(h))||["constructor","prototype","__proto__"].includes(h))||new Set(header).size!==header.length)throw Error("LAB_CSV_BAD_HEADER");
  return rows.map(r=>{
   if(r.length!==header.length)throw Error("LAB_CSV_COLUMN_MISMATCH");
   const o:Record<string,string>=Object.create(null);
