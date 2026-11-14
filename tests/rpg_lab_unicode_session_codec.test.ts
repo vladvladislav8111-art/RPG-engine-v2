@@ -45,7 +45,7 @@ test("valid Cyrillic memory payload above old 150 KB inflate cap can be reloaded
  assert.deepEqual(await decodeLabSession(saved,pack),next);
 });
 test("decompression is still bounded against gzip bombs",async()=>{
- const bytes=new TextEncoder().encode("Д".repeat(220000));
+ const bytes=new TextEncoder().encode("Д".repeat(2200000));
  const gz=new Uint8Array(await new Response(
    new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip")),
  ).arrayBuffer());

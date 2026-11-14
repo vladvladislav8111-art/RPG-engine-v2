@@ -22,9 +22,16 @@ const list=(v:unknown,max:number)=>Array.isArray(v)&&v.length<=max&&v.every(id);
 const map=(v:unknown,max:number)=>v&&typeof v==="object"&&!Array.isArray(v)&&Object.keys(v).length<=max&&Object.keys(v).every(id);
 const n=(v:unknown)=>typeof v==="number"&&Number.isFinite(v)&&v>=0&&v<=1e12;
 const txt=(v:unknown,max:number)=>typeof v==="string"&&v.length>0&&v.length<=max;
+/** Active session limit in UTF-16 code units. Historical turns are archived
+ * separately; ongoing NPC memory still needs room to grow between archives.
+ * Codec handles larger compressed snapshots as individually bounded KV chunks. */
+export const LAB_SESSION_MAX_TEXT_UNITS=1000000;
 export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
- if(!s||s.schema!=="RPG_LAB_SESSION_V1"||s.projectId!==pack.projectId||!id(s.sessionId)||
-    !txt(s.gameClock,100)||JSON.stringify(s).length>100000)throw Error("LAB_SESSION_SCHEMA");
+ if(!s||s.schema!=="RPG_LAB_SESSION_V1"||!id(s.sessionId)||!txt(s.gameClock,100))
+  throw Error("LAB_SESSION_SCHEMA");
+ if(s.projectId!==pack.projectId)throw Error("LAB_SESSION_PROJECT_MISMATCH");
+ if(JSON.stringify(s).length>LAB_SESSION_MAX_TEXT_UNITS)
+  throw Error("LAB_SESSION_SIZE_LIMIT");
  if(!s.player||!map(s.player.resources,128)||!map(s.player.stats,128)||!map(s.player.inventory,500))throw Error("LAB_SESSION_PLAYER_INVALID");
  if(s.player.locationId!==undefined&&( !id(s.player.locationId)||!pack.locations[s.player.locationId]))throw Error("LAB_SESSION_LOCATION_INVALID");
  if(s.player.linos!==undefined){if(pack.worldId!=="danmachi.orario")throw Error("LAB_LINOS_WRONG_WORLD");validateLinosState(s.player.linos);}

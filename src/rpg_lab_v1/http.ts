@@ -7,7 +7,8 @@ import {importLabFile,type LabFileImport} from "./import.ts";
 import {validateLabSession,withSessionDefaults,type LabSession} from "./session.ts";
 import {applyConfirmedLabEvent,type LabConfirmedEvent} from "./events.ts";
 import {encodeLabPack,decodeLabPack,type LabStored} from "./storage_codec.ts";
-import {encodeLabSession,decodeLabSession,type LabSessionStored} from "./session_storage.ts";
+import {encodeLabSession,type LabSessionStored} from "./session_storage.ts";
+import {prepareLabSessionHead,decodeLabSessionFromKv} from "./session_kv.ts";
 import {reviewLabSessionMemory} from "./memory_view.ts";
 import {newLinosState} from "./linos.ts";
 import {planLabEventArchive} from "./event_archive.ts";
@@ -57,7 +58,7 @@ export async function loadLabSessionFromKv(projectId:string,sessionId:string):
  const kv=await storage();
  const saved=await kv.get<LabSessionStored>([ROOT,"sessions",projectId,sessionId]);
  if(!saved.value)throw Error("LAB_SESSION_NOT_FOUND");
- return {pack,packRevision,session:await decodeLabSession(saved.value,pack),sessionRevision:saved.value.revision};
+ return {pack,packRevision,session:await decodeLabSessionFromKv(kv,projectId,sessionId,saved.value,pack),sessionRevision:saved.value.revision};
 }
 /** Shared write gate for HTTP and the opt-in ChatGPT MCP tool.
  * Does not ever open or alter the legacy Shura save keyspace.
@@ -86,7 +87,8 @@ export async function createLabCampaign(args:{
  const existing=await kv.get<LabSessionStored>(key);
  if(existing.value)throw Error("LAB_CAMPAIGN_ALREADY_EXISTS");
  const value=await encodeLabSession(session,pack,1);
- const done=await kv.atomic().check({key,versionstamp:existing.versionstamp}).set(key,value).commit();
+ const head=await prepareLabSessionHead(kv,projectId,sessionId,value);
+ const done=await kv.atomic().check({key,versionstamp:existing.versionstamp}).set(key,head).commit();
  if(!done.ok)throw Error("LAB_REVISION_CONFLICT");
  return {ok:true,revision:1,projectId,sessionId,legacySaveTouched:false};
 }
@@ -105,7 +107,7 @@ export async function commitLabCampaignEvent(args:{
  const existing=await kv.get<LabSessionStored>(key);
  if(!existing.value)throw Error("LAB_SESSION_NOT_FOUND");
  if(existing.value.revision!==expectedRevision)throw Error("LAB_REVISION_CONFLICT");
- const session=await decodeLabSession(existing.value,pack);
+ const session=await decodeLabSessionFromKv(kv,projectId,sessionId,existing.value,pack);
  if(!event||typeof event.sourceRef!=="string"||
     !/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(event.sourceRef))
   throw Error("LAB_EVENT_SOURCE_REF_INVALID");
@@ -117,10 +119,11 @@ export async function commitLabCampaignEvent(args:{
  const planned=planLabEventArchive(session);
  const next=applyConfirmedLabEvent(planned.working,pack,event);
  const value=await encodeLabSession(next,pack,expectedRevision+1);
+ const head=await prepareLabSessionHead(kv,projectId,sessionId,value);
  let tx=kv.atomic()
   .check({key,versionstamp:existing.versionstamp})
   .check({key:refKey,versionstamp:ref.versionstamp})
-  .set(key,value)
+  .set(key,head)
   .set(refKey,{revision:expectedRevision+1,event});
  if(planned.archive){
   const archiveKey=[ROOT,"event_archive",projectId,sessionId,planned.archive.index];
@@ -209,7 +212,7 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    const record=await kv.get<LabSessionStored>([ROOT,"sessions",projectId,sessionId]);
    if(!record.value)return reply({error:"LAB_SESSION_NOT_FOUND"},404);
    const pack=await decodeLabPack(storedPack.value);
-   const session=await decodeLabSession(record.value,pack);
+   const session=await decodeLabSessionFromKv(kv,projectId,sessionId,record.value,pack);
    const ids=url.searchParams.get("npcIds");
    const perNpc=url.searchParams.get("maxPerNpc");
    const view=reviewLabSessionMemory(pack,session,{
@@ -247,7 +250,7 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    if(req.method==="GET"){
     if(!current.value)return reply({error:"LAB_SESSION_NOT_FOUND"},404);
     return reply({schema:"RPG_LAB_SESSION_STORED_V1",revision:current.value.revision,updatedAt:current.value.updatedAt,
-     session:await decodeLabSession(current.value,await decodeLabPack(packEntry.value))});
+     session:await decodeLabSessionFromKv(kv,projectId,sessionId,current.value,await decodeLabPack(packEntry.value))});
    }
    if(req.method==="PUT"){
     const data=await limited(req);if(!obj(data))throw Error("LAB_SESSION_BODY_REQUIRED");
@@ -256,7 +259,8 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
     const session=validateLabSession(data.session as LabSession,pack);
     if(session.sessionId!==sessionId)throw Error("LAB_SESSION_ID_MISMATCH");
     const value=await encodeLabSession(session,pack,(current.value?.revision??0)+1);
-    const commit=await kv.atomic().check({key:sessionKey,versionstamp:current.versionstamp}).set(sessionKey,value).commit();
+    const head=await prepareLabSessionHead(kv,projectId,sessionId,value);
+    const commit=await kv.atomic().check({key:sessionKey,versionstamp:current.versionstamp}).set(sessionKey,head).commit();
     if(!commit.ok)throw Error("LAB_REVISION_CONFLICT");
     return reply({ok:true,projectId,sessionId,revision:value.revision,saved:true,legacySaveTouched:false});
    }
@@ -286,7 +290,7 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
     if(!sessionData.value)throw Error("LAB_SESSION_NOT_FOUND");
     if(data.expectedSessionRevision!==undefined&&data.expectedSessionRevision!==sessionData.value.revision)
      throw Error("LAB_REVISION_CONFLICT");
-    jobs=withSessionDefaults(jobs,await decodeLabSession(sessionData.value,activePack));
+    jobs=withSessionDefaults(jobs,await decodeLabSessionFromKv(kv,projectId,data.sessionId as string,sessionData.value,activePack));
     sessionRevision=sessionData.value.revision;
    }
    return reply({...evaluateLabPack(activePack,jobs),packRevision:result.value.revision,sessionRevision});
