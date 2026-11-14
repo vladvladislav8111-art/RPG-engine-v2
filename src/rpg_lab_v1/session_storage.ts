@@ -38,7 +38,7 @@ async function streamBounded(s:ReadableStream<Uint8Array>,limit:number){
  return out;
 }
 async function sha256(bytes:Uint8Array):Promise<string>{
- const digest=await crypto.subtle.digest("SHA-256",bytes);
+ const digest=await crypto.subtle.digest("SHA-256",new Uint8Array(bytes).buffer as ArrayBuffer);
  return Array.from(new Uint8Array(digest)).map(x=>x.toString(16).padStart(2,"0")).join("");
 }
 function concatParts(parts:Uint8Array[],expectedBytes:number){
