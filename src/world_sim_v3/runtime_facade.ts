@@ -86,6 +86,14 @@ function execute(job:WorldV3Job):SimOutcome<unknown>{
    return relayKnowledge({facts:p.facts as Fact[],message:as<Parameters<typeof relayKnowledge>[0]['message']>(p.message as Record<string,unknown>),provenance:new Map(p.provenance as [string,Evidence][])});
  }
  case 'world_review':
+  if(p.rpgLabEvaluatedV1!==undefined){
+   const result=p.rpgLabEvaluatedV1;
+   if(Object.keys(p).length!==1||!rec(result)||result.schema!=="RPG_LAB_RESULT_V1"||
+      result.committed!==false||result.legacySaveTouched!==false||!array(result.results))
+    return deny('LAB_EVALUATED_BAD_ENVELOPE','Expected read-only RPG Lab evaluations');
+   return pass({...result,committed:false,sourceAttested:false,
+     note:'Pre-evaluated isolated lab simulation; no loot or NPC state was committed'});
+  }
   if(p.rpgLabSourcesResolvedV1!==undefined){
     if(Object.keys(p).length!==1||!rec(p.rpgLabSourcesResolvedV1)||!array(p.rpgLabSourcesResolvedV1.sources))
       return deny('LAB_SOURCE_BAD_ENVELOPE','Expected hydrated Lab sources');

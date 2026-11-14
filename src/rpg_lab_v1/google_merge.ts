@@ -17,9 +17,9 @@ export type DriveMergeResult={
 };
 const SECTIONS=new Set([
  "formulas","resources","lootTables","prices","economy","locations","npcProfiles",
- "progression","recipes","worldProcesses",
+ "progression","recipes","worldProcesses","encounterProfiles","bestiary",
 ]);
-const CSV_SECTIONS=new Set(["formulas","resources","loot","prices","locations"]);
+const CSV_SECTIONS=new Set(["formulas","resources","loot","prices","locations","encounters","bestiary"]);
 const fullNames=new Set(["pack.json","world.json","rpg-pack.json"]);
 const isFull=(x:DriveFileText)=>fullNames.has(x.name.toLowerCase());
 const ext=(name:string)=>name.toLowerCase().split(".").pop()??"";
@@ -44,7 +44,7 @@ export function mergeGoogleProjectSources(baseline:LabPack,files:readonly DriveF
  const copy=files.slice().sort((a,b)=>Number(isFull(b))-Number(isFull(a)) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
  if(new Set(copy.map(f=>f.id)).size!==copy.length)throw Error("LAB_DRIVE_DUPLICATE_FILE_ID");
  if(copy.filter(isFull).length>1)throw Error("LAB_DRIVE_MULTIPLE_BASE_PACKS");
- let pack=structuredClone(baseline),noteBudget=35000;
+ let pack=structuredClone(baseline),noteBudget=22000;
  const imported:string[]=[],skipped:string[]=[],notes:DriveSourceNote[]=[];
  for(const f of copy){
   if(!f.id||!f.name||typeof f.text!=="string"||f.text.length>90000)throw Error("LAB_DRIVE_FILE_INVALID");
@@ -55,7 +55,7 @@ export function mergeGoogleProjectSources(baseline:LabPack,files:readonly DriveF
    imported.push(f.name);continue;
   }
   if(t.kind==="json"){
-   const parsed:unknown=JSON.parse(f.text);
+   const parsed:unknown=JSON.parse(f.text.replace(/^\uFEFF/,""));
    if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))throw Error("LAB_DRIVE_JSON_OBJECT_REQUIRED:"+f.name);
    const value=parsed as Record<string,unknown>;
    const wrapped=t.section&&!(t.section in value)?{[t.section]:value}:value;
@@ -66,7 +66,7 @@ export function mergeGoogleProjectSources(baseline:LabPack,files:readonly DriveF
    pack=importLabFile(pack,baseline.projectId,{format:"csv",table:t.section,content:f.text});
    imported.push(f.name);continue;
   }
-  const excerpt=f.text.slice(0,Math.min(5000,noteBudget));
+  const excerpt=f.text.slice(0,Math.min(1500,noteBudget));
   if(excerpt){notes.push({fileId:f.id,name:f.name,modifiedTime:f.modifiedTime,excerpt});noteBudget-=excerpt.length;}
   else skipped.push(f.name);
  }

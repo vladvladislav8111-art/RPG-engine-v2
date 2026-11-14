@@ -3,6 +3,7 @@ import {validateLabPack,type LabPack} from "./engine.ts";
 export type LabFileImport={format:"json"|"csv";table?:string;content:string};
 const validId=(s:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(s)&&!["constructor","prototype","__proto__"].includes(s);
 export function parseLabCsv(content:string):Record<string,string>[]{
+ content=content.replace(/^\uFEFF/,"");
  if(content.length>90000)throw Error("LAB_CSV_TOO_LARGE");
  const rows:string[][]=[];let row:string[]=[],cell="",quoted=false;
  for(let i=0;i<content.length;i++){
@@ -24,7 +25,7 @@ export function parseLabCsv(content:string):Record<string,string>[]{
  if(cell||row.length){row.push(cell.trim());rows.push(row);}
  if(rows.length<2)throw Error("LAB_CSV_NO_DATA");
  const header=rows.shift()!.map(h=>h.trim());
- if(header.some(h=>!validId(h))||new Set(header).size!==header.length)throw Error("LAB_CSV_BAD_HEADER");
+ if(header.some(h=>!(/^[\p{L}_][\p{L}\p{N}_.:-]{0,79}$/u.test(h))||["constructor","prototype","__proto__"].includes(h))||new Set(header).size!==header.length)throw Error("LAB_CSV_BAD_HEADER");
  return rows.map(r=>{
   if(r.length!==header.length)throw Error("LAB_CSV_COLUMN_MISMATCH");
   const o:Record<string,string>=Object.create(null);
@@ -37,7 +38,7 @@ const num=(v:string|undefined,optional=false):number|undefined=>{
  return Number(v);
 };
 function merged(base:LabPack,patch:Record<string,unknown>):LabPack{
- const allowed=new Set(["formulas","resources","lootTables","prices","economy","locations","npcProfiles","progression","recipes","worldProcesses"]);
+ const allowed=new Set(["formulas","resources","lootTables","prices","economy","locations","npcProfiles","progression","recipes","worldProcesses","encounterProfiles","bestiary"]);
  if(!patch||typeof patch!=="object"||Array.isArray(patch))throw Error("LAB_PATCH_INVALID");
  for(const k of Object.keys(patch))if(!allowed.has(k))throw Error("LAB_PATCH_UNKNOWN_SECTION:"+k);
  const copy=structuredClone(base) as LabPack;
@@ -57,7 +58,7 @@ function merged(base:LabPack,patch:Record<string,unknown>):LabPack{
 export function importLabFile(base:LabPack|null,projectId:string,input:LabFileImport):LabPack{
  if(!validId(projectId)||!input||typeof input.content!=="string"||input.content.length>90000)throw Error("LAB_IMPORT_INVALID");
  if(input.format==="json"){
-  const parsed=JSON.parse(input.content) as Record<string,unknown>;
+  const parsed=JSON.parse(input.content.replace(/^\uFEFF/,"")) as Record<string,unknown>;
   if(parsed.schema==="RPG_LAB_PACK_V1"){
    const pack=validateLabPack(parsed as LabPack);
    if(pack.projectId!==projectId)throw Error("LAB_IMPORT_PROJECT_MISMATCH");
@@ -108,6 +109,39 @@ export function importLabFile(base:LabPack|null,projectId:string,input:LabFileIm
    }
   }
   patch.locations=section;
+ }else if(table==="encounters"){
+  const section:Record<string,unknown>=Object.create(null);
+  for(const r of rows){
+   const floor=num(r.floor) as number;
+   if(!Number.isInteger(floor)||floor<1||floor>50)throw Error("LAB_CSV_ENCOUNTER_FLOOR_INVALID");
+   const key="dungeon_f"+String(floor).padStart(2,"0");
+   if(section[key])throw Error("LAB_CSV_DUPLICATE_ENCOUNTER_FLOOR");
+   section[key]={
+    floor,region:r.region??"",monsterChance:num(r.monsterEncounterPer10Min),
+    adventurerChance:num(r.adventurerEncounterPer10Min),
+    fightingChance:num(r.adventurerAlreadyFightingConditional),
+    strayChance:num(r.wandererFromOtherFloor),
+    birthWindowMin:num(r.localBirthWindowMin),birthWindowMax:num(r.localBirthWindowMax),
+    densityTier:r.densityTier??"",specialRule:r.specialRule??"",
+   };
+  }
+  patch.encounterProfiles=section;
+ }else if(table==="bestiary"){
+  const section:Record<string,unknown>=Object.create(null);
+  for(const r of rows){
+   const monsterId=r.monsterId;
+   if(!validId(monsterId)||section[monsterId])throw Error("LAB_CSV_MONSTER_ID_INVALID");
+   const origin=r["Статус вида"];
+   const rarity=r["Редкость"];
+   const item=r["Авторский_или_известный_трофей"];
+   const lootTableId="rare_"+monsterId;
+   section[monsterId]={
+    name:r["Название"],floorMin:num(r.F_min),floorMax:num(r.F_max),
+    origin,rarity,...(validId(lootTableId)&&item?{lootTableId}:{}),
+    note:r["Пояснение"]??"",
+   };
+  }
+  patch.bestiary=section;
  }else throw Error("LAB_CSV_TABLE_NOT_SUPPORTED");
  return merged(base,patch);
 }

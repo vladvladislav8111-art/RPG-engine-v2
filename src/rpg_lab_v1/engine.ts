@@ -2,6 +2,7 @@
  * Pure bounded proposals. NEVER writes to the legacy Shura runtime.
  */
 import {evaluateFormula,validateFormulaRegistry,type LabVariables} from "./formulas.ts";
+import {previewDungeonExplore,validateEncounterProfile,validateMonster,type LabEncounterProfile,type LabMonster} from "./danmachi.ts";
 export type LabResource={min:number;max:number};
 export type LabLootEntry={itemId:string;weight:number;chance:number;min:number;max:number};
 export type LabLootTable={rolls:number;entries:LabLootEntry[]};
@@ -17,6 +18,7 @@ export type LabPack={
  lootTables:Record<string,LabLootTable>;prices:Record<string,LabPrice>;recipes?:Record<string,LabRecipe>;
  economy:{taxRate:number};locations:Record<string,LabLocation>;
  npcProfiles:Record<string,LabNpc>;worldProcesses?:Record<string,LabWorldProcess>;
+ encounterProfiles?:Record<string,LabEncounterProfile>;bestiary?:Record<string,LabMonster>;
  progression:{xpThresholdFormula?:string;thresholds?:number[]};
 };
 export type LabJob={id:string;kind:string;args:Record<string,unknown>};
@@ -113,6 +115,15 @@ export function validateLabPack(pack:LabPack):LabPack{
    if(v.locationId!==undefined)ident(v.locationId);
    if(v.visibility!=="public"&&v.visibility!=="hidden")throw Error("LAB_PROCESS_VISIBILITY");
   }
+ }
+ if(pack.encounterProfiles!==undefined){
+  for(const [id,profile] of entries(pack.encounterProfiles,100)){
+   if(id!=="dungeon_f"+String(profile.floor).padStart(2,"0"))throw Error("LAB_DUNGEON_PROFILE_KEY");
+   validateEncounterProfile(profile);
+  }
+ }
+ if(pack.bestiary!==undefined){
+  for(const [,monster] of entries(pack.bestiary,150))validateMonster(monster);
  }
  if(!safeObj(pack.progression))throw Error("LAB_PROGRESSION_DEF");
  if(pack.progression.xpThresholdFormula!==undefined)ident(pack.progression.xpThresholdFormula);
@@ -265,6 +276,7 @@ export function evaluateLabJob(pack:LabPack,job:LabJob):unknown{
    return {recipeId,estimatedMinutes:plain(time),remainingInventory:remaining,proposedOutputs:recipe.outputs,
     qcRequired:recipe.qcRequired??true,materialsConsumed:false,itemsGranted:false,needsCommit:true};
   }
+  case "dungeon_watch":return previewDungeonExplore(pack,a);
   case "encounter":{
    const damageId=ident(a.damageFormulaId),f=pack.formulas[damageId];if(!f)throw Error("LAB_DAMAGE_FORMULA_NOT_FOUND");
    const targetHp=numeric(a.targetHp,0,1e12);

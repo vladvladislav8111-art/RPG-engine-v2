@@ -2,7 +2,7 @@
  * The loader is injected so pure tests cannot touch Deno KV or Shura data.
  */
 import type {WorldV3BatchRequest} from "../world_sim_v3/runtime_facade.ts";
-import type {LabPack} from "./engine.ts";
+import {evaluateLabPack,type LabPack,type LabJob} from "./engine.ts";
 import type {GoogleSourceIndex} from "./google_sync.ts";
 export type LabPackLoader=(projectId:string,expectedRevision?:number)=>Promise<{pack:LabPack;revision:number}>;
 export type LabSourceLoader=(projectId:string)=>Promise<GoogleSourceIndex>;
@@ -46,7 +46,13 @@ export async function hydrateLabBridgeRequest(req:WorldV3BatchRequest,load:LabPa
    throw Error("LAB_BRIDGE_EXPECTED_REVISION_INVALID");
   const loaded=await load(project,expected as number|undefined);
   if(loaded.pack.projectId!==project)throw Error("LAB_BRIDGE_PROJECT_MISMATCH");
-  jobs.push({...job,payload:{rpgLabV1:{pack:loaded.pack,jobs:lab.jobs,packRevision:loaded.revision}}});
+  const inline={rpgLabV1:{pack:loaded.pack,jobs:lab.jobs,packRevision:loaded.revision}};
+  if(JSON.stringify(inline).length>46000){
+   const results=evaluateLabPack(loaded.pack,lab.jobs as LabJob[]);
+   jobs.push({...job,payload:{rpgLabEvaluatedV1:{...results,packRevision:loaded.revision}}});
+  }else{
+   jobs.push({...job,payload:inline});
+  }
  }
  const hydrated={...req,jobs};
  if(JSON.stringify(hydrated).length>64000)throw Error("LAB_BRIDGE_PACK_TOO_LARGE_USE_HTTP");

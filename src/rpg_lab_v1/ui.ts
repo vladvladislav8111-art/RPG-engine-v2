@@ -49,7 +49,7 @@ small{color:#98a9c4}.success{color:#85e6bb}.error{color:#ff9e9e}
 <label>ID папки Google Drive</label><input id="folderId" placeholder="ID из ссылки на папку">
 <label><input id="driveAuto" type="checkbox" checked style="width:auto"> Автообновление при обращении к проекту (кеш 2 минуты)</label>
 <div><button id="driveConnect">Подключить папку</button><button id="driveSync" class="secondary">Синхронизировать</button></div>
-<div><button id="driveStatus" class="secondary">Проверить связь</button><button id="driveNotes" class="secondary">Список документов</button><button id="driveDisconnect" class="secondary">Отключить папку</button></div>
+<div><button id="serviceAccount" class="secondary">Адрес для доступа к папке</button><button id="driveStatus" class="secondary">Проверить связь</button><button id="driveNotes" class="secondary">Список документов</button><button id="driveDisconnect" class="secondary">Отключить папку</button></div>
 </div><div><p><small>JSON/CSV становятся источником правил. Google Docs и текстовые файлы с описаниями доступны как справочные материалы: они не меняют автоматически канонические характеристики NPC.</small></p><p><small>После подключения ручное изменение правил через редактор отключено. Меняй файлы в Google Drive, затем синхронизируй.</small></p></div></div>
 </article>
 <article><h2>3. Редактор правил проекта (JSON)</h2>
@@ -57,9 +57,9 @@ small{color:#98a9c4}.success{color:#85e6bb}.error{color:#ff9e9e}
 <button id="save">Сохранить версию</button><button class="secondary" id="format">Форматировать JSON</button>
 </article>
 <article><h2>4. Калькулятор (до 20 заданий одним запросом)</h2>
-<p>Вставь массив jobs. Поддерживаются: formula, resources, loot, harvest, progression, stat, economy, route, npc.</p>
+<p>Вставь массив jobs. Поддерживаются: formula, resources, loot, dungeon_watch, harvest, progression, stat, economy, route, npc. Dungeon_watch лишь предлагает встречу и не начинает бой.</p>
 <textarea id="jobs" rows="8" spellcheck="false">[{"id":"calc.1","kind":"formula","args":{"formulaId":"damage","variables":{"attack":24,"defense":7}}}]</textarea>
-<button id="run">Рассчитать</button>
+<button id="run">Рассчитать</button><button id="dungeonSample" class="secondary">Пример исследования этажа</button>
 </article>
 <article><h2>5. Состояние отдельной кампании</h2>
 <div class="grid"><div><label>ID сессии</label><input id="sessionId" value="demo_session">
@@ -67,6 +67,11 @@ small{color:#98a9c4}.success{color:#85e6bb}.error{color:#ff9e9e}
 <button id="newSession" class="secondary">Новая</button><button id="loadSession" class="secondary">Открыть</button><button id="saveSession">Сохранить</button>
 <small>Версия сессии: <span id="sessionVersion">0</span></small>
 </div><div><label>Состояние (JSON)</label><textarea id="session" rows="9"></textarea></div></div>
+</article>
+<article><h2>6. Подтверждённый игровой ход и память NPC</h2>
+<p>Сохранение требует завершённого исхода сцены, ссылки sourceRef и явного списка очевидцев. Проверка версий не допускает повторной записи.</p>
+<textarea id="sessionEvent" rows="6" spellcheck="false">{"sourceRef":"day1.scene001","kind":"scene","time":"D1 09:10","summary":"Событие состоялось","knownBy":[],"gmConfirmed":true}</textarea>
+<button id="commitEvent">Сохранить подтверждённое событие</button>
 </article>
 <article><h2>Результат</h2><div id="status"><small>Ничего не загружено</small></div><pre id="out"></pre></article>
 <script>
@@ -138,7 +143,7 @@ el("newSession").onclick=()=>act(async()=>{
  sessionRevision=0;el("sessionVersion").textContent="0";
  const p=JSON.parse(el("pack").value);
  const s={schema:"RPG_LAB_SESSION_V1",projectId:p.projectId,sessionId:el("sessionId").value.trim(),
- gameClock:"Day 1 06:00",player:{resources:{hp:100,stamina:60,mana:80},stats:{attack:24,defense:7},inventory:{}},
+ gameClock:"Day 1 06:00",player:{resources:Object.fromEntries(Object.entries(p.resources).map(([k,v])=>[k,v.max])),stats:{},inventory:{}},
  discovered:Object.keys(p.locations).slice(0,2),npcs:{},events:[]};
  el("session").value=JSON.stringify(s,null,2);
 });
@@ -149,6 +154,20 @@ el("loadSession").onclick=()=>act(async()=>{
 el("saveSession").onclick=()=>act(async()=>{
  const r=await api(sessionPath(),"PUT",{expectedRevision:sessionRevision,session:JSON.parse(el("session").value)});
  sessionRevision=r.revision;el("sessionVersion").textContent=sessionRevision;show(r);
+});
+el("commitEvent").onclick=()=>act(async()=>{
+ const body={expectedRevision:sessionRevision,expectedPackRevision:revision,event:JSON.parse(el("sessionEvent").value)};
+ const result=await api(sessionPath()+"/events","POST",body);
+ sessionRevision=result.revision;el("sessionVersion").textContent=sessionRevision;
+ const latest=await api(sessionPath(),"GET");el("session").value=JSON.stringify(latest.session,null,2);
+ show(result);
+});
+el("dungeonSample").onclick=()=>act(async()=>{
+ el("jobs").value=JSON.stringify([{id:"dungeon.preview",kind:"dungeon_watch",args:{
+  floor:7,eventId:"preview.dungeon.001",seed:"preview.seed",minutes:10,
+  noiseFactor:1,trafficFactor:1,allowHomebrew:false
+ }}],null,2);
+ show({example:"DUNGEON_PREVIEW_ONLY",committed:false});
 });
 function driveUrl(suffix){return base+project()+"/drive"+(suffix||"");}
 async function refreshPack(){
@@ -164,6 +183,7 @@ el("driveSync").onclick=()=>act(async()=>{
  const result=await api(driveUrl("/sync"),"POST",{expectedRevision:revision});
  await refreshPack();show(result);
 });
+el("serviceAccount").onclick=()=>act(async()=>show(await api("/rpg-lab/v1/google/service-account","GET")));
 el("driveStatus").onclick=()=>act(async()=>{
  const r=await api(driveUrl(),"GET");
  if(r.binding){el("folderId").value=r.binding.folderId;el("driveAuto").checked=r.binding.autoSync;}
