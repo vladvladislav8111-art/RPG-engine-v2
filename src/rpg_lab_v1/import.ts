@@ -46,7 +46,8 @@ function merged(base:LabPack,patch:Record<string,unknown>):LabPack{
   if(!v||typeof v!=="object"||Array.isArray(v))throw Error("LAB_PATCH_BAD_SECTION");
   if(["economy","progression"].includes(k))Object.assign((copy as unknown as Record<string,unknown>)[k] as Record<string,unknown>,v);
   else {
-   const target=(copy as unknown as Record<string,unknown>)[k] as Record<string,unknown>;
+   const sections=copy as unknown as Record<string,unknown>;
+   const target=(sections[k]??=Object.create(null)) as Record<string,unknown>;
    for(const [id,val] of Object.entries(v)){
     if(!validId(id))throw Error("LAB_PATCH_BAD_ID");
     Object.defineProperty(target,id,{value:val,writable:true,enumerable:true,configurable:true});
