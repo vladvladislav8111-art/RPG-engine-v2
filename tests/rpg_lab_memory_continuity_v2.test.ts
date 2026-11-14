@@ -115,7 +115,7 @@ test("read-only memory bridge retrieves only requested NPCs without scene commit
  assert.equal(sim.committed,false);
  const one=sim.results[0].result;
  assert.equal(one.ok,true);
- if(!one.ok)throw Error(one.error);
+ if(!one.ok)throw Error("LAB_MEMORY_BRIDGE_TEST_FAILED");
  const v=one.value as {npcSummaries:{npcId:string;memories:unknown[]}[];sessionRevision:number};
  assert.equal(v.sessionRevision,2);
  assert.equal(v.npcSummaries.length,1);
