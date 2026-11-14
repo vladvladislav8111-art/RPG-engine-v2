@@ -2,13 +2,16 @@
  * No inferred NPC feelings; manual edits are user-provided state, not canonical proof.
  */
 import type {LabPack,LabJob} from "./engine.ts";
-export type LabMemory={sourceRef:string;summary:string;learnedAt:string;knownBy:string[]};
+export type LabMemory={sourceRef:string;summary:string;learnedAt:string;knownBy:string[];
+  eventTime?:string;locationId?:string;channel?:string;sourceActor?:string;
+  confidence?:string;salience?:string;privacy?:string;perceivedFact?:string;
+ };
 export type LabNpcState={knownFacts:string[];memories:LabMemory[];currentGoal?:string;relationships?:Record<string,string>};
 export type LabSession={
  schema:"RPG_LAB_SESSION_V1";projectId:string;sessionId:string;gameClock:string;
- player:{resources:Record<string,number>;stats:Record<string,number>;inventory:Record<string,number>};
+ player:{resources:Record<string,number>;stats:Record<string,number>;inventory:Record<string,number>;locationId?:string};
  discovered:string[];npcs:Record<string,LabNpcState>;
- events:{sourceRef:string;summary:string;time:string;knownBy:string[]}[];
+ events:{sourceRef:string;summary:string;time:string;knownBy:string[];locationId?:string;kind?:string}[];
 };
 const id=(v:unknown)=>typeof v==="string"&&/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(v)&&!["constructor","prototype","__proto__"].includes(v);
 const list=(v:unknown,max:number)=>Array.isArray(v)&&v.length<=max&&v.every(id);
@@ -19,6 +22,7 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
  if(!s||s.schema!=="RPG_LAB_SESSION_V1"||s.projectId!==pack.projectId||!id(s.sessionId)||
     !txt(s.gameClock,100)||JSON.stringify(s).length>100000)throw Error("LAB_SESSION_SCHEMA");
  if(!s.player||!map(s.player.resources,128)||!map(s.player.stats,128)||!map(s.player.inventory,500))throw Error("LAB_SESSION_PLAYER_INVALID");
+ if(s.player.locationId!==undefined&&( !id(s.player.locationId)||!pack.locations[s.player.locationId]))throw Error("LAB_SESSION_LOCATION_INVALID");
  for(const [k,v] of Object.entries(s.player.resources)){if(!n(v)||!pack.resources[k]||v<pack.resources[k].min||v>pack.resources[k].max)throw Error("LAB_SESSION_RESOURCE_INVALID");}
  for(const v of Object.values(s.player.stats))if(!n(v))throw Error("LAB_SESSION_STAT_INVALID");
  for(const v of Object.values(s.player.inventory))if(!n(v)||!Number.isInteger(v))throw Error("LAB_SESSION_ITEM_INVALID");
@@ -34,12 +38,17 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
   for(const mem of state.memories){
    if(!id(mem.sourceRef)||!txt(mem.summary,600)||!txt(mem.learnedAt,100)||!list(mem.knownBy,128))
     throw Error("LAB_SESSION_MEMORY_INVALID");
+   for(const field of ["eventTime","sourceActor","confidence","salience","privacy","channel"] as const)
+    if(mem[field]!==undefined&&!txt(mem[field],150))throw Error("LAB_SESSION_MEMORY_META_INVALID");
+   if(mem.locationId!==undefined&&!id(mem.locationId))throw Error("LAB_SESSION_MEMORY_LOCATION_INVALID");
+   if(mem.perceivedFact!==undefined&&!txt(mem.perceivedFact,600))throw Error("LAB_SESSION_MEMORY_PERCEPTION_INVALID");
   }
   if(new Set(state.memories.map(m=>m.sourceRef)).size!==state.memories.length)throw Error("LAB_SESSION_DUPLICATE_MEMORY");
  }
  if(!Array.isArray(s.events)||s.events.length>256)throw Error("LAB_SESSION_EVENTS_INVALID");
  for(const ev of s.events){
-  if(!id(ev.sourceRef)||!txt(ev.summary,600)||!txt(ev.time,100)||!list(ev.knownBy,128))
+  if(!id(ev.sourceRef)||!txt(ev.summary,600)||!txt(ev.time,100)||!list(ev.knownBy,128)||
+     (ev.locationId!==undefined&&!id(ev.locationId))||(ev.kind!==undefined&&!id(ev.kind)))
    throw Error("LAB_SESSION_EVENT_INVALID");
  }
  if(new Set(s.events.map(e=>e.sourceRef)).size!==s.events.length)throw Error("LAB_SESSION_DUPLICATE_EVENT");

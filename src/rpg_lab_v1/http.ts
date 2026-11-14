@@ -5,12 +5,13 @@ import {config} from "../config.ts";
 import {validateLabPack,evaluateLabPack,type LabPack,type LabJob} from "./engine.ts";
 import {importLabFile,type LabFileImport} from "./import.ts";
 import {validateLabSession,withSessionDefaults,type LabSession} from "./session.ts";
+import {applyConfirmedLabEvent,type LabConfirmedEvent} from "./events.ts";
+import {encodeLabPack,decodeLabPack,type LabStored} from "./storage_codec.ts";
 import {
  connectGoogleProject,syncGoogleProject,autoSyncGoogleProject,getGoogleProjectStatus,
  getGoogleProjectSources,disconnectGoogleProject,
 } from "./google_sync.ts";
 const ROOT="rpg-lab-v1";
-type LabStored={revision:number;pack:LabPack;updatedAt:string};
 type SessionStored={revision:number;session:LabSession;updatedAt:string};
 let kvPromise:Promise<Deno.Kv>|undefined;
 const reply=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff"}});
@@ -43,15 +44,17 @@ export async function loadLabProjectFromKv(projectId:string,expectedRevision?:nu
  const result=await kv.get<LabStored>(keyOf(projectId));
  if(!result.value)throw Error("LAB_PROJECT_NOT_FOUND");
  if(expectedRevision!==undefined&&expectedRevision!==result.value.revision)throw Error("LAB_REVISION_CONFLICT");
- return {pack:validateLabPack(result.value.pack),revision:result.value.revision};
+ return {pack:await decodeLabPack(result.value),revision:result.value.revision};
 }
 export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
  try{
   const kv=await storage(),path=url.pathname;
+  if(path==="/rpg-lab/v1/google/service-account"&&req.method==="GET")
+   return reply({email:config.google.email,role:"reader",sharingInstruction:"Share only the desired project folder with this service account"});
   if(path==="/rpg-lab/v1/projects"&&req.method==="GET"){
    const projects:unknown[]=[];
    for await(const e of kv.list<LabStored>({prefix:[ROOT,"projects"]},{limit:50})){
-    projects.push({projectId:e.value.pack.projectId,worldId:e.value.pack.worldId,revision:e.value.revision,updatedAt:e.value.updatedAt});
+    projects.push({projectId:e.value.projectId??e.value.pack?.projectId,worldId:e.value.worldId??e.value.pack?.worldId,revision:e.value.revision,updatedAt:e.value.updatedAt});
    }
    return reply({schema:"RPG_LAB_PROJECT_INDEX_V1",projects});
   }
@@ -86,9 +89,48 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    }
    return reply({error:"LAB_METHOD_NOT_ALLOWED"},405);
   }
+  const sessionsIndex=/^\/rpg-lab\/v1\/projects\/([A-Za-z0-9_-]{3,64})\/sessions$/.exec(path);
+  if(sessionsIndex&&req.method==="GET"){
+   const projectId=sessionsIndex[1],sessions:unknown[]=[];
+   const packEntry=await kv.get<LabStored>(keyOf(projectId));
+   if(!packEntry.value)return reply({error:"LAB_PROJECT_NOT_FOUND"},404);
+   for await(const e of kv.list<SessionStored>({prefix:[ROOT,"sessions",projectId]},{limit:100})){
+    sessions.push({sessionId:e.value.session.sessionId,revision:e.value.revision,
+     gameClock:e.value.session.gameClock,updatedAt:e.value.updatedAt});
+   }
+   return reply({schema:"RPG_LAB_SESSION_INDEX_V1",projectId,sessions});
+  }
+  const eventPath=/^\/rpg-lab\/v1\/projects\/([A-Za-z0-9_-]{3,64})\/sessions\/([A-Za-z0-9_-]{3,64})\/events$/.exec(path);
+  if(eventPath&&req.method==="POST"){
+   const projectId=eventPath[1],sessionId=eventPath[2];
+   await autoSyncGoogleProject(kv,projectId);
+   const project=await kv.get<LabStored>(keyOf(projectId));
+   if(!project.value)return reply({error:"LAB_PROJECT_NOT_FOUND"},404);
+   const sessionKey=[ROOT,"sessions",projectId,sessionId];
+   const stored=await kv.get<SessionStored>(sessionKey);
+   if(!stored.value)return reply({error:"LAB_SESSION_NOT_FOUND"},404);
+   const data=await limited(req);
+   if(!obj(data)||!Number.isSafeInteger(data.expectedRevision)||data.expectedRevision!==stored.value.revision)
+    throw Error("LAB_REVISION_CONFLICT");
+   if(data.expectedPackRevision!==undefined&&data.expectedPackRevision!==project.value.revision)
+    throw Error("LAB_REVISION_CONFLICT");
+   const event=data.event as LabConfirmedEvent;
+   const next=applyConfirmedLabEvent(stored.value.session,await decodeLabPack(project.value),event);
+   if(next.sessionId!==sessionId)throw Error("LAB_SESSION_ID_MISMATCH");
+   const value:SessionStored={revision:stored.value.revision+1,session:next,
+    updatedAt:new Date().toISOString()};
+   const done=await kv.atomic().check({key:sessionKey,versionstamp:stored.versionstamp})
+    .set(sessionKey,value).commit();
+   if(!done.ok)throw Error("LAB_REVISION_CONFLICT");
+   return reply({ok:true,saved:true,projectId,sessionId,revision:value.revision,
+    sourceRef:event.sourceRef,rememberedBy:event.observations?.map(o=>o.npcId)??[],
+    gameClock:next.gameClock,legacySaveTouched:false});
+  }
   const sessionPath=/^\/rpg-lab\/v1\/projects\/([A-Za-z0-9_-]{3,64})\/sessions\/([A-Za-z0-9_-]{3,64})$/.exec(path);
   if(sessionPath){
-   const projectId=sessionPath[1],sessionId=sessionPath[2],packEntry=await kv.get<LabStored>(keyOf(projectId));
+   const projectId=sessionPath[1],sessionId=sessionPath[2];
+   await autoSyncGoogleProject(kv,projectId);
+   const packEntry=await kv.get<LabStored>(keyOf(projectId));
    if(!packEntry.value)return reply({error:"LAB_PROJECT_NOT_FOUND"},404);
    const sessionKey=[ROOT,"sessions",projectId,sessionId];
    const current=await kv.get<SessionStored>(sessionKey);
@@ -99,7 +141,7 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    if(req.method==="PUT"){
     const data=await limited(req);if(!obj(data))throw Error("LAB_SESSION_BODY_REQUIRED");
     if(!Number.isSafeInteger(data.expectedRevision)||data.expectedRevision!==(current.value?.revision??0))throw Error("LAB_REVISION_CONFLICT");
-    const session=validateLabSession(data.session as LabSession,packEntry.value.pack);
+    const session=validateLabSession(data.session as LabSession,await decodeLabPack(packEntry.value));
     if(session.sessionId!==sessionId)throw Error("LAB_SESSION_ID_MISMATCH");
     const value:SessionStored={revision:(current.value?.revision??0)+1,session,updatedAt:new Date().toISOString()};
     const commit=await kv.atomic().check({key:sessionKey,versionstamp:current.versionstamp}).set(sessionKey,value).commit();
@@ -115,7 +157,7 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    await autoSyncGoogleProject(kv,projectId);
    const result=await kv.get<LabStored>(kvKey);
    if(!result.value)return reply({error:"LAB_PROJECT_NOT_FOUND"},404);
-   return reply({schema:"RPG_LAB_PROJECT_V1",revision:result.value.revision,updatedAt:result.value.updatedAt,pack:result.value.pack});
+   return reply({schema:"RPG_LAB_PROJECT_V1",revision:result.value.revision,updatedAt:result.value.updatedAt,pack:await decodeLabPack(result.value)});
   }
   if(action==="evaluate"&&req.method==="POST"){
    await autoSyncGoogleProject(kv,projectId);
@@ -125,16 +167,17 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    if(!obj(data))throw Error("LAB_EVALUATE_BODY_REQUIRED");
    if(data.expectedRevision!==undefined&&data.expectedRevision!==result.value.revision)throw Error("LAB_REVISION_CONFLICT");
    let jobs=data.jobs as LabJob[];let sessionRevision:number|null=null;
+   const activePack=await decodeLabPack(result.value);
    if(data.sessionId!==undefined){
     if(typeof data.sessionId!=="string"||!projectRe.test(data.sessionId))throw Error("LAB_SESSION_ID_INVALID");
     const sessionData=await kv.get<SessionStored>([ROOT,"sessions",projectId,data.sessionId]);
     if(!sessionData.value)throw Error("LAB_SESSION_NOT_FOUND");
     if(data.expectedSessionRevision!==undefined&&data.expectedSessionRevision!==sessionData.value.revision)
      throw Error("LAB_REVISION_CONFLICT");
-    jobs=withSessionDefaults(jobs,validateLabSession(sessionData.value.session,result.value.pack));
+    jobs=withSessionDefaults(jobs,validateLabSession(sessionData.value.session,activePack));
     sessionRevision=sessionData.value.revision;
    }
-   return reply({...evaluateLabPack(result.value.pack,jobs),packRevision:result.value.revision,sessionRevision});
+   return reply({...evaluateLabPack(activePack,jobs),packRevision:result.value.revision,sessionRevision});
   }
   if(action===null&&req.method==="PUT"||action==="import"&&req.method==="POST"){
    const data=await limited(req);
@@ -146,12 +189,12 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    if(typeof expected!=="number"||!Number.isSafeInteger(expected)||expected<0||expected!==(current.value?.revision??0))throw Error("LAB_REVISION_CONFLICT");
    let pack:LabPack;
    if(action==="import"){
-    pack=importLabFile(current.value?.pack??null,projectId,data.file as LabFileImport);
+    pack=importLabFile(current.value?await decodeLabPack(current.value):null,projectId,data.file as LabFileImport);
    }else{
     pack=validateLabPack(data.pack as LabPack);
    }
    if(pack.projectId!==projectId)throw Error("LAB_PROJECT_MISMATCH");
-   const value:LabStored={revision:(current.value?.revision??0)+1,pack,updatedAt:new Date().toISOString()};
+   const value=await encodeLabPack(pack,(current.value?.revision??0)+1);
    const commit=await kv.atomic().check({key:kvKey,versionstamp:current.versionstamp}).set(kvKey,value).commit();
    if(!commit.ok)throw Error("LAB_REVISION_CONFLICT");
    return reply({ok:true,projectId,revision:value.revision,updatedAt:value.updatedAt,saved:true,legacySaveTouched:false});
@@ -159,7 +202,7 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
   return reply({error:"LAB_METHOD_NOT_ALLOWED"},405);
  }catch(e){
   const msg=unexpected(e);
-  const status=msg==="LAB_REVISION_CONFLICT"?409:msg==="LAB_KV_DISABLED"?503:msg==="LAB_BODY_TOO_LARGE"?413:msg==="LAB_PROJECT_NOT_FOUND"||msg==="LAB_DRIVE_NOT_BOUND"?404:400;
+  const status=msg==="LAB_EVENT_ALREADY_APPLIED"||msg==="LAB_REVISION_CONFLICT"?409:msg==="LAB_KV_DISABLED"?503:msg==="LAB_BODY_TOO_LARGE"?413:msg==="LAB_PROJECT_NOT_FOUND"||msg==="LAB_DRIVE_NOT_BOUND"?404:400;
   return reply({ok:false,error:msg},status);
  }
 }
