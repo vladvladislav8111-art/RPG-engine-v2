@@ -4,15 +4,36 @@
 import type {WorldV3BatchRequest} from "../world_sim_v3/runtime_facade.ts";
 import {evaluateLabPack,type LabPack,type LabJob} from "./engine.ts";
 import type {GoogleSourceIndex} from "./google_sync.ts";
+import {reviewLabSessionMemory,type LabMemoryViewRequest} from "./memory_view.ts";
+import type {LabSession} from "./session.ts";
 export type LabPackLoader=(projectId:string,expectedRevision?:number)=>Promise<{pack:LabPack;revision:number}>;
 export type LabSourceLoader=(projectId:string)=>Promise<GoogleSourceIndex>;
+export type LabSessionLoader=(projectId:string,sessionId:string)=>Promise<{
+ pack:LabPack;packRevision:number;session:LabSession;sessionRevision:number;
+}>;
 const projectId=/^[A-Za-z0-9_-]{3,64}$/;
 const record=(x:unknown):x is Record<string,unknown>=>!!x&&typeof x==="object"&&!Array.isArray(x);
-export async function hydrateLabBridgeRequest(req:WorldV3BatchRequest,load:LabPackLoader,loadSources?:LabSourceLoader):Promise<WorldV3BatchRequest>{
+export async function hydrateLabBridgeRequest(req:WorldV3BatchRequest,load:LabPackLoader,loadSources?:LabSourceLoader,loadSession?:LabSessionLoader):Promise<WorldV3BatchRequest>{
  if(!req||!Array.isArray(req.jobs)||req.jobs.length>12)throw Error("LAB_BRIDGE_INVALID_BATCH");
  const jobs=[];
  for(const job of req.jobs){
   const payload=job.payload;
+  if(job.operation==="world_review"&&record(payload)&&record(payload.rpgLabSessionV1)){
+   if(Object.keys(payload).length!==1||!loadSession)throw Error("LAB_SESSION_BRIDGE_ENVELOPE");
+   const spec=payload.rpgLabSessionV1;
+   if(typeof spec.projectId!=="string"||!projectId.test(spec.projectId)||
+      typeof spec.sessionId!=="string"||!projectId.test(spec.sessionId))
+    throw Error("LAB_SESSION_BRIDGE_REF_INVALID");
+   const loaded=await loadSession(spec.projectId,spec.sessionId);
+   if(loaded.pack.projectId!==spec.projectId||loaded.session.projectId!==spec.projectId||
+      loaded.session.sessionId!==spec.sessionId)
+    throw Error("LAB_SESSION_BRIDGE_PROJECT_MISMATCH");
+   const view=reviewLabSessionMemory(loaded.pack,loaded.session,spec as LabMemoryViewRequest);
+   jobs.push({...job,payload:{rpgLabSessionResolvedV1:{
+    ...view,packRevision:loaded.packRevision,sessionRevision:loaded.sessionRevision,
+   }}});
+   continue;
+  }
   if(job.operation==="world_review"&&record(payload)&&record(payload.rpgLabSourcesV1)){
    const spec=payload.rpgLabSourcesV1;
    if(Object.keys(payload).length!==1||typeof spec.projectId!=="string"||

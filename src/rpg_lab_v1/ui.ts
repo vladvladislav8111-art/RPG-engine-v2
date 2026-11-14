@@ -73,6 +73,13 @@ small{color:#98a9c4}.success{color:#85e6bb}.error{color:#ff9e9e}
 <textarea id="sessionEvent" rows="6" spellcheck="false">{"sourceRef":"day1.scene001","kind":"scene","time":"D1 09:10","summary":"Событие состоялось","knownBy":[],"gmConfirmed":true}</textarea>
 <button id="commitEvent">Сохранить подтверждённое событие</button>
 </article>
+<article><h2>7. Проверка памяти NPC (без записи)</h2>
+<p>Показывает только события выбранной кампании. Личные воспоминания доступны отдельно по запросу и могут содержать субъективные ошибки.</p>
+<label>ID персонажей через запятую</label><input id="memoryNpcIds" value="npc.loki,npc.finn" placeholder="npc.loki,npc.finn">
+<label>Поиск в памяти (необязательно)</label><input id="memoryQuery" placeholder="нить, встреча, письмо">
+<label><input id="memoryPrivate" type="checkbox" style="width:auto"> Включить личные записи ведущего</label>
+<button id="loadMemory" class="secondary">Прочитать память текущей сессии</button>
+</article>
 <article><h2>Результат</h2><div id="status"><small>Ничего не загружено</small></div><pre id="out"></pre></article>
 <script>
 (function(){
@@ -139,12 +146,22 @@ el("addNpc").onclick=()=>act(async()=>{
  el("pack").value=JSON.stringify(p,null,2);show({added:"npc",unsaved:true});
 });
 function sessionPath(){return base+project()+"/sessions/"+encodeURIComponent(el("sessionId").value.trim());}
+el("loadMemory").onclick=()=>act(async()=>{
+ const qs=new URLSearchParams();
+ const ids=el("memoryNpcIds").value.trim();
+ if(ids)qs.set("npcIds",ids);
+ const query=el("memoryQuery").value.trim();
+ if(query)qs.set("query",query);
+ qs.set("includePrivate",el("memoryPrivate").checked?"true":"false");
+ qs.set("maxPerNpc","12");
+ show(await api(sessionPath()+"/memory?"+qs.toString(),"GET"));
+});
 el("newSession").onclick=()=>act(async()=>{
  sessionRevision=0;el("sessionVersion").textContent="0";
  const p=JSON.parse(el("pack").value);
  const s={schema:"RPG_LAB_SESSION_V1",projectId:p.projectId,sessionId:el("sessionId").value.trim(),
  gameClock:"Day 1 06:00",player:{resources:Object.fromEntries(Object.entries(p.resources).map(([k,v])=>[k,v.max])),stats:{},inventory:{}},
- discovered:Object.keys(p.locations).slice(0,2),npcs:{},events:[]};
+ discovered:[],npcs:{},events:[]};
  el("session").value=JSON.stringify(s,null,2);
 });
 el("loadSession").onclick=()=>act(async()=>{

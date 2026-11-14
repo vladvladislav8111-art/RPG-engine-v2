@@ -11,7 +11,7 @@ const record=(x:unknown):x is Record<string,unknown>=>!!x&&typeof x==="object"&&
 const bounded=(x:unknown,max:number):x is string[]=>Array.isArray(x)&&x.length<=max&&x.every(good);
 export type LabNpcObservation={
  npcId:string;channel:"seen"|"heard"|"experienced"|"report"|"rumor"|"deduction";
- perceivedFact:string;learnedAt:string;sourceActor?:string;
+ perceivedFact:string;learnedAt:string;sourceActor?:string;relayedSourceRef?:string;
  confidence:"certain"|"likely"|"uncertain"|"doubted"|"disproved";
  salience:"fleeting"|"ordinary"|"important"|"life_defining";
  privacy:"private"|"small_group"|"public";
@@ -24,6 +24,15 @@ export type LabConfirmedEvent={
  gmConfirmed:true;
 };
 const channels=["seen","heard","experienced","report","rumor","deduction"];
+/** A narrative clock may be D1 HH:MM or Day 1 HH:MM. Nonmatching clocks
+ * remain opaque, rather than enforcing an invented real-world timestamp. */
+function narrativeMinute(s:string):number|null{
+ const match=/^(?:D|Day\s+)(\d+)\s+(\d\d):(\d\d)$/i.exec(s);
+ if(!match)return null;
+ const day=Number(match[1]),hour=Number(match[2]),minute=Number(match[3]);
+ if(!Number.isSafeInteger(day)||day<0||day>100000||hour>23||minute>59)return null;
+ return day*1440+hour*60+minute;
+}
 export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:LabConfirmedEvent):LabSession{
  validateLabSession(session,pack);
  if(!record(event)||event.gmConfirmed!==true||!good(event.sourceRef)||!good(event.kind)||
@@ -33,6 +42,9 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
   throw Error("LAB_EVENT_LOCATION_INVALID");
  if(event.playerLocationId!==undefined&&(!good(event.playerLocationId)||!pack.locations[event.playerLocationId]))
   throw Error("LAB_EVENT_PLAYER_LOCATION_INVALID");
+ const previousMinute=narrativeMinute(session.gameClock),nextMinute=narrativeMinute(event.time);
+ if(previousMinute!==null&&nextMinute!==null&&nextMinute<previousMinute)
+  throw Error("LAB_EVENT_CLOCK_REGRESSION");
  if(session.events.some(e=>e.sourceRef===event.sourceRef))throw Error("LAB_EVENT_ALREADY_APPLIED");
  if(session.events.length>=256)throw Error("LAB_EVENT_JOURNAL_FULL");
  if(new Set(event.knownBy).size!==event.knownBy.length||event.knownBy.some(k=>!pack.npcProfiles[k]))
@@ -65,6 +77,14 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
    throw Error("LAB_EVENT_NO_DIRECT_WITNESS_EVIDENCE");
   if(!direct&&(!good(observation.sourceActor)||observation.sourceActor===observation.npcId))
    throw Error("LAB_EVENT_REPORT_SOURCE_REQUIRED");
+  if(observation.relayedSourceRef!==undefined){
+   if(direct||!good(observation.relayedSourceRef)||!pack.npcProfiles[observation.sourceActor??""])
+    throw Error("LAB_EVENT_RELAY_INVALID");
+   const src=observation.sourceActor!;
+   const witnessNow=event.sourceRef===observation.relayedSourceRef&&event.knownBy.includes(src);
+   const remembered=!!session.npcs[src]?.memories.some(m=>m.sourceRef===observation.relayedSourceRef);
+   if(!witnessNow&&!remembered)throw Error("LAB_EVENT_RELAY_SOURCE_UNVERIFIED");
+  }
   const state:LabNpcState=next.npcs[observation.npcId]??{knownFacts:[],memories:[]};
   if(state.memories.length>=128)throw Error("LAB_EVENT_NPC_MEMORY_FULL");
   const memory:LabMemory={
@@ -74,6 +94,7 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
    channel:observation.channel,confidence:observation.confidence,
    salience:observation.salience,privacy:observation.privacy,
    ...(observation.sourceActor?{sourceActor:observation.sourceActor}:{}),
+   ...(observation.relayedSourceRef?{relayedSourceRef:observation.relayedSourceRef}:{}),
    ...(event.locationId?{locationId:event.locationId}:{}),
   };
   state.memories.push(memory);
