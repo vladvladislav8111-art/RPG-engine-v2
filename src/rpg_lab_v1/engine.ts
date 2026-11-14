@@ -118,12 +118,13 @@ export function validateLabPack(pack:LabPack):LabPack{
  }
  if(pack.encounterProfiles!==undefined){
   for(const [id,profile] of entries(pack.encounterProfiles,100)){
-   if(id!=="dungeon_f"+String(profile.floor).padStart(2,"0"))throw Error("LAB_DUNGEON_PROFILE_KEY");
-   validateEncounterProfile(profile);
+   const p=profile as LabEncounterProfile;
+   if(id!=="dungeon_f"+String(p.floor).padStart(2,"0"))throw Error("LAB_DUNGEON_PROFILE_KEY");
+   validateEncounterProfile(p);
   }
  }
  if(pack.bestiary!==undefined){
-  for(const [,monster] of entries(pack.bestiary,150))validateMonster(monster);
+  for(const [,monster] of entries(pack.bestiary,150))validateMonster(monster as LabMonster);
  }
  if(!safeObj(pack.progression))throw Error("LAB_PROGRESSION_DEF");
  if(pack.progression.xpThresholdFormula!==undefined)ident(pack.progression.xpThresholdFormula);
