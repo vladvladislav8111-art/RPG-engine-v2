@@ -3,6 +3,7 @@
  */
 import {validateLabSession,type LabSession,type LabMemory} from "./session.ts";
 import type {LabPack} from "./engine.ts";
+import {featureReview} from "./npc_perception.ts";
 const ID=/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/;
 const rank=(s?:string)=>s==="life_defining"?4:s==="important"?3:s==="ordinary"?2:1;
 export type LabMemoryViewRequest={
@@ -42,12 +43,22 @@ export function reviewLabSessionMemory(pack:LabPack,session:LabSession,req:LabMe
   return {npcId,name:pack.npcProfiles[npcId].name,
     currentGoal:includePrivate?(state?.currentGoal??null):null,
     relationships:includePrivate?(state?.relationships??{}):{},
-    memories:selected,matchingMemoryCount:memories.length,
+    memories:selected,
+    featureFamiliarity:featureReview(state?.perceptions,includePrivate)
+      .filter(p=>!needle||p.featureId.toLowerCase().includes(needle)||
+       (p.lastInterpretation??"").toLowerCase().includes(needle))
+      .slice(0,maxPerNpc),
+    matchingMemoryCount:memories.length,
     hiddenOrUnselectedCount:(state?.memories.length??0)-selected.length,
     canonicalPersonalityChanged:false};
  });
  return {schema:"RPG_LAB_MEMORY_VIEW_V1",projectId:session.projectId,
   sessionId:session.sessionId,gameClock:session.gameClock,readOnly:true,
   sourceAttestedBySave:true,committed:false,includePrivate,
-  npcSummaries:report,notes:"A remembered claim may be mistaken or a rumor; never present a subjective NPC belief as established world fact."};
+  npcSummaries:report,
+  independentWorldEvents:(session.worldEvents??[]).filter(x=>
+   (includePrivate||x.privacy==="public")&&
+   npcIds.includes(x.npcId)&&(!needle||x.action.toLowerCase().includes(needle)||
+    x.outcome.toLowerCase().includes(needle))).slice(-32),
+  notes:"Subjective perceptions, hearsay and goal proposals are not objective canon. Features require direct sightings to increase habituation."};
 }

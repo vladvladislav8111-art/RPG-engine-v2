@@ -3,6 +3,9 @@
  */
 import {evaluateFormula,validateFormulaRegistry,type LabVariables} from "./formulas.ts";
 import {previewDungeonExplore,validateEncounterProfile,validateMonster,type LabEncounterProfile,type LabMonster} from "./danmachi.ts";
+import {newLinosState,linosProfile,previewLinosCast,regenerateLinosMp,
+ type LinosState,type LinosAbilityRequest} from "./linos.ts";
+import {proposeIndependentWorldAgenda} from "./autonomy.ts";
 export type LabResource={min:number;max:number};
 export type LabLootEntry={itemId:string;weight:number;chance:number;min:number;max:number};
 export type LabLootTable={rolls:number;entries:LabLootEntry[]};
@@ -246,6 +249,20 @@ export function evaluateLabJob(pack:LabPack,job:LabJob):unknown{
  const a=job.args;
  if(!safeObj(a))throw Error("LAB_ARGS_INVALID");
  switch(job.kind){
+  case "linos":{
+   if(pack.worldId!=="danmachi.orario")throw Error("LAB_LINOS_WORLD_MISMATCH");
+   const state=(a.state??newLinosState()) as LinosState;
+   const task=a.task??"profile";
+   if(task==="profile")return linosProfile(state,(a.diameterMm as number|undefined)??2,
+    (a.hands as number|undefined)??8);
+   if(task==="cast")return previewLinosCast(state,a.request as LinosAbilityRequest);
+   if(task==="recovery"){
+    const r=regenerateLinosMp(state,a.minutes as number,a.mode as "quiet"|"combat"|"thread_use");
+    return {beforeMp:state.mp,afterMp:r.state.mp,gainedMp:r.gainedMp,
+     mode:a.mode,readOnly:true};
+   }
+   throw Error("LAB_LINOS_TASK_UNKNOWN");
+  }
   case "formula":{
    const formulaId=ident(a.formulaId),f=pack.formulas[formulaId];if(!f)throw Error("LAB_FORMULA_NOT_FOUND");
    return {formulaId,value:plain(evaluateFormula(f,params(a.variables??{}),pack.formulas,[formulaId]))};
@@ -313,8 +330,12 @@ export function evaluateLabJob(pack:LabPack,job:LabJob):unknown{
    const due=Object.entries(pack.worldProcesses??{}).filter(([,v])=>v.dueMinute>from&&v.dueMinute<=to)
     .map(([id,v])=>({id,kind:v.kind,dueMinute:v.dueMinute,sourceRef:v.sourceRef,
      visibleToPlayer:v.visibility==="public"&&(!v.locationId||discovered.has(v.locationId))}));
+   const agenda=proposeIndependentWorldAgenda(pack,from,to,a.npcIds??[],
+    (a.sessionId as string|undefined)??"preview");
    return {fromMinute:from,toMinute:to,dueProcesses:due,
-    eventsResolved:false,npcDecisionsMade:false,worldTimeAdvanced:false};
+    npcAgenda:agenda.intents,
+    eventsResolved:false,npcDecisionsMade:false,worldTimeAdvanced:false,
+    proposalsRequireConfirmedWorldEvent:true};
   }
   case "economy":return price(pack,a);
   case "route":return route(pack,a);

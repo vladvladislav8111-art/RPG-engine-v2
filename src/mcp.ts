@@ -17,6 +17,8 @@ import {
 import { intBetween } from "./rng.ts";
 import { WORLD_V3_OPERATIONS, type WorldV3BatchRequest } from "./world_sim_v3/runtime_facade.ts";
 import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
+import {createLabCampaign,commitLabCampaignEvent,readLabConfirmedEvent} from "./rpg_lab_v1/http.ts";
+import type {LabConfirmedEvent} from "./rpg_lab_v1/events.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import { resolveRoutineAction } from "./routine.ts";
 
@@ -651,6 +653,72 @@ function buildServer() {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async (input) => toolJson(resolveInjurySimulation(input)),
+  );
+
+  server.registerTool(
+    "rpg_lab_create_campaign",
+    {
+      title:"RPG Lab: create a clean, isolated campaign",
+      description:"WRITE ACTION. Creates a NEW versioned RPG Lab campaign in its own KV keyspace, including an optional natural, unblessed Linos profile when characterProfile=linos and the world is DanMachi. Does not select location unless supplied. Never modifies Shura or an existing campaign. Only invoke on an explicit user decision to begin a campaign.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        gameClock:z.string().min(1).max(100),
+        characterProfile:z.enum(["none","linos"]).default("none"),
+        locationId:z.string().min(1).max(80).optional(),
+      }),
+      annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await createLabCampaign(input));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_CREATE_FAILED"});}
+    },
+  );
+
+  server.registerTool(
+    "rpg_lab_read_event",
+    {
+      title:"RPG Lab: recover one archived campaign event",
+      description:"READ ONLY. Retrieve the exact confirmed prior turn by its sourceRef from a separate RPG Lab campaign event ledger, even when its summary has rolled out of the active session. Never touches the Shura save.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sourceRef:z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/),
+      }),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await readLabConfirmedEvent(input.projectId,input.sessionId,input.sourceRef));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_EVENT_READ_FAILED"});}
+    },
+  );
+
+  server.registerTool(
+    "rpg_lab_commit_event",
+    {
+      title:"RPG Lab: commit ONE confirmed campaign event",
+      description:"WRITE ACTION. Advances only the named isolated RPG Lab session using optimistic expectedRevision, confirmed scene sourceRef, witnesses, NPC observations, Linos mana/skills and optional world acts. Duplicate sourceRef rejected. Must NEVER be used for hypothetical scenes, preview calculations, or without a player-confirmed outcome. The legacy Shura save remains unchanged. Use after each actual user turn of this specific campaign.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        expectedRevision:z.number().int().min(1),
+        expectedPackRevision:z.number().int().min(1).optional(),
+        event:z.record(z.string(),z.unknown()),
+      }),
+      annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
+    },
+    async input=>{
+      try{
+       return toolJson(await commitLabCampaignEvent({
+        projectId:input.projectId,sessionId:input.sessionId,
+        expectedRevision:input.expectedRevision,
+        expectedPackRevision:input.expectedPackRevision,
+        event:input.event as LabConfirmedEvent,
+       }));
+      }catch(error){
+       return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_COMMIT_FAILED"});
+      }
+    },
   );
 
   server.registerTool(
