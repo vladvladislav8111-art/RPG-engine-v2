@@ -659,11 +659,12 @@ function buildServer() {
     "rpg_lab_create_campaign",
     {
       title:"RPG Lab: create a clean, isolated campaign",
-      description:"WRITE ACTION. Creates a NEW versioned RPG Lab campaign in its own KV keyspace, including a natural, unblessed Linos profile when the chosen world is DanMachi. Does not select location unless supplied. Never modifies Shura or an existing campaign. Only invoke on an explicit user decision to begin a campaign.",
+      description:"WRITE ACTION. Creates a NEW versioned RPG Lab campaign in its own KV keyspace, including an optional natural, unblessed Linos profile when characterProfile=linos and the world is DanMachi. Does not select location unless supplied. Never modifies Shura or an existing campaign. Only invoke on an explicit user decision to begin a campaign.",
       inputSchema:z.object({
         projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
         sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
         gameClock:z.string().min(1).max(100),
+        characterProfile:z.enum(["none","linos"]).default("none"),
         locationId:z.string().min(1).max(80).optional(),
       }),
       annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},

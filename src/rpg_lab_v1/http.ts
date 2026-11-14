@@ -63,19 +63,21 @@ export async function loadLabSessionFromKv(projectId:string,sessionId:string):
  * Each RPG Lab session is independently versioned with CAS.
  */
 export async function createLabCampaign(args:{
- projectId:string;sessionId:string;gameClock:string;locationId?:string;
+ projectId:string;sessionId:string;gameClock:string;locationId?:string;characterProfile?:"none"|"linos";
 }):Promise<{ok:true;revision:number;projectId:string;sessionId:string;legacySaveTouched:false}>{
- const {projectId,sessionId,gameClock,locationId}=args;
+ const {projectId,sessionId,gameClock,locationId,characterProfile="none"}=args;
  if(!projectRe.test(projectId)||!projectRe.test(sessionId)||
     typeof gameClock!=="string"||gameClock.length<1||gameClock.length>100)
   throw Error("LAB_NEW_CAMPAIGN_INVALID");
+ if(!["none","linos"].includes(characterProfile))throw Error("LAB_CHARACTER_PROFILE_INVALID");
  const {pack}=await loadLabProjectFromKv(projectId);
+ if(characterProfile==="linos"&&pack.worldId!=="danmachi.orario")throw Error("LAB_LINOS_WRONG_WORLD");
  if(locationId!==undefined&&(!pack.locations[locationId]||!projectRe.test(locationId.replace(/[.:-]/g,"_"))))
   throw Error("LAB_NEW_CAMPAIGN_LOCATION_INVALID");
  const session:LabSession={schema:"RPG_LAB_SESSION_V1",projectId,sessionId,gameClock,
   player:{resources:{},stats:{},inventory:{},
    ...(locationId?{locationId}:{}),
-   ...(pack.worldId==="danmachi.orario"?{linos:newLinosState()}:{}),
+   ...(characterProfile==="linos"?{linos:newLinosState()}:{}),
   },
   discovered:locationId?[locationId]:[],npcs:{},events:[],worldEvents:[]};
  validateLabSession(session,pack);

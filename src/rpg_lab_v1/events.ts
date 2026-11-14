@@ -98,7 +98,7 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
     throw Error("LAB_LINOS_TIME_UNVERIFIED");
    state=regenerateLinosMp(state,later-earlier,action.mode).state;
   }else if(action.type==="learn"){
-   if(action.godConfirmed!==true||!state.blessed||!event.summary||state.unlockedSkills.includes(action.skill))
+   if(action.godConfirmed!==true||!state.blessed||event.kind!=="falna_update"||!event.summary||state.unlockedSkills.includes(action.skill))
     throw Error("LAB_LINOS_LEARNING_INVALID");
    if(!["optical_new","optical_hide","magic_drive","living_network",
     "cutting_loop","web_regeneration","healing_cocoon","draining_bindings",
@@ -157,8 +157,7 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
     return features.some(x=>x.npcId===actor&&x.featureId===featureId&&x.channel==="seen");
    const mem=session.npcs[actor]?.perceptions?.[featureId];
    return !!mem&&mem.notices>0&&
-    (mem.firstSeenRef===ref||mem.lastSeenRef===ref||
-     session.events.some(e=>e.sourceRef===ref));
+    (mem.firstSeenRef===ref||mem.lastSeenRef===ref);
   };
   const known=noteNpcFeature(old,feature,event.sourceRef,event.knownBy,{hasSourceObserved});
   npc.perceptions={...(npc.perceptions??{}),[feature.featureId]:known};
