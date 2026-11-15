@@ -29,8 +29,34 @@ export async function hydrateLabBridgeRequest(req:WorldV3BatchRequest,load:LabPa
       loaded.session.sessionId!==spec.sessionId)
     throw Error("LAB_SESSION_BRIDGE_PROJECT_MISMATCH");
    const view=reviewLabSessionMemory(loaded.pack,loaded.session,spec as LabMemoryViewRequest);
+   // The existing World V3 memory-view channel can also audit the player's actual
+   // typed RPG Lab state. Keep it opt-in, read-only, and bounded to avoid leaking
+   // NPC private memories or exceeding World V3's 64 KiB payload limit.
+   const auditRequested=spec.includePlayerAudit===true;
+   if(spec.includePlayerAudit!==undefined&&typeof spec.includePlayerAudit!=="boolean")
+    throw Error("LAB_PLAYER_AUDIT_FLAG_INVALID");
+   const eventOffset=typeof spec.eventOffset==="number"?spec.eventOffset:
+    spec.eventOffset===undefined?0:Number.NaN;
+   const eventLimit=typeof spec.eventLimit==="number"?spec.eventLimit:
+    spec.eventLimit===undefined?12:Number.NaN;
+   if(auditRequested&&(!Number.isSafeInteger(eventOffset)||eventOffset<0||
+      !Number.isSafeInteger(eventLimit)||eventLimit<1||eventLimit>30))
+    throw Error("LAB_PLAYER_AUDIT_PAGINATION_INVALID");
+   const audit=auditRequested?{
+    player:loaded.session.player,
+    gameClock:loaded.session.gameClock,
+    discovered:loaded.session.discovered,
+    activeEventCount:loaded.session.events.length,
+    archivedEventCount:loaded.session.archivedEventCount??0,
+    eventOffset,eventLimit,
+    events:loaded.session.events.slice(eventOffset,eventOffset+eventLimit),
+    worldEventCount:loaded.session.worldEvents?.length??0,
+    sourceAttestedBySave:true,
+    readOnly:true,
+   }:null;
    jobs.push({...job,payload:{rpgLabSessionResolvedV1:{
     ...view,packRevision:loaded.packRevision,sessionRevision:loaded.sessionRevision,
+    ...(audit?{playerAudit:audit}:{}),
    }}});
    continue;
   }

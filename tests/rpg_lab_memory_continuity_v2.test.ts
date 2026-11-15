@@ -156,3 +156,46 @@ test("false witness list and unconfirmed events never become a memory",()=>{
  assert.throws(()=>applyConfirmedLabEvent(fresh(),pack,fake),/LAB_EVENT_NO_DIRECT_WITNESS_EVIDENCE/);
  assert.equal(fresh().events.length,0);
 });
+
+test("existing memory view optionally audits actual typed player state without writing",async()=>{
+ const original=fresh();
+ const session:LabSession={...original,
+  player:{resources:{hp:81},stats:{STR:28},inventory:{thread_rolls:3}},
+  events:[{sourceRef:"evt.audit.one",summary:"Previously confirmed one",time:"Day 1 06:01",knownBy:[]},
+          {sourceRef:"evt.audit.two",summary:"Previously confirmed two",time:"Day 1 06:02",knownBy:[]}],
+  archivedEventCount:17,
+ };
+ const load=async()=>({pack,packRevision:10,session,sessionRevision:215});
+ const request:WorldV3BatchRequest={expectedSaveId:"TEST-SAVE",jobs:[{
+  id:"session.audit",operation:"world_review",payload:{rpgLabSessionV1:{
+   projectId:"danmachi_test",sessionId:"linos_test",npcIds:[],
+   maxPerNpc:1,includePrivate:false,includePlayerAudit:true,eventOffset:1,eventLimit:1,
+  }}
+ }]};
+ const resolved=await hydrateLabBridgeRequest(request,
+  async()=>{throw Error("unexpected pack load")},undefined,load);
+ const outcome=dispatchWorldV3Batch(resolved,"TEST-SAVE").results[0].result;
+ assert.equal(outcome.ok,true);
+ if(!outcome.ok)throw Error("AUDIT_BRIDGE_FAILED");
+ const val=outcome.value as any;
+ assert.equal(val.sessionRevision,215);
+ assert.deepEqual(val.playerAudit.player.resources,{hp:81});
+ assert.deepEqual(val.playerAudit.player.inventory,{thread_rolls:3});
+ assert.equal(val.playerAudit.archivedEventCount,17);
+ assert.equal(val.playerAudit.events.length,1);
+ assert.equal(val.playerAudit.events[0].sourceRef,"evt.audit.two");
+ assert.equal(val.playerAudit.readOnly,true);
+ assert.equal(val.committed,false);
+ assert.equal(session.events.length,2);
+ const noAuditRequest:WorldV3BatchRequest={...request,jobs:[{
+   id:"memory.only",operation:"world_review",payload:{rpgLabSessionV1:{
+    projectId:"danmachi_test",sessionId:"linos_test",npcIds:[],maxPerNpc:1,
+   }}
+ }]};
+ const old=await hydrateLabBridgeRequest(noAuditRequest,
+  async()=>{throw Error("unexpected pack load")},undefined,load);
+ const oldOutcome=dispatchWorldV3Batch(old,"TEST-SAVE").results[0].result;
+ assert.equal(oldOutcome.ok,true);
+ if(!oldOutcome.ok)throw Error("NO_AUDIT_FAILED");
+ assert.equal((oldOutcome.value as any).playerAudit,undefined);
+});
