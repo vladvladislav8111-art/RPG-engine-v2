@@ -199,3 +199,81 @@ test("existing memory view optionally audits actual typed player state without w
  if(!oldOutcome.ok)throw Error("NO_AUDIT_FAILED");
  assert.equal((oldOutcome.value as any).playerAudit,undefined);
 });
+
+test("NPC social changes require that NPC's own persisted memory",()=>{
+ let s=fresh();
+ s=applyConfirmedLabEvent(s,pack,baseEvent);
+ const social:LabConfirmedEvent={
+  sourceRef:"evt.social",time:"D1 09:20",kind:"continuity_repair",
+  summary:"NPC memory-based relationship assessment",knownBy:[],gmConfirmed:true,
+  npcSocial:[{npcId:"npc.loki",evidenceRefs:["evt.thread"],
+   goal:"Продолжать дела своей Семьи, учитывая увиденные нити",
+   relationships:{linos:"Знакома с магическими нитями Линоса, но не с их происхождением"}}],
+ };
+ const fixed=applyConfirmedLabEvent(s,pack,social);
+ assert.equal(fixed.npcs["npc.loki"].currentGoal,
+  "Продолжать дела своей Семьи, учитывая увиденные нити");
+ assert.equal(fixed.npcs["npc.loki"].relationships?.linos,
+  "Знакома с магическими нитями Линоса, но не с их происхождением");
+ assert.equal(s.npcs["npc.loki"].relationships,undefined);
+ const privateView=reviewLabSessionMemory(pack,fixed,{
+  npcIds:["npc.loki"],includePrivate:true});
+ const publicView=reviewLabSessionMemory(pack,fixed,{
+  npcIds:["npc.loki"],includePrivate:false});
+ assert.equal(privateView.npcSummaries[0].currentGoal,
+  "Продолжать дела своей Семьи, учитывая увиденные нити");
+ assert.equal(publicView.npcSummaries[0].currentGoal,null);
+ assert.deepEqual(publicView.npcSummaries[0].relationships,{});
+ assert.throws(()=>applyConfirmedLabEvent(s,pack,{
+  ...social,sourceRef:"evt.social.fake",npcSocial:[
+   {npcId:"npc.finn",evidenceRefs:["evt.thread"],goal:"Я знаю всё"}
+  ]
+ }),/LAB_NPC_SOCIAL_UNVERIFIED_MEMORY/);
+});
+test("work orders track signed commitments and bounded stock without creating cash or MP",async()=>{
+ let s=fresh();
+ s=applyConfirmedLabEvent(s,pack,{sourceRef:"evt.orig.contract",time:"D1 07:00",
+  kind:"scene",summary:"Client signed an order",knownBy:[],gmConfirmed:true});
+ s=applyConfirmedLabEvent(s,pack,{sourceRef:"evt.orig.deposit",time:"D1 07:10",
+  kind:"scene",summary:"Deposit already included in player's money",knownBy:[],gmConfirmed:true});
+ const original=s.player.resources.hp;
+ const ordered={
+  title:"Ночное небо",clientNpcId:"npc.finn",signedAt:"D1 07:00",
+  dueFrom:"D5",dueTo:"D6",totalValis:80000,depositValis:10000,
+  balanceValis:70000,warrantyDays:30,freeAlterations:1,
+  status:"preparing" as const,
+  material:{diameterMm:0.2,minMeters:5419,maxMeters:8658,accuracy:"range" as const},
+  notes:"Measured thread stock is incomplete",version:1,
+  lastUpdatedRef:"evt.order.register",
+  evidenceRefs:["evt.orig.contract","evt.orig.deposit"],
+ };
+ s=applyConfirmedLabEvent(s,pack,{sourceRef:"evt.order.register",time:"D1 07:10",
+  kind:"continuity_repair",summary:"Existing order reconstructed, no new sale",
+  knownBy:[],gmConfirmed:true,
+  workOrderChanges:[{orderId:"night_sky",expectedVersion:0,
+   record:ordered,evidenceRefs:ordered.evidenceRefs}]});
+ assert.equal(s.player.workOrders?.night_sky.balanceValis,70000);
+ assert.equal(s.player.resources.hp,original);
+ assert.deepEqual((await decodeLabSession(await encodeLabSession(s,pack,3),pack))
+  .player.workOrders,s.player.workOrders);
+ const revised={...ordered,version:2,lastUpdatedRef:"evt.order.next",
+  status:"weaving" as const,
+  material:{diameterMm:0.2,minMeters:8000,maxMeters:9000,accuracy:"range" as const}};
+ const next=applyConfirmedLabEvent(s,pack,{sourceRef:"evt.order.next",time:"D1 07:11",
+  kind:"player_turn",summary:"Player confirmed more fiber for the order",
+  knownBy:[],gmConfirmed:true,
+  workOrderChanges:[{orderId:"night_sky",expectedVersion:1,record:revised}]});
+ assert.equal(next.player.workOrders?.night_sky.material.minMeters,8000);
+ assert.equal(next.player.resources.hp,original);
+ assert.throws(()=>applyConfirmedLabEvent(s,pack,{sourceRef:"evt.order.duplicate",
+  time:"D1 07:11",kind:"player_turn",summary:"Duplicate stock attempt",
+  knownBy:[],gmConfirmed:true,workOrderChanges:[{
+   orderId:"night_sky",expectedVersion:0,record:revised}]}),
+  /LAB_WORKORDER_VERSION_CONFLICT/);
+ assert.throws(()=>applyConfirmedLabEvent(s,pack,{sourceRef:"evt.order.renegotiate",
+  time:"D1 07:11",kind:"player_turn",summary:"Changing a price without client",
+  knownBy:[],gmConfirmed:true,workOrderChanges:[{
+   orderId:"night_sky",expectedVersion:1,record:{
+    ...revised,totalValis:90000,balanceValis:80000,lastUpdatedRef:"evt.order.renegotiate"
+   }}]}),/LAB_WORKORDER_RENEGOTIATION_NOT_CONFIRMED/);
+});

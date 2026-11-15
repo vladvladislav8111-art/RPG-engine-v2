@@ -2,7 +2,7 @@
  * Confirmed, source-tagged, CAS-ready RPG Lab turn event.
  * Pure function. Never grants preview loot, rewrites canon or touches legacy saves.
  */
-import {validateLabSession,type LabSession,type LabMemory,type LabNpcState} from "./session.ts";
+import {validateLabSession,type LabSession,type LabMemory,type LabNpcState,type LabWorkOrder} from "./session.ts";
 import type {LabPack} from "./engine.ts";
 import {noteNpcFeature,type NpcFeatureObservation} from "./npc_perception.ts";
 import {newLinosState,validateLinosState,LINOS_RANKS,
@@ -28,6 +28,18 @@ export type LabLinosTurn=
  {type:"status_update";godConfirmed:true;current?:LinosScores;
    levelUp?:boolean;threadRank?:LinosRank}|
  {type:"audit_reconcile";approved:true;state:LinosState;evidenceRefs:string[]};
+export type LabNpcSocialChange={
+ npcId:string;
+ /** Must cite this NPC's own previously confirmed memory, or new observation in this event. */
+ evidenceRefs:string[];
+ goal?:string|null;
+ relationships?:Record<string,string|null>;
+};
+export type LabWorkOrderChange={
+ orderId:string;expectedVersion:number;record:LabWorkOrder;
+ /** Initial registration must cite at least two existing confirmed events. */
+ evidenceRefs?:string[];
+};
 export type LabIndependentAction={npcId:string;action:string;outcome:string;
  locationId?:string;privacy:"public"|"hidden"};
 export type LabConfirmedEvent={
@@ -35,6 +47,8 @@ export type LabConfirmedEvent={
  knownBy:string[];observations?:LabNpcObservation[];
  features?:NpcFeatureObservation[];linos?:LabLinosTurn;
  worldActions?:LabIndependentAction[];
+ npcSocial?:LabNpcSocialChange[];
+ workOrderChanges?:LabWorkOrderChange[];
  discovered?:string[];playerLocationId?:string;
  effects?:{resources?:Record<string,number>;inventory?:Record<string,number>};
  gmConfirmed:true;
@@ -218,6 +232,86 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
   if(!state.knownFacts.includes(event.sourceRef))state.knownFacts.push(event.sourceRef);
   if(state.knownFacts.length>128)throw Error("LAB_EVENT_NPC_KNOWLEDGE_FULL");
   next.npcs[observation.npcId]=state;
+ }
+ // Interpretations and current objectives are updated only from the NPC's own
+ // confirmed memories. This does not alter immutable canonical personality.
+ const social=event.npcSocial??[];
+ if(!Array.isArray(social)||social.length>24||
+   new Set(social.map(x=>x.npcId)).size!==social.length)
+  throw Error("LAB_NPC_SOCIAL_BATCH_INVALID");
+ for(const change of social){
+  if(!record(change)||!good(change.npcId)||!pack.npcProfiles[change.npcId]||
+    !bounded(change.evidenceRefs,12)||change.evidenceRefs.length<1||
+    new Set(change.evidenceRefs).size!==change.evidenceRefs.length||
+    (change.goal===undefined&&change.relationships===undefined)||
+    (change.goal!==undefined&&change.goal!==null&&!phrase(change.goal,300))||
+    (change.relationships!==undefined&&
+     (!record(change.relationships)||Object.keys(change.relationships).length>12)))
+   throw Error("LAB_NPC_SOCIAL_INVALID");
+  const state:LabNpcState=next.npcs[change.npcId]??{knownFacts:[],memories:[]};
+  if(!change.evidenceRefs.every(ref=>state.memories.some(m=>m.sourceRef===ref)))
+   throw Error("LAB_NPC_SOCIAL_UNVERIFIED_MEMORY");
+  if(change.goal!==undefined){
+   if(change.goal===null)delete state.currentGoal;
+   else state.currentGoal=change.goal;
+  }
+  if(change.relationships!==undefined){
+   const relations={...(state.relationships??{})};
+   for(const [target,value] of Object.entries(change.relationships)){
+    if(!good(target)||(value!==null&&!phrase(value,250)))
+     throw Error("LAB_NPC_SOCIAL_RELATION_INVALID");
+    if(value===null)delete relations[target];
+    else relations[target]=value;
+   }
+   state.relationships=relations;
+  }
+  next.npcs[change.npcId]=state;
+ }
+ // A contract is an obligation, not a second transfer of money or MP.
+ // Future updates are CAS-versioned and do not rewrite contractual amounts
+ // without the client's direct, explicitly recorded participation.
+ const workOrderChanges=event.workOrderChanges??[];
+ if(!Array.isArray(workOrderChanges)||workOrderChanges.length>8||
+    new Set(workOrderChanges.map(x=>x.orderId)).size!==workOrderChanges.length)
+  throw Error("LAB_WORKORDER_CHANGES_INVALID");
+ for(const change of workOrderChanges){
+  if(!record(change)||!good(change.orderId)||
+    !Number.isSafeInteger(change.expectedVersion)||change.expectedVersion<0||
+    !record(change.record)||!pack.npcProfiles[change.record.clientNpcId])
+   throw Error("LAB_WORKORDER_CHANGE_INVALID");
+  const orders=next.player.workOrders??{};
+  const old=orders[change.orderId];
+  if((old?.version??0)!==change.expectedVersion||
+    change.record.version!==change.expectedVersion+1||
+    change.record.lastUpdatedRef!==event.sourceRef)
+   throw Error("LAB_WORKORDER_VERSION_CONFLICT");
+  if(!old){
+   if(event.kind!=="continuity_repair"&&event.kind!=="order_contract"&&event.kind!=="player_turn")
+    throw Error("LAB_WORKORDER_REGISTER_KIND");
+   if(!bounded(change.evidenceRefs,16)||change.evidenceRefs.length<2||
+      !change.evidenceRefs.every(ref=>
+       session.events.some(oldEvent=>oldEvent.sourceRef===ref)))
+    throw Error("LAB_WORKORDER_SOURCE_UNVERIFIED");
+  }else{
+   if(JSON.stringify(old.evidenceRefs)!==JSON.stringify(change.record.evidenceRefs))
+    throw Error("LAB_WORKORDER_ORIGINAL_EVIDENCE_CHANGED");
+   const terms=["clientNpcId","signedAt","totalValis","depositValis",
+    "balanceValis","warrantyDays","freeAlterations"] as const;
+   const termsChanged=terms.some(k=>old[k]!==change.record[k])||
+    old.dueFrom!==change.record.dueFrom||old.dueTo!==change.record.dueTo;
+   if(termsChanged&&(!event.knownBy.includes(old.clientNpcId)||
+     !observations.some(o=>o.npcId===old.clientNpcId)))
+    throw Error("LAB_WORKORDER_RENEGOTIATION_NOT_CONFIRMED");
+   const allowed:Record<string,string[]>={
+    contracted:["contracted","preparing","cancelled"],
+    preparing:["preparing","weaving","ready","cancelled"],
+    weaving:["weaving","ready","cancelled"],
+    ready:["ready","weaving","delivered","cancelled"],
+    delivered:["delivered"],cancelled:["cancelled"]};
+   if(!allowed[old.status]?.includes(change.record.status))
+    throw Error("LAB_WORKORDER_STATUS_REGRESSION");
+  }
+  next.player.workOrders={...orders,[change.orderId]:structuredClone(change.record)};
  }
  if(event.effects!==undefined){
   if(!record(event.effects))throw Error("LAB_EVENT_EFFECT_INVALID");
