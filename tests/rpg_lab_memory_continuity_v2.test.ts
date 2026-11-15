@@ -5,6 +5,7 @@ import {applyConfirmedLabEvent,type LabConfirmedEvent} from "../src/rpg_lab_v1/e
 import {validateLabSession,withSessionDefaults,type LabSession,type LabMemory} from "../src/rpg_lab_v1/session.ts";
 import {reviewLabSessionMemory} from "../src/rpg_lab_v1/memory_view.ts";
 import {encodeLabSession,decodeLabSession} from "../src/rpg_lab_v1/session_storage.ts";
+import {planLabEventArchive} from "../src/rpg_lab_v1/event_archive.ts";
 import {hydrateLabBridgeRequest} from "../src/rpg_lab_v1/bridge.ts";
 import {dispatchWorldV3Batch,type WorldV3BatchRequest} from "../src/world_sim_v3/runtime_facade.ts";
 const pack:LabPack={
@@ -276,4 +277,42 @@ test("work orders track signed commitments and bounded stock without creating ca
    orderId:"night_sky",expectedVersion:1,record:{
     ...revised,totalValis:90000,balanceValis:80000,lastUpdatedRef:"evt.order.renegotiate"
    }}]}),/LAB_WORKORDER_RENEGOTIATION_NOT_CONFIRMED/);
+});
+
+test("signed work order keeps client-memory provenance after original events are archived",()=>{
+ let s=fresh();
+ const witness=(ref:string,time:string):LabConfirmedEvent=>({
+  sourceRef:ref,time,kind:"scene",summary:"Customer directly witnessed the signing",
+  knownBy:["npc.finn"],gmConfirmed:true,
+  observations:[{npcId:"npc.finn",channel:"experienced",
+   perceivedFact:"Подтверждаю собственный разговор и договор с мастером",
+   learnedAt:time,confidence:"certain",salience:"important",privacy:"private"}],
+ });
+ s=applyConfirmedLabEvent(s,pack,witness("evt.customer.sample","D1 09:10"));
+ s=applyConfirmedLabEvent(s,pack,witness("evt.customer.contract","D1 09:11"));
+ for(let i=0;i<243;i++){
+  const archival=planLabEventArchive(s);
+  s=applyConfirmedLabEvent(archival.working,pack,{
+   sourceRef:"evt.other."+i,time:"D1 09:12",kind:"note",
+   summary:"Unrelated confirmed event",knownBy:[],gmConfirmed:true});
+ }
+ assert.ok((s.archivedEventCount??0)>=8);
+ assert.ok(!s.events.some(e=>e.sourceRef==="evt.customer.contract"));
+ assert.equal(s.npcs["npc.finn"].memories.length,2);
+ const proof=["evt.customer.sample","evt.customer.contract"];
+ const record={
+  title:"Individual garment",clientNpcId:"npc.finn",signedAt:"D1 09:11",
+  dueFrom:"D5",dueTo:"D6",totalValis:80000,depositValis:10000,
+  balanceValis:70000,warrantyDays:30,freeAlterations:1,
+  status:"preparing" as const,
+  material:{diameterMm:0.2,minMeters:5419,maxMeters:8658,accuracy:"range" as const},
+  version:1,lastUpdatedRef:"evt.after.archive",evidenceRefs:proof,
+ };
+ const completed=applyConfirmedLabEvent(s,pack,{
+  sourceRef:"evt.after.archive",time:"D1 09:13",kind:"continuity_repair",
+  summary:"Reconstruct old contract after event archival",knownBy:[],gmConfirmed:true,
+  workOrderChanges:[{orderId:"night_sky",expectedVersion:0,record,evidenceRefs:proof}],
+ });
+ assert.equal(completed.player.workOrders?.night_sky.depositValis,10000);
+ assert.equal(completed.player.resources.hp,95);
 });
