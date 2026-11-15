@@ -43,7 +43,7 @@ const channels=["seen","heard","experienced","report","rumor","deduction"];
 /** A narrative clock may be D1 HH:MM or Day 1 HH:MM. Nonmatching clocks
  * remain opaque, rather than enforcing an invented real-world timestamp. */
 export function narrativeMinute(s:string):number|null{
- const match=/^(?:D|Day\s+)(\d+)\s+(\d\d):(\d\d)$/i.exec(s);
+ const match=/^(?:D\s*|Day\s+|День\s+)(\d+)\s*,?\s+(\d\d):(\d\d)$/iu.exec(s);
  if(!match)return null;
  const day=Number(match[1]),hour=Number(match[2]),minute=Number(match[3]);
  if(!Number.isSafeInteger(day)||day<0||day>100000||hour>23||minute>59)return null;

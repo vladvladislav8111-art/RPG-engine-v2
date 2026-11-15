@@ -258,3 +258,18 @@ test("reconciliation refuses invented provenance, unblessed target and arbitrary
  assert.equal(session.player.linos!.blessed,false);
  assert.equal(session.events.length,3);
 });
+
+test("Russian campaign clock stays comparable for typed Linos events and rejects regressions",()=>{
+ let session=fresh();
+ session.gameClock="День 3, 19:40";
+ session=applyConfirmedLabEvent(session,pack,evt("evt.russian.clock","День 3, 19:40",{
+  linos:{type:"cast",request:{ability:"thread",lengthM:1,diameterMm:0.2}},
+ }));
+ assert.equal(session.player.linos!.mp,2399);
+ assert.equal(session.gameClock,"День 3, 19:40");
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,evt(
+  "evt.russian.backwards","День 3, 19:39",{
+  linos:{type:"time",mode:"quiet"},
+ })),/LAB_EVENT_CLOCK_REGRESSION/);
+ assert.equal(session.player.linos!.mp,2399);
+});
