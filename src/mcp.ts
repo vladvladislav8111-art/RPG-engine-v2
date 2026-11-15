@@ -17,7 +17,7 @@ import {
 import { intBetween } from "./rng.ts";
 import { WORLD_V3_OPERATIONS, type WorldV3BatchRequest } from "./world_sim_v3/runtime_facade.ts";
 import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
-import {createLabCampaign,commitLabCampaignEvent,readLabConfirmedEvent} from "./rpg_lab_v1/http.ts";
+import {createLabCampaign,commitLabCampaignEvent,readLabConfirmedEvent,loadLabSessionFromKv} from "./rpg_lab_v1/http.ts";
 import type {LabConfirmedEvent} from "./rpg_lab_v1/events.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import { resolveRoutineAction } from "./routine.ts";
@@ -690,6 +690,56 @@ function buildServer() {
     async input=>{
       try{return toolJson(await readLabConfirmedEvent(input.projectId,input.sessionId,input.sourceRef));}
       catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_EVENT_READ_FAILED"});}
+    },
+  );
+
+  server.registerTool(
+    "rpg_lab_read_session",
+    {
+      title:"RPG Lab: audit authoritative isolated session state",
+      description:"READ ONLY. Return the actual player.linos state, resources, stats, inventory, location and a paginated index of confirmed events in one named RPG Lab session. Also reports revision, archive count and NPC memory/feature counts without exposing private NPC memories. Never writes, advances time, or reads the legacy Shura save. Use before reconciling narrative state with saved mechanics.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        eventOffset:z.number().int().min(0).max(1000000).optional(),
+        eventLimit:z.number().int().min(1).max(40).optional(),
+      }),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{
+        const {session,sessionRevision,packRevision}=await loadLabSessionFromKv(input.projectId,input.sessionId);
+        const offset=input.eventOffset??0;
+        const limit=input.eventLimit??30;
+        return toolJson({
+          ok:true,
+          schema:"RPG_LAB_SESSION_AUDIT_V1",
+          projectId:input.projectId,
+          sessionId:input.sessionId,
+          revision:sessionRevision,
+          packRevision,
+          gameClock:session.gameClock,
+          player:session.player,
+          discovered:session.discovered,
+          activeEventCount:session.events.length,
+          archivedEventCount:session.archivedEventCount??0,
+          eventOffset:offset,
+          eventLimit:limit,
+          events:session.events.slice(offset,offset+limit),
+          npcIndex:Object.entries(session.npcs).map(([npcId,npc])=>({
+            npcId,
+            memoryCount:npc.memories.length,
+            featureCount:Object.keys(npc.perceptions??{}).length,
+            relationshipCount:Object.keys(npc.relationships??{}).length,
+            hasCurrentGoal:!!npc.currentGoal,
+          })),
+          worldEventCount:session.worldEvents?.length??0,
+          readOnly:true,
+          legacySaveTouched:false,
+        });
+      }catch(error){
+        return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_SESSION_AUDIT_FAILED"});
+      }
     },
   );
 
