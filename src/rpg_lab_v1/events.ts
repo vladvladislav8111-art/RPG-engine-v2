@@ -26,7 +26,8 @@ export type LabLinosTurn=
  {type:"time";mode:"quiet"|"combat"|"thread_use"}|
  {type:"learn";skill:LinosSkill;godConfirmed:true}|
  {type:"status_update";godConfirmed:true;current?:LinosScores;
-   levelUp?:boolean;threadRank?:LinosRank};
+   levelUp?:boolean;threadRank?:LinosRank}|
+ {type:"audit_reconcile";approved:true;state:LinosState;evidenceRefs:string[]};
 export type LabIndependentAction={npcId:string;action:string;outcome:string;
  locationId?:string;privacy:"public"|"hidden"};
 export type LabConfirmedEvent={
@@ -82,11 +83,28 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
  const next=structuredClone(session);
  if(event.linos!==undefined){
   const action=event.linos;
-  if(!record(action)||!["blessing","cast","time","learn","status_update"].includes(action.type))
+  if(!record(action)||!["blessing","cast","time","learn","status_update","audit_reconcile"].includes(action.type))
    throw Error("LAB_LINOS_EVENT_INVALID");
   let state=next.player.linos??newLinosState();
   validateLinosState(state);
-  if(action.type==="blessing"){
+  if(action.type==="audit_reconcile"){
+   // Recovery is deliberately single-use: ONLY an untouched newLinosState()
+   // can be reconciled using at least three already confirmed event references.
+   // No cast, blessing or XP is retroactively replayed.
+   if(event.kind!=="continuity_repair"||action.approved!==true||
+      JSON.stringify(state)!==JSON.stringify(newLinosState())||
+      !Array.isArray(action.evidenceRefs)||action.evidenceRefs.length<3||
+      action.evidenceRefs.length>12||
+      !action.evidenceRefs.every((ref:unknown)=>good(ref)&&session.events.some(ev=>ev.sourceRef===ref))||
+      new Set(action.evidenceRefs).size!==action.evidenceRefs.length)
+    throw Error("LAB_LINOS_AUDIT_RECONCILE_INVALID");
+   const proposed=validateLinosState(action.state);
+   if(!proposed.blessed||proposed.level!==1||
+      proposed.unlockedSkills.length!==0||
+      Object.values(proposed.past).some(x=>x!==0))
+    throw Error("LAB_LINOS_AUDIT_RECONCILE_UNSUPPORTED");
+   state=structuredClone(proposed);
+  }else if(action.type==="blessing"){
    if(action.godConfirmed!==true||state.blessed||event.kind!=="blessing")
     throw Error("LAB_LINOS_BLESSING_INVALID");
    state={...state,blessed:true,level:1};
