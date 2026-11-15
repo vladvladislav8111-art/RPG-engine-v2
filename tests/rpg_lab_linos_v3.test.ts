@@ -208,3 +208,53 @@ test("feature rumor cannot cite an unrelated event of a character who once obser
    sourceActor:"npc.finn",relayedSourceRef:"evt.unrelated",privacy:"small_group"}]
  })),/LAB_FEATURE_UNVERIFIED_RELAY/);
 });
+
+test("one-time evidence-backed reconciliation restores typed Falna and MP without replaying casts",()=>{
+ let session=fresh();
+ for(const ref of ["evt.original.bless","evt.original.falna","evt.original.thread"])
+  session=applyConfirmedLabEvent(session,pack,evt(ref,"D0 08:00"));
+ const original=session.player.linos!;
+ assert.equal(original.blessed,false);
+ assert.equal(original.mp,2400);
+ const repaired={...newLinosState(),
+  blessed:true,level:1,
+  current:{str:30,end:28,dex:63,agi:45,mag:79},
+  threadRank:"H" as const,mp:707.07,
+ };
+ const repair=evt("evt.audit.reconcile","D0 08:00",{
+  kind:"continuity_repair",
+  linos:{type:"audit_reconcile",approved:true,state:repaired,
+   evidenceRefs:["evt.original.bless","evt.original.falna","evt.original.thread"]},
+  effects:{resources:{hp:-5}},
+ });
+ session=applyConfirmedLabEvent(session,pack,repair);
+ assert.equal(session.player.linos!.blessed,true);
+ assert.equal(session.player.linos!.level,1);
+ assert.equal(session.player.linos!.current.mag,79);
+ assert.equal(session.player.linos!.threadRank,"H");
+ assert.equal(session.player.linos!.mp,707.07);
+ assert.equal(linosProfile(session.player.linos!).maxMp,5665);
+ assert.equal(session.player.resources.hp,95);
+ assert.equal(session.gameClock,"D0 08:00");
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,{
+  ...repair,sourceRef:"evt.audit.second"
+ }),/LAB_LINOS_AUDIT_RECONCILE_INVALID/);
+});
+test("reconciliation refuses invented provenance, unblessed target and arbitrary timestamps",()=>{
+ let session=fresh();
+ for(const ref of ["evt.first","evt.second","evt.third"])
+  session=applyConfirmedLabEvent(session,pack,evt(ref,"D0 08:00"));
+ const state={...newLinosState(),blessed:true,level:1};
+ const req=evt("evt.bad.audit","D0 08:00",{
+  kind:"continuity_repair",linos:{type:"audit_reconcile",approved:true,state,
+   evidenceRefs:["evt.first","evt.second","evt.NOT_IN_HISTORY"]},
+ });
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,req),
+  /LAB_LINOS_AUDIT_RECONCILE_INVALID/);
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,{
+  ...req,sourceRef:"evt.no.evidence",linos:{type:"audit_reconcile",approved:true,state,
+   evidenceRefs:["evt.first","evt.second","evt.third"]},kind:"scene",
+ }),/LAB_LINOS_AUDIT_RECONCILE_INVALID/);
+ assert.equal(session.player.linos!.blessed,false);
+ assert.equal(session.events.length,3);
+});
