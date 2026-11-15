@@ -6,7 +6,7 @@ import {validateLabSession,type LabSession,type LabMemory,type LabNpcState} from
 import type {LabPack} from "./engine.ts";
 import {noteNpcFeature,type NpcFeatureObservation} from "./npc_perception.ts";
 import {newLinosState,validateLinosState,LINOS_RANKS,
- resolveLinosCast,regenerateLinosMp,type LinosAbilityRequest,type LinosScores,
+ resolveLinosCast,regenerateLinosMp,type LinosAbilityRequest,type LinosState,type LinosScores,
  type LinosRank,type LinosSkill} from "./linos.ts";
 const ID=/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/;
 const good=(s:unknown):s is string=>typeof s==="string"&&ID.test(s)&&!["constructor","prototype","__proto__"].includes(s);
