@@ -35,8 +35,10 @@ export async function hydrateLabBridgeRequest(req:WorldV3BatchRequest,load:LabPa
    const auditRequested=spec.includePlayerAudit===true;
    if(spec.includePlayerAudit!==undefined&&typeof spec.includePlayerAudit!=="boolean")
     throw Error("LAB_PLAYER_AUDIT_FLAG_INVALID");
-   const eventOffset=spec.eventOffset??0;
-   const eventLimit=spec.eventLimit??12;
+   const eventOffset=typeof spec.eventOffset==="number"?spec.eventOffset:
+    spec.eventOffset===undefined?0:Number.NaN;
+   const eventLimit=typeof spec.eventLimit==="number"?spec.eventLimit:
+    spec.eventLimit===undefined?12:Number.NaN;
    if(auditRequested&&(!Number.isSafeInteger(eventOffset)||eventOffset<0||
       !Number.isSafeInteger(eventLimit)||eventLimit<1||eventLimit>30))
     throw Error("LAB_PLAYER_AUDIT_PAGINATION_INVALID");
