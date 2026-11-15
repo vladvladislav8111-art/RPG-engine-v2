@@ -288,9 +288,16 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
   if(!old){
    if(event.kind!=="continuity_repair"&&event.kind!=="order_contract"&&event.kind!=="player_turn")
     throw Error("LAB_WORKORDER_REGISTER_KIND");
+   // Contract evidence survives narrative archiving: the client's own
+   // confirmed memories remain in the session after events roll to KV archives.
+   const clientMemories=session.npcs[change.record.clientNpcId]?.memories??[];
    if(!bounded(change.evidenceRefs,16)||change.evidenceRefs.length<2||
+      new Set(change.evidenceRefs).size!==change.evidenceRefs.length||
+      !Array.isArray(change.record.evidenceRefs)||
+      !change.record.evidenceRefs.every(ref=>change.evidenceRefs!.includes(ref))||
       !change.evidenceRefs.every(ref=>
-       session.events.some(oldEvent=>oldEvent.sourceRef===ref)))
+       session.events.some(oldEvent=>oldEvent.sourceRef===ref)||
+       clientMemories.some(mem=>mem.sourceRef===ref)))
     throw Error("LAB_WORKORDER_SOURCE_UNVERIFIED");
   }else{
    if(JSON.stringify(old.evidenceRefs)!==JSON.stringify(change.record.evidenceRefs))
