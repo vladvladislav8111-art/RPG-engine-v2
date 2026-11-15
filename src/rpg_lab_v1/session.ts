@@ -9,9 +9,18 @@ export type LabMemory={sourceRef:string;summary:string;learnedAt:string;knownBy:
   confidence?:string;salience?:string;privacy?:string;perceivedFact?:string;
  };
 export type LabNpcState={knownFacts:string[];memories:LabMemory[];currentGoal?:string;relationships?:Record<string,string>;perceptions?:Record<string,NpcFeatureMemory>};
+/** Explicit commercial commitments. Amounts are ledger facts, NOT cash effects. */
+export type LabWorkOrder={
+ title:string;clientNpcId:string;signedAt:string;dueFrom:string;dueTo:string;
+ totalValis:number;depositValis:number;balanceValis:number;
+ warrantyDays:number;freeAlterations:number;
+ status:"contracted"|"preparing"|"weaving"|"ready"|"delivered"|"cancelled";
+ material:{diameterMm:number;minMeters:number;maxMeters:number;accuracy:"exact"|"range"};
+ notes?:string;version:number;lastUpdatedRef:string;evidenceRefs:string[];
+};
 export type LabSession={
  schema:"RPG_LAB_SESSION_V1";projectId:string;sessionId:string;gameClock:string;
- player:{resources:Record<string,number>;stats:Record<string,number>;inventory:Record<string,number>;locationId?:string;linos?:LinosState};
+ player:{resources:Record<string,number>;stats:Record<string,number>;inventory:Record<string,number>;locationId?:string;linos?:LinosState;workOrders?:Record<string,LabWorkOrder>};
  discovered:string[];npcs:Record<string,LabNpcState>;
  events:{sourceRef:string;summary:string;time:string;knownBy:string[];locationId?:string;kind?:string}[];
  worldEvents?:{sourceRef:string;time:string;npcId:string;action:string;outcome:string;locationId?:string;privacy:"public"|"hidden"}[];
@@ -33,6 +42,32 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
  if(JSON.stringify(s).length>LAB_SESSION_MAX_TEXT_UNITS)
   throw Error("LAB_SESSION_SIZE_LIMIT");
  if(!s.player||!map(s.player.resources,128)||!map(s.player.stats,128)||!map(s.player.inventory,500))throw Error("LAB_SESSION_PLAYER_INVALID");
+ if(s.player.workOrders!==undefined){
+  if(!map(s.player.workOrders,60))throw Error("LAB_WORKORDER_MAP_INVALID");
+  for(const [orderId,order] of Object.entries(s.player.workOrders)){
+   const material=order?.material;
+   if(!order||!pack.npcProfiles[order.clientNpcId]||
+      !txt(order.title,120)||!txt(order.signedAt,100)||
+      !txt(order.dueFrom,100)||!txt(order.dueTo,100)||
+      !Number.isSafeInteger(order.version)||order.version<1||order.version>10000||
+      !id(order.lastUpdatedRef)||!list(order.evidenceRefs,16)||order.evidenceRefs.length<2||
+      new Set(order.evidenceRefs).size!==order.evidenceRefs.length||
+      !["contracted","preparing","weaving","ready","delivered","cancelled"].includes(order.status)||
+      !n(order.totalValis)||!n(order.depositValis)||!n(order.balanceValis)||
+      !Number.isInteger(order.totalValis)||!Number.isInteger(order.depositValis)||
+      !Number.isInteger(order.balanceValis)||
+      order.depositValis>order.totalValis||
+      order.balanceValis!==order.totalValis-order.depositValis||
+      !Number.isInteger(order.warrantyDays)||order.warrantyDays<0||order.warrantyDays>3650||
+      !Number.isInteger(order.freeAlterations)||order.freeAlterations<0||order.freeAlterations>100||
+      !material||!n(material.diameterMm)||material.diameterMm<0.01||material.diameterMm>100||
+      !n(material.minMeters)||!n(material.maxMeters)||material.minMeters>material.maxMeters||
+      material.maxMeters>1000000000||!["exact","range"].includes(material.accuracy)||
+      (material.accuracy==="exact"&&material.minMeters!==material.maxMeters)||
+      (order.notes!==undefined&&!txt(order.notes,400)))
+    throw Error("LAB_WORKORDER_INVALID:"+orderId);
+  }
+ }
  if(s.player.locationId!==undefined&&( !id(s.player.locationId)||!pack.locations[s.player.locationId]))throw Error("LAB_SESSION_LOCATION_INVALID");
  if(s.player.linos!==undefined){if(pack.worldId!=="danmachi.orario")throw Error("LAB_LINOS_WRONG_WORLD");validateLinosState(s.player.linos);}
  for(const [k,v] of Object.entries(s.player.resources)){if(!n(v)||!pack.resources[k]||v<pack.resources[k].min||v>pack.resources[k].max)throw Error("LAB_SESSION_RESOURCE_INVALID");}
