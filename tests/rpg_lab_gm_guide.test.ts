@@ -24,7 +24,7 @@ test("GM guide distinguishes legacy and RPG Lab tools, read-only vs write",()=>{
  assert.equal(names.filter(x=>x==="rpg_runtime_guide").length,1);
  assert.equal(x.rpgLabQuickLoop.some(s=>s.includes("narrationPlan")),true);
  assert.equal(x.guardrails.some(s=>s.includes("deployed")),true);
- assert.equal(x.legacySaveTouched,undefined);
+ assert.equal(x.modifiesSave,false);
 });
 test("every direct RPG Lab NPC context carries concise read-only GM reminder",async()=>{
  const pack:LabPack={
