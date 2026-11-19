@@ -71,7 +71,7 @@ const plain=(n:number)=>Math.round(n*1e6)/1e6;
 export function validateLabPack(pack:LabPack):LabPack{
  if(!safeObj(pack)||pack.schema!=="RPG_LAB_PACK_V1")throw Error("LAB_PACK_SCHEMA");
  ident(pack.projectId);ident(pack.worldId);validateFormulaRegistry(pack.formulas);
- if(JSON.stringify(pack).length>100000)throw Error("LAB_PACK_TOO_LARGE");
+ if(JSON.stringify(pack).length>220000)throw Error("LAB_PACK_TOO_LARGE");
  for(const [,v] of entries(pack.resources,128)){
   if(!safeObj(v))throw Error("LAB_RESOURCE_DEF");
   numeric(v.min,0,1e12);numeric(v.max,v.min as number,1e12);
