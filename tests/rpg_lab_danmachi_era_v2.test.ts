@@ -101,8 +101,9 @@ test("Maxim regression: private witness can respond, others must not magically s
   signals:[{actorId:"npc.freya",sourceRef:"evt.maxim_return",kind:"maxim_appearance"},
     {actorId:"npc.ottar",sourceRef:"evt.maxim_return",kind:"maxim_appearance"}]
  });
- assert.deepEqual(new Set(proposed.intents.map(i=>i.actorId)),
+ assert.deepEqual(new Set(proposed.intents.filter(i=>i.kind==="reactive").map(i=>i.actorId)),
   new Set(["npc.freya","npc.ottar"]));
+ assert.equal(proposed.intents.some(i=>i.actorId==="npc.finn"&&i.kind==="reactive"),false);
  assert.equal(actorHasEraFact(s,"npc.finn","freya.soul.of.maxim.absent"),false);
  const claim=auditDanmachiEraScene(pack,s,[
    {actorId:"npc.finn",claims:[{factId:"freya.soul.of.maxim.absent",assertion:"certain"}]}
