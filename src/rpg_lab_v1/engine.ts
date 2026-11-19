@@ -130,7 +130,7 @@ export function validateLabPack(pack:LabPack):LabPack{
   if(v.speechStyle!==undefined)text(v.speechStyle,600);
   if(v.faction!==undefined)text(v.faction,80);
   if(v.entryArc!==undefined)ident(v.entryArc);
-  if(v.adaptiveAxes!==undefined)validateLabNpcAdaptiveAxes(v.adaptiveAxes);
+  if(v.adaptiveAxes!==undefined)validateLabNpcAdaptiveAxes(v.adaptiveAxes as LabNpcAdaptiveAxis[]);
   if(v.originalCore!==undefined){
    const c=v.originalCore as LabOriginalNpcCore;
    if(!safeObj(c)||typeof v.canonRef!=="string"||
