@@ -96,7 +96,7 @@ const significantHistory=()=>applyConfirmedLabEvent(oneVisit(),world,
 
 test("smith: background encounter plus witnessed refusal builds a deep, stable NPC preview",()=>{
  const session=significantHistory();
- const oldPack=structuredClone(world),oldSession=structuredClone(session);
+ const oldPackJson=JSON.stringify(world),oldSessionJson=JSON.stringify(session);
  const preview=previewOriginalNpcPromotion(world,session,seed,smith);
  assert.equal(preview.from,"background");
  assert.equal(preview.to,"full_core");
@@ -109,8 +109,8 @@ test("smith: background encounter plus witnessed refusal builds a deep, stable N
  assert.equal(preview.proposedSession.npcs[smithId].relationships,undefined);
  assert.equal(preview.proposedSession.playerFog,undefined);
  assert.equal(preview.proposedPack.npcProfiles["npc.loki"].name,world.npcProfiles["npc.loki"].name);
- assert.deepEqual(world,oldPack);
- assert.deepEqual(session,oldSession);
+ assert.equal(JSON.stringify(world),oldPackJson);
+ assert.equal(JSON.stringify(session),oldSessionJson);
  assert.equal(world.npcProfiles[smithId],undefined);
  const ctx=buildLabSceneBrief(preview.proposedPack,preview.proposedSession,{npcIds:[smithId]});
  assert.equal(ctx.actors[0].originalCore?.personalGoal,smith.originalCore?.personalGoal);
