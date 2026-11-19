@@ -4,7 +4,7 @@
 import {config} from "../config.ts";
 import {validateLabPack,evaluateLabPack,type LabPack,type LabJob} from "./engine.ts";
 import {importLabFile,type LabFileImport} from "./import.ts";
-import {validateLabSession,withSessionDefaults,type LabSession} from "./session.ts";
+import {validateLabSession,withSessionDefaults,assertLabDirectSessionPutAllowed,type LabSession} from "./session.ts";
 import type {LabConfirmedEvent} from "./events.ts";
 import {applyGuardedLabEvent,type LabTurnWithPlan} from "./turn_guard.ts";
 import {encodeLabPack,decodeLabPack,type LabStored} from "./storage_codec.ts";
@@ -261,12 +261,9 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
     if(!Number.isSafeInteger(data.expectedRevision)||data.expectedRevision!==(current.value?.revision??0))throw Error("LAB_REVISION_CONFLICT");
     const pack=await decodeLabPack(packEntry.value);
     const session=validateLabSession(data.session as LabSession,pack);
-    // Strict gameplay forbids replacement of the authoritative snapshot
-    // through a bypass that does not commit source-attested NPC events.
-    if(current.value){
-     const previous=await decodeLabSessionFromKv(kv,projectId,sessionId,current.value,pack);
-     if(previous.roleplayGuard==="strict")throw Error("LAB_STRICT_SESSION_PUT_FORBIDDEN");
-    }
+    const previous=current.value?
+     await decodeLabSessionFromKv(kv,projectId,sessionId,current.value,pack):null;
+    assertLabDirectSessionPutAllowed(previous,session);
     if(session.sessionId!==sessionId)throw Error("LAB_SESSION_ID_MISMATCH");
     const value=await encodeLabSession(session,pack,(current.value?.revision??0)+1);
     const head=await prepareLabSessionHead(kv,projectId,sessionId,value);
