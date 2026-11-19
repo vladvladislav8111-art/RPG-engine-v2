@@ -264,6 +264,8 @@ function assertPlayerSystem(s:JinwooState){
 export function awardJinwooEncounter(s:JinwooState,e:{
  sourceRef:string;targetRef:string;confirmed:boolean;
  xp:number;systemGold:number;killer:"player"|"shadow";
+ /** A shadow kill must be attributed to an existing owned soldier. */
+ shadowId?:string;
  isNewDefeat:boolean;gmThreatRated:boolean;
 }):JinwooState{
  assertPlayerSystem(s);requireReward(s,e.sourceRef);
@@ -273,6 +275,12 @@ export function awardJinwooEncounter(s:JinwooState,e:{
   !Number.isSafeInteger(e.systemGold)||e.systemGold<0||e.systemGold>1000000||
   !["player","shadow"].includes(e.killer))
   throw Error("JINWOO_UNCONFIRMED_XP_OR_KILL");
+ if(e.killer==="shadow"&&
+  (!e.shadowId||!s.shadowRoster.some(sh=>sh.id===e.shadowId)||
+   s.phase==="player_system"))
+  throw Error("JINWOO_SHADOW_KILL_NOT_OWNED");
+ if(e.killer==="player"&&e.shadowId!==undefined)
+  throw Error("JINWOO_SHADOW_KILL_ATTRIBUTION_INVALID");
  const n=clone(s);
  n.appliedRewardRefs.push(e.sourceRef);
  n.defeatedTargetRefs.push(e.targetRef);
