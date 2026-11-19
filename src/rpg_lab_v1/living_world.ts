@@ -136,6 +136,17 @@ export function buildLabSceneBrief(pack:LabPack,session:LabSession,req:LabSceneB
     interpretation:old?.lastInterpretation??null,sourceRef:old?.lastSeenRef??old?.lastHeardRef??null,
     mustNotInheritOtherNpcFamiliarity:true};
   });
+  const ownsSources=new Set((state?.memories??[]).map(m=>m.sourceRef));
+  const knownWorldEvidence=Object.values(session.worldEvidence??{})
+   .filter(f=>ownsSources.has(f.sourceRef))
+   .sort((a,b)=>{
+    const priority=(s:string)=>s==="transformative"?3:s==="notable"?2:1;
+    return priority(b.significance)-priority(a.significance);
+   }).slice(0,16)
+   .map(f=>({factId:f.factId,statement:f.statement,scope:f.scope,
+    sourceRef:f.sourceRef,kind:f.kind,level:f.level,
+    significance:f.significance,observedPersonally:f.observedBy.includes(npcId),
+    method:f.method??null,noExtrapolation:true}));
   const work=Object.entries(session.worldProjects??{})
    .filter(([,p])=>p.ownerNpcId===npcId)
    .map(([projectId,p])=>({projectId,title:p.title,status:p.status,stage:p.stage,
@@ -146,6 +157,7 @@ export function buildLabSceneBrief(pack:LabPack,session:LabSession,req:LabSceneB
    speechStyle:identity.speechStyle??null,currentGoal:state?.currentGoal??null,
    mood:state?.mood??null,relationships:state?.relationships??{},
    eventObservation:observation,memories:relevant,featureAwareness,
+   knownWorldEvidence,
    activeResponsibilities:work,
    priorDecisions:Object.values(state?.decisions??{}).sort((a,b)=>b.madeAtMinute-a.madeAtMinute).slice(0,24),
    decisionMustFollowOwnKnowledge:true,playerApprovalNotAssumed:true,
