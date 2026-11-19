@@ -95,18 +95,22 @@ export function proposeDanmachiNpcIntentCycle(pack:LabPack,session:LabSession,op
       nextReviewMinute:review}});
   }
   if(toMinute>fromMinute&&actorSignals.length<max){
-   const day=Math.floor(fromMinute/1440);
-   const minute=Math.min(toMinute,day*1440+480+
-    hash(session.sessionId+"|"+actorId+"|"+day)%650);
-   if(minute>fromMinute){
-    const active=Object.values(session.worldProjects??{}).some(p=>
+   const active=Object.values(session.worldProjects??{}).some(p=>
       p.ownerNpcId===actorId&&["accepted","active","blocked"].includes(p.status));
-    if(!active){
+   if(!active){
+    let added=0;
+    const firstDay=Math.floor(fromMinute/1440);
+    const lastDay=Math.floor((toMinute-1)/1440);
+    for(let day=firstDay;day<=lastDay&&added<max-actorSignals.length;day++){
+     const minute=day*1440+480+
+      hash(session.sessionId+"|"+actorId+"|"+day)%650;
+     if(minute<=fromMinute||minute>toMinute)continue;
      intents.push({actorId,action:kernel.independentRoutine,
       reason:profile.goals[0]??kernel.privatePriority,
       atMinute:minute,nextReviewMinute:minute+1440,triggerRef:null,
       kind:"routine",priority:"normal",privateUntilConfirmed:true,
       alreadyOccurred:false,requiresConfirmation:true,projectDraft:null});
+     added++;
     }
    }
   }
