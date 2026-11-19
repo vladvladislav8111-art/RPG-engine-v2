@@ -302,7 +302,8 @@ export function attemptJinwooShadowExtraction(s:JinwooState,
  if(attempt>=3)return {next:s,success:false,reason:"attempts_exhausted",chance:0};
  const n=clone(s);n.appliedRewardRefs.push(e.sourceRef);
  n.extractionAttempts[e.targetRef]=attempt+1;
- const anchored=(e.corpsePresent&&e.magicStoneIntact)||
+ const anchored=(e.corpsePresent&&
+  (e.originalKind!=="monster"||e.magicStoneIntact))||
   (s.phase==="true_monarch"&&s.shadowTraceRule==="monarch_imprint"&&e.residualImprint);
  const fail:ExtractionFailure|undefined=
   !anchored?"no_remains":e.corruptedMana?"corrupt_mana":
