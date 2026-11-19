@@ -216,8 +216,11 @@ export function actorHasEraFact(session:LabSession,npcId:string,factId:string):b
  const f=DANMACHI_ERA_FACT_BY_ID[factId];
  if(!f)return false;
  if(f.status==="known_at_anchor"&&f.holders.includes(npcId))return true;
+ const sourceRef=session.worldEvidence?.[factId]?.sourceRef;
  return (session.npcs[npcId]?.memories??[]).some(m=>
-  m.sourceRef===factId||m.relayedSourceRef===factId);
+  m.sourceRef===factId||m.relayedSourceRef===factId||
+  (sourceRef!==undefined&&
+   (m.sourceRef===sourceRef||m.relayedSourceRef===sourceRef)));
 }
 export function readDanmachiEraNpcContext(pack:LabPack,session:LabSession,
  npcIds:string[],topic=""){
