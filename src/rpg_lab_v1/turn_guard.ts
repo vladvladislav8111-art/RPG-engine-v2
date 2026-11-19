@@ -25,6 +25,11 @@ function activeNpcRoles(event:LabConfirmedEvent){
  for(const x of event.npcInteractions??[]){
   require(x.initiatorNpcId);require(x.recipientNpcId);
  }
+ for(const x of event.npcPositions??[])require(x.npcId);
+ for(const x of event.socialDynamics??[])require(x.npcId);
+ for(const x of event.rumorRelays??[]){
+  require(x.speakerNpcId);require(x.listenerNpcId);
+ }
  for(const x of event.npcDecisionChanges??[])require(x.npcId);
  for(const x of event.npcSocial??[])require(x.npcId);
  for(const x of event.moodChanges??[])require(x.npcId);
