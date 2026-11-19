@@ -4,11 +4,12 @@
 import type {LabPack,LabJob} from "./engine.ts";
 import {validateLinosState,type LinosState} from "./linos.ts";
 import {validateFeatureMemory,type NpcFeatureMemory} from "./npc_perception.ts";
+import {validateLabNpcMood,validateLabWorldProject,type LabNpcMood,type LabWorldProject} from "./living_world.ts";
 export type LabMemory={sourceRef:string;summary:string;learnedAt:string;knownBy:string[];
   eventTime?:string;locationId?:string;channel?:string;sourceActor?:string;relayedSourceRef?:string;
   confidence?:string;salience?:string;privacy?:string;perceivedFact?:string;
  };
-export type LabNpcState={knownFacts:string[];memories:LabMemory[];currentGoal?:string;relationships?:Record<string,string>;perceptions?:Record<string,NpcFeatureMemory>};
+export type LabNpcState={knownFacts:string[];memories:LabMemory[];currentGoal?:string;relationships?:Record<string,string>;perceptions?:Record<string,NpcFeatureMemory>;mood?:LabNpcMood};
 /** Explicit commercial commitments. Amounts are ledger facts, NOT cash effects. */
 export type LabWorkOrder={
  title:string;clientNpcId:string;signedAt:string;dueFrom:string;dueTo:string;
@@ -21,7 +22,7 @@ export type LabWorkOrder={
 export type LabSession={
  schema:"RPG_LAB_SESSION_V1";projectId:string;sessionId:string;gameClock:string;
  player:{resources:Record<string,number>;stats:Record<string,number>;inventory:Record<string,number>;locationId?:string;linos?:LinosState;workOrders?:Record<string,LabWorkOrder>};
- discovered:string[];npcs:Record<string,LabNpcState>;
+ discovered:string[];npcs:Record<string,LabNpcState>;worldProjects?:Record<string,LabWorldProject>;
  events:{sourceRef:string;summary:string;time:string;knownBy:string[];locationId?:string;kind?:string}[];
  worldEvents?:{sourceRef:string;time:string;npcId:string;action:string;outcome:string;locationId?:string;privacy:"public"|"hidden"}[];
  archivedEventCount?:number;
@@ -74,6 +75,11 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
  for(const v of Object.values(s.player.stats))if(!n(v))throw Error("LAB_SESSION_STAT_INVALID");
  for(const v of Object.values(s.player.inventory))if(!n(v)||!Number.isInteger(v))throw Error("LAB_SESSION_ITEM_INVALID");
  if(!list(s.discovered,500)||s.discovered.some(k=>!pack.locations[k]))throw Error("LAB_SESSION_DISCOVERY_INVALID");
+ if(s.worldProjects!==undefined){
+  if(!map(s.worldProjects,128))throw Error("LAB_WORLD_PROJECTS_INVALID");
+  for(const [projectId,project] of Object.entries(s.worldProjects))
+   validateLabWorldProject(projectId,project,pack);
+ }
  if(!map(s.npcs,128))throw Error("LAB_SESSION_NPCS_INVALID");
  for(const [npcId,raw] of Object.entries(s.npcs)){
   const state=raw as LabNpcState;
@@ -86,6 +92,7 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
     validateFeatureMemory(feature);
    }
   }
+  if(state.mood!==undefined)validateLabNpcMood(state.mood);
   if(state.currentGoal!==undefined&&!txt(state.currentGoal,300))throw Error("LAB_SESSION_NPC_GOAL_INVALID");
   if(state.relationships!==undefined&&(!map(state.relationships,80)||Object.values(state.relationships).some(v=>!txt(v,250))))
    throw Error("LAB_SESSION_NPC_RELATION_INVALID");
@@ -130,6 +137,12 @@ export function withSessionDefaults(jobs:LabJob[],session:LabSession):LabJob[]{
    args.variables=session.player.stats;
   if(job.kind==="linos"&&args.state===undefined&&session.player.linos!==undefined)
    args.state=session.player.linos;
+  if(job.kind==="scene_brief")args.session=session;
+  if(job.kind==="world_tick"){
+   args.worldProjects=session.worldProjects??{};
+   args.discovered=session.discovered;
+   args.sessionId=session.sessionId;
+  }
   if(job.kind==="npc"&&args.knownFactIds===undefined){
    const id=typeof args.npcId==="string"?args.npcId:"";
    args.knownFactIds=session.npcs[id]?.knownFacts??[];
