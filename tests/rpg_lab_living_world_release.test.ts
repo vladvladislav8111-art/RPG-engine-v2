@@ -484,3 +484,20 @@ test("focused weapon test cannot be reduced to missing velocity measurements",()
    worldClaims:[{factId:"rifle.demonstrated.armor",assertion:"established"}]}]},4);
  assert.equal(acknowledge.readyToRender,true);
 });
+
+test("unparseable or multiweek time cannot bypass an accepted workshop review",()=>{
+ let session=fresh();
+ session=applyConfirmedLabEvent(session,pack,evt("evt.materials","D0 09:00",{
+  knownBy:["npc.smith"],
+  observations:[{npcId:"npc.smith",channel:"experienced",
+   perceivedFact:"Smith accepts physical samples",learnedAt:"D0 09:00",
+   confidence:"certain",salience:"important",privacy:"private"}],
+  worldProjectChanges:[{projectId:"proj.heph.thread",expectedRevision:0,
+   record:research("accepted",1,m(0,9),m(1,9))}]
+ }));
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,
+  evt("evt.opaque","sometime later")) ,/LAB_WORLD_PROJECT_CLOCK_COMPARABILITY_REQUIRED/);
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,
+  evt("evt.weeks","D20 12:00")),/LAB_WORLD_PROJECT_CATCHUP_WINDOW_EXCEEDED/);
+ assert.equal(session.gameClock,"D0 09:00");
+});
