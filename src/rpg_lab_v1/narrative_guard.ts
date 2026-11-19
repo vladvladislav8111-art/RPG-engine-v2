@@ -111,7 +111,7 @@ export function reviewLabNarration(pack:LabPack,session:LabSession,
       code:"WORLD_EVIDENCE_NOT_SAVED",detail:claim.factId});
     continue;
    }
-   if(!memories.some(m=>m.sourceRef===fact.sourceRef))
+   if(!memories.some(m=>m.sourceRef===fact.sourceRef||m.relayedSourceRef===fact.sourceRef))
     failures.push({beat:index,actorId:beat.actorId,
      code:"NPC_NOT_INFORMED_OF_WORLD_EVIDENCE",detail:claim.factId});
    if(!permittedLabEvidenceClaim(fact,claim.assertion))
