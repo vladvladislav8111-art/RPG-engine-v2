@@ -11,8 +11,11 @@
 3. Read the \`RPG_LAB_SCENE_BRIEF_V1\` packet: immutable traits, goals, mood, per-NPC features, remembered facts with provenance, previous decisions, and private responsibilities.
 4. Derive NPC actions from those facts and motives. Do not simply agree with the player. Do not replace the NPC's canon with universal politeness. A refusal or grudge may persist. A personality flaw can be expressed without reducing the character to a one-note caricature.
 5. Resolve actual interactions among NPCs, decisions on specific subjects, mood changes and discovered facts before writing prose. Narrative is the *rendering* of adjudicated events, not an unrecorded alternative outcome.
-6. Commit a single \`rpg_lab_commit_event\` confirmed event at the real session revision with source-bound \`observations\`, \`features\`, \`npcInteractions\`, \`npcDecisionChanges\`, \`moodChanges\`, \`worldProjectChanges\` and \`worldActions\` as applicable. Only genuinely confirmed outcomes may be committed. Do not write tools on meta/design discussion turns.
-7. On any commit/revision conflict, re-read the current campaign and reconcile rather than retrying stale data or silently inventing successes.
+6. Submit the adjudicated outcome as one **source-verified** \`rpg_lab_commit_event\` at the real RPG Lab session revision, using \`observations\`, \`features\`, \`npcInteractions\`, \`npcDecisionChanges\`, \`moodChanges\`, \`worldProjectChanges\`, \`worldActions\` and optional typed \`worldEvidence\`. A claim remains \`reported/unverified\` until a separately confirmed test.
+7. Re-read the campaign revision and send **\`rpgLabNarrationV1\`** (same existing \`simulate_world_v3/world_review\` route) containing \`projectId,sessionId,npcIds,expectedSessionRevision,contextEventRef?,beats\`. Each beat names the actor, source-backed \`factRefs\`, witnessed vs reported feature knowledge, any \`worldClaims\` and previous topic-specific \`decision\` claims.
+8. Do not render an NPC beat as settled if \`readyToRender:false\`. Resolve \`FOCUSED_EVENT_IGNORED\`, \`FIRST_SIGNIFICANT_FEATURE_IGNORED\`, \`TRANSFORMATIVE_EVIDENCE_IGNORED\`, \`UNVERIFIED_CLAIM_UPGRADED\`, missing knowledge or incompatible decisions. \`readyToRender:true\` verifies **structured provenance metadata only**, **not** whether free-form dialogue is in character.
+9. Render the confirmed consequences, without a parallel narrator invention. On CAS conflict reload and reconcile rather than re-using stale decisions. Meta/design discussion does not advance in-world time.
+
 
 ## Time passing while the player is elsewhere
 
@@ -34,6 +37,14 @@
 - Bete may be offended by public humiliation; a later apology does not clear \`mood\`, \`relationships\` or \`priorDecisions\` unless a sourced change is recorded.
 - Loki can show canonical impudence without narrator-enforced chastity or automatic flirtation in every scene.
 - A private argument between two NPCs can be committed without the player even being in the same room; its participants retain the memory, other NPCs do not.
+
+## Scoped proofs, including unsupported claims
+
+- \`worldEvidence\` is saved per explicit event and has \`kind\` (observed/measured/reported/hypothesis), \`level\` (established/provisional/unverified), \`scope\`, witness list and optional test \`method\`.
+- Verified 2 mm tensile tests **do not** establish untested 10 mm strength. Observed armor penetration **does not** establish muzzle velocity or effects on high-level gods.
+- An NPC can learn of a verified test second-hand by a source-backed relay, but the narrator must not claim **firsthand** technical confirmation when that NPC never witnessed it.
+- In a scene focused on a saved transformative event or a first remarkable feature, at least one relevant structured beat must acknowledge it. The actual emotional/social response still depends on the character, not automatic awe.
+- All GM-visible context remains private. Player-visible prose may only reveal independently observed, spoken or discovered information.
 
 ## Release and deployment safety
 
