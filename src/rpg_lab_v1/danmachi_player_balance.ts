@@ -165,9 +165,10 @@ export function previewCombatExchange(s:JinwooState,params:{
   !safeNum(params.positionBonus??0,-25,25)||
   !safeNum(params.proficiencyBonus??0,-10,20))
   throw Error("BALANCE_BATTLE_INPUT_INVALID");
+ const spellCost=params.spellMpCost??0;
  if(params.move==="magic"&&
-  (!Number.isSafeInteger(params.spellMpCost)||params.spellMpCost<1||
-   params.spellMpCost>s.mp||
+  (!Number.isSafeInteger(spellCost)||spellCost<1||
+   spellCost>s.mp||
    (!s.unlockedSkills.some(k=>k.includes("magic")||k.includes("rulers_authority"))&&
     s.falna.skills.length===0)))
   throw Error("BALANCE_MAGIC_NOT_AVAILABLE");
