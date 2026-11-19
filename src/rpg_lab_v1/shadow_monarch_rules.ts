@@ -114,7 +114,7 @@ export interface JinwooState{
  gold:number;inventory:Record<string,number>;
  shadowRoster:JinwooShadow[];extractionAttempts:Record<string,number>;
  unlockedShopItems:string[];unlockedSkills:string[];
- appliedRewardRefs:string[];completedDailyDays:string[];
+ appliedRewardRefs:string[];defeatedTargetRefs:string[];completedDailyDays:string[];
  storyFlags:string[]; 
  /** A Falna cannot exist before a god gives a blessing. Never auto-rank on System level-up. */
  falna:{blessed:boolean;divineLevel:number;lastUpdatedRef:string|null};
@@ -138,7 +138,7 @@ export function newJinwooPreparation(config?:{
   systemLevel:1,xp:0,freeStatPoints:0,stats,
   hp:playerMaxHp(stats),mp:playerMaxMp(stats),fatigue:0,
   gold:0,inventory:{},shadowRoster:[],extractionAttempts:{},
-  unlockedShopItems:[],unlockedSkills:[],appliedRewardRefs:[],
+  unlockedShopItems:[],unlockedSkills:[],appliedRewardRefs:[],defeatedTargetRefs:[],
   completedDailyDays:[],storyFlags:[],
   falna:{blessed:false,divineLevel:0,lastUpdatedRef:null}};
 }
@@ -166,12 +166,14 @@ export function awardJinwooEncounter(s:JinwooState,e:{
 }):JinwooState{
  assertPlayerSystem(s);requireReward(s,e.sourceRef);
  if(!e.confirmed||!e.gmThreatRated||!e.isNewDefeat||
-  !validRef(e.targetRef)||!Number.isSafeInteger(e.xp)||e.xp<0||e.xp>1000000||
+  !validRef(e.targetRef)||s.defeatedTargetRefs.includes(e.targetRef)||
+  !Number.isSafeInteger(e.xp)||e.xp<0||e.xp>1000000||
   !Number.isSafeInteger(e.systemGold)||e.systemGold<0||e.systemGold>1000000||
   !["player","shadow"].includes(e.killer))
   throw Error("JINWOO_UNCONFIRMED_XP_OR_KILL");
  const n=clone(s);
  n.appliedRewardRefs.push(e.sourceRef);
+ n.defeatedTargetRefs.push(e.targetRef);
  n.gold+=e.systemGold;
  n.xp+=e.xp;
  let steps=0;
