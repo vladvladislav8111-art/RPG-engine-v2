@@ -24,7 +24,7 @@ export type LabSession={
  player:{resources:Record<string,number>;stats:Record<string,number>;inventory:Record<string,number>;locationId?:string;linos?:LinosState;workOrders?:Record<string,LabWorkOrder>};
  discovered:string[];npcs:Record<string,LabNpcState>;worldProjects?:Record<string,LabWorldProject>;
  events:{sourceRef:string;summary:string;time:string;knownBy:string[];locationId?:string;kind?:string}[];
- worldEvents?:{sourceRef:string;time:string;npcId:string;action:string;outcome:string;locationId?:string;privacy:"public"|"hidden"}[];
+ worldEvents?:{sourceRef:string;time:string;npcId:string;targetNpcId?:string;action:string;outcome:string;locationId?:string;privacy:"public"|"hidden"}[];
  archivedEventCount?:number;
 };
 const id=(v:unknown)=>typeof v==="string"&&/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(v)&&!["constructor","prototype","__proto__"].includes(v);
@@ -119,6 +119,7 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
   if(!Array.isArray(s.worldEvents)||s.worldEvents.length>256)throw Error("LAB_WORLD_JOURNAL_INVALID");
   for(const world of s.worldEvents){
    if(!id(world.sourceRef)||!id(world.npcId)||!pack.npcProfiles[world.npcId]||
+    (world.targetNpcId!==undefined&&(!id(world.targetNpcId)||!pack.npcProfiles[world.targetNpcId]||world.targetNpcId===world.npcId))||
     !txt(world.time,100)||!txt(world.action,150)||!txt(world.outcome,400)||
     !["public","hidden"].includes(world.privacy)||
     (world.locationId!==undefined&&(!id(world.locationId)||!pack.locations[world.locationId])))
