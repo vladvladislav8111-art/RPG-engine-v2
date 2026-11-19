@@ -211,7 +211,7 @@ export function previewLabLivingWorldCycle(pack:LabPack,
     const confidence=m.channel==="report"||m.channel==="rumor"?
      "hearsay_of_hearsay":"reported_from_witness";
     if(rumors.length>=20)break;
-    rumors.push({speakerNpcId:sourceId,listenerNpcId,
+    rumors.push({speakerNpcId:sourceId,listenerNpcId:listenerId,
      sourceMemoryRef:m.sourceRef,
      originRef:m.relayedSourceRef??m.sourceRef,
      commonLocationId:speaker.locationId,
