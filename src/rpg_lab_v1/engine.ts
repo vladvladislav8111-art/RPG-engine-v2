@@ -7,6 +7,7 @@ import {newLinosState,linosProfile,previewLinosCast,regenerateLinosMp,
  type LinosState,type LinosAbilityRequest} from "./linos.ts";
 import {proposeIndependentWorldAgenda} from "./autonomy.ts";
 import {previewLabLivingWorldCycle} from "./living_world_cycle_v2.ts";
+import {validateLabStoryDefs,previewLabStoryPaths,type LabStoryArcDef} from "./story_consequences.ts";
 import {buildLabSceneBrief,dueLabWorldProjects,type LabWorldProject} from "./living_world.ts";
 import type {LabSession} from "./session.ts";
 export type LabResource={min:number;max:number};
@@ -34,6 +35,7 @@ export type LabPack={
  lootTables:Record<string,LabLootTable>;prices:Record<string,LabPrice>;recipes?:Record<string,LabRecipe>;
  economy:{taxRate:number};locations:Record<string,LabLocation>;
  npcProfiles:Record<string,LabNpc>;worldProcesses?:Record<string,LabWorldProcess>;
+ storyArcs?:Record<string,LabStoryArcDef>;
  encounterProfiles?:Record<string,LabEncounterProfile>;bestiary?:Record<string,LabMonster>;
  progression:{xpThresholdFormula?:string;thresholds?:number[]};
 };
@@ -138,6 +140,7 @@ export function validateLabPack(pack:LabPack):LabPack{
    }
   }
  }
+ if(pack.storyArcs!==undefined)validateLabStoryDefs(pack.storyArcs);
  if(pack.worldProcesses!==undefined){
   for(const [,v] of entries(pack.worldProcesses,256)){
    if(!safeObj(v))throw Error("LAB_PROCESS_DEF");
@@ -369,6 +372,8 @@ export function evaluateLabJob(pack:LabPack,job:LabJob):unknown{
    const agenda=proposeIndependentWorldAgenda(pack,from,to,a.npcIds??[],
     (a.sessionId as string|undefined)??"preview");
    const live=a.session as LabSession|undefined;
+   const storyPreview=live&&live.projectId===pack.projectId?
+    previewLabStoryPaths(pack,live):null;
    const worldCycle=live&&live.projectId===pack.projectId?
     previewLabLivingWorldCycle(pack,live,{
      fromMinute:from,toMinute:to,
@@ -379,6 +384,7 @@ export function evaluateLabJob(pack:LabPack,job:LabJob):unknown{
     resolutionRequired:pending.length>0||due.length>0||agenda.intents.length>0,
     npcAgenda:agenda.intents,
     ...(worldCycle?{livingWorldCycle:worldCycle}:{}),
+    ...(storyPreview?{storyPathOptions:storyPreview}:{}),
     eventsResolved:false,npcDecisionsMade:false,worldTimeAdvanced:false,
     proposalsRequireConfirmedWorldEvent:true};
   }
