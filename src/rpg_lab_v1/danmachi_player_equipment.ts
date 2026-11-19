@@ -15,7 +15,6 @@ export const SYSTEM_EQUIPMENT_EFFECTS:Readonly<Record<string,Effect>>={
  sword_iron:{slot:"weapon",attack:5,armor:0,speedPenalty:0},
  spear_steel:{slot:"weapon",attack:7,armor:0,speedPenalty:1},
  shortbow:{slot:"weapon",attack:4,armor:0,speedPenalty:0},
- arrow_bundle:{slot:"weapon",attack:0,armor:0,speedPenalty:0},
  daggers_throwing:{slot:"weapon",attack:3,armor:0,speedPenalty:0},
  dagger_hardened:{slot:"weapon",attack:7,armor:0,speedPenalty:0},
  sword_obsidian:{slot:"weapon",attack:11,armor:0,speedPenalty:0},
@@ -46,6 +45,8 @@ export function previewVerifiedLoadout(s:JinwooState,e:Loadout){
    throw Error("PLAYER_EQUIPMENT_NOT_OWNED_OR_UNSUPPORTED");
   if(m.skillGate&&!s.unlockedSkills.includes(m.skillGate))
    throw Error("PLAYER_EQUIPMENT_SKILL_LOCKED");
+  if(id==="shortbow"&&(s.inventory.arrow_bundle??0)<1)
+   throw Error("PLAYER_EQUIPMENT_AMMUNITION_REQUIRED");
   if(slots.has(m.slot))throw Error("PLAYER_EQUIPMENT_SLOT_COLLISION");
   if((id===e.weaponId&&m.slot!=="weapon")||
    (id!==e.weaponId&&m.slot==="weapon"))
@@ -72,7 +73,8 @@ export function previewOwnedEquipmentEncounter(s:JinwooState,e:{
  // A simple verified armor-penetration bonus, not absolute immunity bypass.
  const exchange=previewCombatExchange(s,{
   monsterId:e.monsterId,floor:e.floor,move:e.move,
-  weaponPower:gear.attack+piercing,armorPower:gear.armor,
+  weaponPower:e.move==="magic"?0:gear.attack+piercing,
+  armorPower:gear.armor,
   positionBonus:(e.positionBonus??0)-gear.speedPenalty,
   proficiencyBonus:e.proficiencyBonus,
   spellMpCost:e.spellMpCost,confirmedIrregularRef:e.confirmedIrregularRef
