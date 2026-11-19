@@ -86,6 +86,16 @@ function execute(job:WorldV3Job):SimOutcome<unknown>{
    return relayKnowledge({facts:p.facts as Fact[],message:as<Parameters<typeof relayKnowledge>[0]['message']>(p.message as Record<string,unknown>),provenance:new Map(p.provenance as [string,Evidence][])});
  }
  case 'world_review':
+  if(p.rpgLabSceneResolvedV1!==undefined){
+   const view=p.rpgLabSceneResolvedV1;
+   if(Object.keys(p).length!==1||!rec(view)||
+      view.schema!=="RPG_LAB_SCENE_BRIEF_V1"||
+      view.gmOnly!==true||view.notPlayerVisible!==true||
+      view.readOnly!==true||view.committed!==false||!array(view.actors))
+    return deny('LAB_SCENE_BRIEF_BAD_ENVELOPE','Expected source-bound GM-only scene brief');
+   return pass({...view,committed:false,legacySaveTouched:false,
+     note:'GM-only subjective NPC context, not an automatically decided or committed scene'});
+  }
   if(p.rpgLabSessionResolvedV1!==undefined){
    const view=p.rpgLabSessionResolvedV1;
    if(Object.keys(p).length!==1||!rec(view)||view.schema!=="RPG_LAB_MEMORY_VIEW_V1"||
