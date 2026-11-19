@@ -9,6 +9,7 @@ import type {LabPack} from "./engine.ts";
 import type {LabSession} from "./session.ts";
 import {narrativeMinute} from "./events.ts";
 import type {LabNpcDecisionStance} from "./living_world.ts";
+import {permittedLabEvidenceClaim} from "./world_evidence.ts";
 
 const id=/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/;
 const goodId=(x:unknown):x is string=>typeof x==="string"&&id.test(x)&&
@@ -20,6 +21,7 @@ export type LabNarrativeBeat={
  /** Every *persisted* personal-fact reference expressed by this beat. */
  factRefs:string[];
  featureRefs?:{featureId:string;knowledge:"seen"|"heard"|"either"}[];
+ worldClaims?:{factId:string;assertion:"established"|"tentative"|"reported"}[];
  /** Assert that the NPC still holds this saved stance. A new decision
   * must be source-committed before being asserted as settled fact. */
  decision?:{subjectId:string;stance:LabNpcDecisionStance;revision?:number};
@@ -82,6 +84,26 @@ export function reviewLabNarration(pack:LabPack,session:LabSession,
     f.knowledge==="heard"?relayed:personal||relayed;
    if(!valid)failures.push({beat:index,actorId:beat.actorId,
     code:"NPC_FEATURE_KNOWLEDGE_MISSING",detail:f.featureId+":"+f.knowledge});
+  }
+  const claims=beat.worldClaims??[];
+  if(!Array.isArray(claims)||claims.length>16||
+    claims.some(x=>!x||!goodId(x.factId)||
+     !["established","tentative","reported"].includes(x.assertion))||
+    !unique(claims.map(x=>x.factId)))
+   throw Error("LAB_NARRATIVE_WORLD_CLAIMS_INVALID");
+  for(const claim of claims){
+   const fact=session.worldEvidence?.[claim.factId];
+   if(!fact){
+    failures.push({beat:index,actorId:beat.actorId,
+      code:"WORLD_EVIDENCE_NOT_SAVED",detail:claim.factId});
+    continue;
+   }
+   if(!memories.some(m=>m.sourceRef===fact.sourceRef))
+    failures.push({beat:index,actorId:beat.actorId,
+     code:"NPC_NOT_INFORMED_OF_WORLD_EVIDENCE",detail:claim.factId});
+   if(!permittedLabEvidenceClaim(fact,claim.assertion))
+    failures.push({beat:index,actorId:beat.actorId,
+     code:"UNVERIFIED_CLAIM_UPGRADED",detail:claim.factId+":"+claim.assertion});
   }
   if(beat.decision!==undefined){
    const d=beat.decision;
