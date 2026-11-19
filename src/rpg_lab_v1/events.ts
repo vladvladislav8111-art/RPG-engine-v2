@@ -7,6 +7,7 @@ import {validateLabSession,type LabSession,type LabMemory,type LabNpcState,
 import type {LabPack} from "./engine.ts";
 import {noteNpcFeature,type NpcFeatureObservation} from "./npc_perception.ts";
 import {validateLabWorldEvidence,type LabWorldEvidenceInput} from "./world_evidence.ts";
+import {applyLabSocialSignal,type LabSocialSignal} from "./social_dynamics_v2.ts";
 import {dueLabWorldProjects,allowedLabProjectTransition,validateLabNpcMood,validateLabWorldProject,
  validateLabNpcDecision,type LabNpcMood,type LabNpcDecision,type LabNpcDecisionStance,
  type LabWorldProject} from "./living_world.ts";
@@ -50,6 +51,12 @@ export type LabNpcInteraction={
  salience:"fleeting"|"ordinary"|"important"|"life_defining";
  privacy:"private"|"small_group"|"public";witnessNpcIds?:string[];
 };
+export type LabNpcPositionChange={npcId:string;locationId:string};
+export type LabRumorRelay={
+ speakerNpcId:string;listenerNpcId:string;sourceMemoryRef:string;
+ /** A private confidence can be betrayed, but a deliberate breach must be recorded. */
+ breachConfidence?:true;
+};
 export type LabIndependentAction={npcId:string;action:string;outcome:string;
  locationId?:string;privacy:"public"|"hidden"};
 export type LabPlayerFeatureChange={
@@ -71,6 +78,9 @@ export type LabConfirmedEvent={
  features?:NpcFeatureObservation[];linos?:LabLinosTurn;
  worldActions?:LabIndependentAction[];
  npcInteractions?:LabNpcInteraction[];
+ npcPositions?:LabNpcPositionChange[];
+ socialDynamics?:LabSocialSignal[];
+ rumorRelays?:LabRumorRelay[];
  npcSocial?:LabNpcSocialChange[];
  moodChanges?:LabNpcMoodChange[];
  npcDecisionChanges?:LabNpcDecisionChange[];
@@ -340,7 +350,7 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
     sourceActor:interaction.initiatorNpcId,
     ...(event.locationId?{locationId:event.locationId}:{})
    };
-   state.memories.push(memory);
+   if(!state.memories.some(m=>m.sourceRef===event.sourceRef))state.memories.push(memory);
    if(!state.knownFacts.includes(event.sourceRef))
     state.knownFacts.push(event.sourceRef);
    next.npcs[npcId]=state;
@@ -352,6 +362,82 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
    action:interaction.action,outcome:interaction.outcome,
    privacy:interaction.privacy==="public"?"public":"hidden",
    ...(event.locationId?{locationId:event.locationId}:{})});
+ }
+ // Directed feelings are only changed by a participant with grounded
+ // remembered evidence; they do not mutate a canon's immutable personality.
+ const signals=event.socialDynamics??[];
+ if(!Array.isArray(signals)||signals.length>24||
+   new Set(signals.map(x=>x.npcId+"|"+x.towardNpcId)).size!==signals.length)
+  throw Error("LAB_SOCIAL_DYNAMICS_BATCH_INVALID");
+ for(const signal of signals){
+  if(!record(signal)||!good(signal.npcId)||!good(signal.towardNpcId)||
+    !pack.npcProfiles[signal.npcId]||!pack.npcProfiles[signal.towardNpcId]||
+    signal.npcId===signal.towardNpcId||nextMinute===null)
+   throw Error("LAB_SOCIAL_DYNAMICS_INVALID");
+  const state:LabNpcState=next.npcs[signal.npcId]??{knownFacts:[],memories:[]};
+  if(!Array.isArray(signal.evidenceRefs)||!signal.evidenceRefs.length||
+    !signal.evidenceRefs.every(ref=>state.memories.some(m=>m.sourceRef===ref)))
+   throw Error("LAB_SOCIAL_DYNAMICS_UNVERIFIED");
+  if(!state.socialDynamics?.[signal.towardNpcId]&&
+     Object.keys(state.socialDynamics??{}).length>=80)
+   throw Error("LAB_SOCIAL_DYNAMICS_LIMIT");
+  state.socialDynamics={...(state.socialDynamics??{}),
+   [signal.towardNpcId]:applyLabSocialSignal(
+    state.socialDynamics?.[signal.towardNpcId],signal,event.sourceRef,nextMinute)};
+  next.npcs[signal.npcId]=state;
+ }
+ // Positions must be supported by a confirmed physical action or by a
+ // direct witness of arrival. A claimed location is not teleportation.
+ const positions=event.npcPositions??[];
+ if(!Array.isArray(positions)||positions.length>24||
+    new Set(positions.map(x=>x.npcId)).size!==positions.length)
+  throw Error("LAB_NPC_POSITIONS_BATCH_INVALID");
+ for(const position of positions){
+  if(!record(position)||!good(position.npcId)||!pack.npcProfiles[position.npcId]||
+    !good(position.locationId)||!pack.locations[position.locationId])
+   throw Error("LAB_NPC_POSITION_INVALID");
+  const actualMove=event.worldActions?.some(a=>
+   a.npcId===position.npcId&&a.locationId===position.locationId);
+  const witness=event.locationId===position.locationId&&
+   event.knownBy.includes(position.npcId)&&
+   observations.some(o=>o.npcId===position.npcId&&
+    ["seen","heard","experienced"].includes(o.channel));
+  if(!actualMove&&!witness)throw Error("LAB_NPC_POSITION_NOT_EVIDENCED");
+  const state:LabNpcState=next.npcs[position.npcId]??{knownFacts:[],memories:[]};
+  state.locationId=position.locationId;
+  state.locationSourceRef=event.sourceRef;
+  next.npcs[position.npcId]=state;
+ }
+ // Rumor propagation requires a real exchange. A reported origin never
+ // becomes a test, and a privately sourced secret requires an explicit breach.
+ const relays=event.rumorRelays??[];
+ if(!Array.isArray(relays)||relays.length>12||
+    new Set(relays.map(x=>x.speakerNpcId+"|"+x.listenerNpcId+"|"+
+     x.sourceMemoryRef)).size!==relays.length)
+   throw Error("LAB_RUMOR_BATCH_INVALID");
+ for(const relay of relays){
+  if(!record(relay)||!good(relay.speakerNpcId)||!good(relay.listenerNpcId)||
+   relay.speakerNpcId===relay.listenerNpcId||
+   !pack.npcProfiles[relay.speakerNpcId]||!pack.npcProfiles[relay.listenerNpcId]||
+   !good(relay.sourceMemoryRef))
+   throw Error("LAB_RUMOR_RELAY_INVALID");
+  const source=session.npcs[relay.speakerNpcId]?.memories.find(m=>
+   m.sourceRef===relay.sourceMemoryRef);
+  if(!source)throw Error("LAB_RUMOR_SOURCE_NOT_KNOWN");
+  if(source.privacy==="private"&&relay.breachConfidence!==true)
+   throw Error("LAB_RUMOR_PRIVATE_SOURCE_NO_DISCLOSURE");
+  const paired=interactions.some(x=>
+   (x.initiatorNpcId===relay.speakerNpcId&&x.recipientNpcId===relay.listenerNpcId)||
+   (x.recipientNpcId===relay.speakerNpcId&&x.initiatorNpcId===relay.listenerNpcId));
+  const relayed=observations.some(x=>x.npcId===relay.listenerNpcId&&
+   ["report","rumor"].includes(x.channel)&&x.sourceActor===relay.speakerNpcId&&
+   x.relayedSourceRef===relay.sourceMemoryRef);
+  if(!paired||!relayed)throw Error("LAB_RUMOR_ENCOUNTER_MISSING");
+  const from=session.npcs[relay.speakerNpcId]?.locationId;
+  const to=session.npcs[relay.listenerNpcId]?.locationId;
+  if(from&&to&&from!==to&&
+    !positions.some(x=>x.npcId===relay.speakerNpcId||x.npcId===relay.listenerNpcId))
+   throw Error("LAB_RUMOR_REMOTE_CONTACT_NOT_ESTABLISHED");
  }
  // World-level evidence is scoped: two 2mm tested strands do not prove
  // a claimed 10mm capacity, nor does a breastplate test prove damage to gods.
