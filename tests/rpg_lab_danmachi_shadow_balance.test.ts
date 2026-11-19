@@ -4,7 +4,7 @@ import {newJinwooPreparation,awardJinwooEncounter,
  changeJinwooPhase,grantJinwooStoryUnlock} from
  "../src/rpg_lab_v1/shadow_monarch_rules.ts";
 import {previewArmyBalance,previewShadowCombatStrength,
- previewShadowOrder,recordShadowVerifiedVictory,
+ previewShadowOrder,setShadowDeployment,recordShadowVerifiedVictory,
  recoverShadowWithBalancedMana,previewMonarchDomain,
  shadowRevivalMpCost,SHADOW_BALANCE_PRESET} from
  "../src/rpg_lab_v1/danmachi_shadow_balance.ts";
@@ -29,6 +29,23 @@ test("shadow storage and standing army do not continuously consume MP",()=>{
  assert.equal(a.slotsRemaining,29);
  assert.equal(s.mp,140);
  assert.equal(SHADOW_BALANCE_PRESET.noPassiveSummonUpkeep,true);
+});
+test("stored soldier cannot fight until deployed and can later be recalled",()=>{
+ const s=army();
+ assert.throws(()=>recordShadowVerifiedVictory(s,{sourceRef:"evt.shadow.fake",
+  shadowId:"mob.goblin.shadow.1",targetRef:"enemy.unknown",
+  contributedToConfirmedKill:true,confirmedChallengeWorthXp:true
+ }),/NOT_CONFIRMED/);
+ const deployed=setShadowDeployment(s,{sourceRef:"evt.deploy",
+  shadowId:"mob.goblin.shadow.1",command:"deploy",confirmedPlayerOrder:true});
+ assert.equal(deployed.shadowRoster[0].stored,false);
+ assert.equal(s.shadowRoster[0].stored,true);
+ assert.throws(()=>setShadowDeployment(deployed,{sourceRef:"evt.repeat",
+  shadowId:"mob.goblin.shadow.1",command:"deploy",confirmedPlayerOrder:true}),
+  /STATE_INVALID/);
+ const back=setShadowDeployment(deployed,{sourceRef:"evt.recall",
+  shadowId:"mob.goblin.shadow.1",command:"recall",confirmedPlayerOrder:true});
+ assert.equal(back.shadowRoster[0].stored,true);
 });
 test("shadow strength comes from a verified monster origin; unknown origin is not invented",()=>{
  const s=army();
@@ -58,6 +75,8 @@ test("NPC shadows can receive orders but success is never silently committed",()
 });
 test("a verified shadow kill progresses its rank once and never duplicates System XP",()=>{
  let s=army();
+ s=setShadowDeployment(s,{sourceRef:"evt.shadow.deploy.one",
+  shadowId:"mob.goblin.shadow.1",command:"deploy",confirmedPlayerOrder:true});
  for(let i=0;i<8;i++){
   const targetRef="enemy.confirmed."+i;
   s=awardJinwooEncounter(s,{sourceRef:"evt.mob.kill."+i,
@@ -84,7 +103,8 @@ test("a verified shadow kill progresses its rank once and never duplicates Syste
   confirmedChallengeWorthXp:true}),/NOT_CONFIRMED/);
 });
 test("low-value enemies cannot count toward shadow promotion merely for existing",()=>{
- const s=army();
+ const s=setShadowDeployment(army(),{sourceRef:"evt.shadow.deploy.two",
+  shadowId:"mob.goblin.shadow.1",command:"deploy",confirmedPlayerOrder:true});
  const k=awardJinwooEncounter(s,{sourceRef:"evt.weak.kill",
   targetRef:"enemy.weak",confirmed:true,xp:0,systemGold:0,
   killer:"shadow",shadowId:"mob.goblin.shadow.1",
