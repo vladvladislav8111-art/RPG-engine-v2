@@ -103,6 +103,20 @@ export function previewLabLivingWorldCycle(pack:LabPack,
   .filter(x=>!req.focusEventRef||x.sourceRef===req.focusEventRef);
  const significance=req.npcIds.map(npcId=>{
   const profile=profiles[npcId],state=session.npcs[npcId];
+  const focusedObservations=(state?.memories??[])
+   .filter(m=>req.focusEventRef&&m.sourceRef===req.focusEventRef)
+   .slice(0,max).map(m=>({
+    sourceRef:m.sourceRef,perceivedFact:m.perceivedFact??m.summary,
+    confidence:m.confidence??"unspecified",
+    channel:m.channel??"unspecified",
+    salience:m.salience??"ordinary",
+    personallyPerceived:["seen","heard","experienced"].includes(m.channel??""),
+    namingOrIdentityCue:/name|alias|called|introduc|имя|зовут|прозвищ|представ|дедал|daedal/i
+      .test(m.perceivedFact??m.summary),
+    canonKnowledgeMatches:profile.knownFacts.filter(ref=>
+     [...words(ref)].some(t=>words(m.perceivedFact??m.summary).has(t))),
+    observedNotNecessarilyUnderstood:true,
+   }));
   const known=evidence.filter(x=>sourceKnown(state,x.sourceRef))
    .map(fact=>{
     const relevant=interest(profile,fact);
@@ -124,7 +138,7 @@ export function previewLabLivingWorldCycle(pack:LabPack,
      possibleFirstSightOnly:true,actualWitnessNotYetEstablished:true,
      noAutomaticReaction:true}));
   return {npcId,canonRef:profile.canonRef,knowledge:known,
-   firstSights,focusPersonallyRecorded:focus?.knownBy.includes(npcId)??false};
+   focusedObservations,firstSights,focusPersonallyRecorded:focus?.knownBy.includes(npcId)??false};
  });
  const agenda=proposeIndependentWorldAgenda(pack,req.fromMinute,
   req.toMinute,req.npcIds,session.sessionId);
@@ -158,11 +172,14 @@ export function previewLabLivingWorldCycle(pack:LabPack,
  const decisions=req.npcIds.map(npcId=>{
   const profile=profiles[npcId],state=session.npcs[npcId];
   const focusKnown=Boolean(req.focusEventRef&&sourceKnown(state,req.focusEventRef));
+  const recognizedIdentity=significance.find(x=>x.npcId===npcId)
+   ?.focusedObservations.some(x=>x.namingOrIdentityCue)??false;
   const important=significance.find(s=>s.npcId===npcId)?.knowledge??[];
   const recent=(state?.memories??[]).filter(x=>
    ["important","life_defining"].includes(x.salience??"")).slice(-max);
   const prior=Object.values(state?.decisions??{}).slice(-max);
   const options:string[]=[];
+  if(recognizedIdentity)options.push("ask_about_name_origin_or_alias_if_character_cares");
   if(important.length||focusKnown){
    options.push("investigate_specific_unknowns","question_source_or_method",
     "recognize_verified_limit_without_exaggerating");
