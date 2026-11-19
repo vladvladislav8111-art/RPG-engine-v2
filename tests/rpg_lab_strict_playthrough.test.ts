@@ -4,6 +4,7 @@ import type {LabPack} from "../src/rpg_lab_v1/engine.ts";
 import {assertLabDirectSessionPutAllowed,type LabSession} from "../src/rpg_lab_v1/session.ts";
 import type {LabTurnWithPlan} from "../src/rpg_lab_v1/turn_guard.ts";
 import {applyGuardedLabEvent} from "../src/rpg_lab_v1/turn_guard.ts";
+import {readLabRoleplayScene,reviewLabRoleplayScene} from "../src/rpg_lab_v1/roleplay_adapter.ts";
 import {hydrateLabBridgeRequest} from "../src/rpg_lab_v1/bridge.ts";
 import {dispatchWorldV3Batch,type WorldV3BatchRequest} from "../src/world_sim_v3/runtime_facade.ts";
 
@@ -187,4 +188,48 @@ test("strict session cannot bypass roleplay via direct snapshot PUT",()=>{
  assert.throws(()=>assertLabDirectSessionPutAllowed(older,session),
  /LAB_STRICT_SESSION_CREATE_OR_UPGRADE_FORBIDDEN/);
  assert.equal(assertLabDirectSessionPutAllowed(older,{...older}),true);
+});
+
+test("direct RPG Lab roleplay context has no Shura save dependency and enforces revision",async()=>{
+ const campaign=demo();
+ campaign.write(event("evt.character","D0 08:05",{
+  kind:"character_setup",
+  playerFeatureChanges:[{featureId:"daedalus.halo",expectedRevision:0,
+   action:"set",playerApproved:true,
+   feature:{description:"Radiant halo",significance:"transformative",visibility:"obvious"}}],
+ }));
+ const loader=async(projectId:string,sessionId:string)=>{
+  assert.equal(projectId,pack.projectId);
+  assert.equal(sessionId,"strict_demo");
+  return {pack,packRevision:5,session:campaign.current(),
+   sessionRevision:campaign.revision()};
+ };
+ const first=await readLabRoleplayScene(loader,{
+  projectId:pack.projectId,sessionId:"strict_demo",
+  npcIds:["npc.loki","npc.finn"],featureIds:["daedalus.halo"],
+ });
+ assert.equal(first.roleplayGuard,"strict");
+ assert.equal(first.mustUseSourceBoundCommit,true);
+ assert.equal(first.sourceAttestedBySave,true);
+ assert.equal(first.actors[0].featureAwareness[0].possibleFirstSighting,true);
+ assert.equal(first.actors[1].featureAwareness[0].personallySeen,false);
+ const bad=await reviewLabRoleplayScene(loader,{
+  projectId:pack.projectId,sessionId:"strict_demo",
+  expectedSessionRevision:campaign.revision(),npcIds:["npc.finn"],
+  beats:[{actorId:"npc.finn",kind:"speech",
+   summary:"Finn asserts he saw Daedalus's halo",
+   factRefs:[],featureRefs:[{featureId:"daedalus.halo",knowledge:"seen"}]}],
+ });
+ assert.equal(bad.readyToRender,false);
+ assert.ok(bad.failures.some(x=>x.code==="NPC_FEATURE_KNOWLEDGE_MISSING"));
+ await assert.rejects(()=>reviewLabRoleplayScene(loader,{
+  projectId:pack.projectId,sessionId:"strict_demo",
+  expectedSessionRevision:campaign.revision()-1,npcIds:["npc.loki"],
+  beats:[{actorId:"npc.loki",kind:"reaction",summary:"Looks",factRefs:[]}],
+ }),/LAB_NARRATIVE_REVIEW_SOURCE_INVALID/);
+ await assert.rejects(()=>readLabRoleplayScene(async()=>{
+   return {pack:{...pack,projectId:"other"},packRevision:5,
+    session:campaign.current(),sessionRevision:campaign.revision()};
+ },{projectId:pack.projectId,sessionId:"strict_demo",npcIds:["npc.loki"]}),
+ /LAB_ROLEPLAY_SOURCE_MISMATCH/);
 });
