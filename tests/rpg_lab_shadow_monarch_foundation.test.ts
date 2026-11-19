@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import {JINWOO_CAMPAIGN_PRESET,JINWOO_CANON_VS_ADAPTATION,
  JINWOO_STORE,awardJinwooEncounter,allocateJinwooPoints,
  attemptJinwooShadowExtraction,changeJinwooPhase,completeJinwooDaily,
- grantJinwooStoryUnlock,newJinwooPreparation,projectJinwooFalna,
+ grantJinwooStoryUnlock,grantJinwooFalna,updateJinwooFalna,newJinwooPreparation,
+ newOrarioPlayerAwakening,activateOrarioPlayerSystem,projectJinwooFalna,
  purchaseJinwooItem,resurrectJinwooShadow,shadowCapacity,
  shopAvailable,visibleJinwooStore,xpToNextLevel
 } from "../src/rpg_lab_v1/shadow_monarch_rules.ts";
@@ -199,15 +200,50 @@ test("Shadow regeneration is costly and source-confirmed, not free extra army",(
  assert.throws(()=>resurrectJinwooShadow(extracted,{sourceRef:"evt.fake",
   shadowId:"enemy.good.1",confirmedDefeat:false,manaCost:15}),/UNAVAILABLE/);
 });
-test("Falna is only a translated window, not 2nd free level progression",()=>{
- const s=newJinwooPreparation();
- const n={...s,stats:{strength:30,stamina:40,agility:35,perception:25,
-  intelligence:15},falna:{blessed:true,divineLevel:1,lastUpdatedRef:"evt.blessing"}};
- const p=projectJinwooFalna(n);
- assert.deepEqual(p.display,{strength:240,endurance:360,dexterity:240,agility:300,magic:60});
- assert.equal(p.divineLevel,1);assert.equal(p.sourceOfCombatPower,"SYSTEM_NOT_FALNA");
- assert.equal(n.stats.strength,30);
- const over=projectJinwooFalna({...n,stats:{...n.stats,strength:200}});
- assert.equal(over.display?.strength,999);assert.equal(over.overRank,true);
- assert.equal(over.divineLevel,1);
+test("Player awakens in Orario without inherited Jinwoo biography",()=>{
+ const s=newOrarioPlayerAwakening();
+ assert.equal(s.awaitingActivation,true);
+ assert.equal(JINWOO_CAMPAIGN_PRESET.heroIdentity,null);
+ assert.equal(JINWOO_CAMPAIGN_PRESET.heroIsSungJinwoo,false);
+ assert.equal(visibleJinwooStore(s).length,0);
+ assert.throws(()=>awardJinwooEncounter(s,{
+  sourceRef:"evt.early.kill",targetRef:"mob.1",xp:10,systemGold:1,
+  confirmed:true,isNewDefeat:true,killer:"player",gmThreatRated:true
+ }),/NOT_ACTIVATED/);
+ const activated=activateOrarioPlayerSystem(s,{sourceRef:"evt.first_login",confirmedAwakening:true});
+ assert.equal(activated.awaitingActivation,false);
+ assert.ok(visibleJinwooStore(activated).length>0);
+ assert.throws(()=>activateOrarioPlayerSystem(activated,{sourceRef:"evt.second_login",
+  confirmedAwakening:true}),/NOT_CONFIRMED/);
+});
+test("Falna is earned independently and grants an additive System enhancement",()=>{
+ const base=newJinwooPreparation();
+ base.stats={strength:30,stamina:40,agility:35,perception:25,intelligence:15};
+ assert.equal(projectJinwooFalna(base).total.strength,30);
+ const b=grantJinwooFalna(base,{sourceRef:"evt.hestia.blessing",
+  godId:"npc.hestia",godConfirmed:true});
+ const noGrowth=projectJinwooFalna(b);
+ assert.deepEqual(noGrowth.display,{strength:0,endurance:0,dexterity:0,agility:0,magic:0});
+ assert.equal(noGrowth.total.strength,30);
+ assert.throws(()=>updateJinwooFalna(b,{sourceRef:"evt.falna.fake",godId:"npc.loki",
+  godConfirmed:true,newStatus:{strength:300,endurance:200,dexterity:100,agility:250,magic:100}
+ }),/GOD_CONSENT/);
+ const grown=updateJinwooFalna(b,{sourceRef:"evt.status.1",godId:"npc.hestia",
+  godConfirmed:true,newStatus:{strength:300,endurance:200,dexterity:100,agility:250,magic:100}});
+ const p=projectJinwooFalna(grown);
+ assert.deepEqual(p.display,{strength:300,endurance:200,dexterity:100,agility:250,magic:100});
+ assert.deepEqual(p.bonus,{strength:6,stamina:4,agility:5,perception:2,intelligence:2});
+ assert.deepEqual(p.total,{strength:36,stamina:44,agility:40,perception:27,intelligence:17});
+ assert.equal(p.divineLevel,1);assert.equal(p.sourceOfCombatPower,"SYSTEM_PLUS_FALNA");
+ assert.equal(grown.stats.strength,30,"System stats do not rise when Falna is updated");
+ assert.equal(grown.systemLevel,1,"Falna stats do not raise System level");
+ const over=projectJinwooFalna({...grown,falna:{
+  ...grown.falna,status:{...grown.falna.status,strength:1200}}});
+ assert.equal(over.overRank,true);assert.equal(over.display?.strength,1200);
+ grown.storyFlags.push("feat.boss.victory");
+ const lvl=updateJinwooFalna(grown,{sourceRef:"evt.divine.2",
+  godId:"npc.hestia",godConfirmed:true,
+  newStatus:grown.falna.status,levelUpFeatRef:"feat.boss.victory"});
+ assert.equal(lvl.falna.divineLevel,2);
+ assert.equal(projectJinwooFalna(lvl).total.strength,41);
 });
