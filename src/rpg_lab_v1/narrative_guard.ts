@@ -117,6 +117,9 @@ export function reviewLabNarration(pack:LabPack,session:LabSession,
    if(!permittedLabEvidenceClaim(fact,claim.assertion))
     failures.push({beat:index,actorId:beat.actorId,
      code:"UNVERIFIED_CLAIM_UPGRADED",detail:claim.factId+":"+claim.assertion});
+   if(claim.assertion==="established"&&!fact.observedBy.includes(beat.actorId))
+    failures.push({beat:index,actorId:beat.actorId,
+     code:"NPC_DIRECT_CONFIRMATION_MISSING",detail:claim.factId});
   }
   if(beat.decision!==undefined){
    const d=beat.decision;
