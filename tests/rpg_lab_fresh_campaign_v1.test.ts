@@ -104,6 +104,10 @@ test("reliable hearsay remains a reported belief, not a verified player-known se
 test("alternative Bell rescue unlocks possibilities without silverback Falna gain",()=>{
  let session=fresh();
  session=applyConfirmedLabEvent(session,pack,evt("evt.monster","D0 09:00",{
+  playerWitnessed:true,knownBy:["npc.shakti"],
+  observations:[{npcId:"npc.shakti",channel:"seen",
+   perceivedFact:"Bell bravely helped the player evacuate during Silverback incident",
+   learnedAt:"D0 09:00",confidence:"certain",salience:"important",privacy:"public"}],
   storyFlagChanges:[
    {flagId:"monsterphilia.started",expectedRevision:0,value:true,evidenceRefs:["evt.monster"]},
    {flagId:"silverback.saved_by_player",expectedRevision:0,value:true,evidenceRefs:["evt.monster"]},
@@ -117,6 +121,10 @@ test("alternative Bell rescue unlocks possibilities without silverback Falna gai
  assert.equal(view.techniques.length,0);
  assert.equal(session.player.stats.excelia,undefined);
  session=applyConfirmedLabEvent(session,pack,evt("evt.ganesha_offer","D0 10:00",{
+  npcInteractions:[{initiatorNpcId:"npc.shakti",recipientNpcId:"npc.bell",
+   action:"Shakti offers a structured sparring practice to Bell",
+   outcome:"Bell accepts after checking with Hestia",
+   salience:"important",privacy:"small_group"}],
   storyFlagChanges:[
    {flagId:"ganesha.training_offered",expectedRevision:0,value:true,
     evidenceRefs:["evt.ganesha_offer"]},
@@ -248,4 +256,36 @@ test("contradictory silverback outcomes cannot both be canon even in a single ev
     evidenceRefs:["evt.bad_two_wins"]}
   ]
  })),/LAB_STORY_MUTUALLY_EXCLUSIVE_CAUSE/);
+});
+
+test("no fictitious Ganesha training invitation without an actual contact",()=>{
+ const session=fresh();
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,evt("evt.fake_ganesha","D0 09:00",{
+  storyFlagChanges:[{flagId:"ganesha.training_offered",value:true,
+   expectedRevision:0,evidenceRefs:["evt.fake_ganesha"]}]
+ })),/LAB_STORY_GANESHA_OFFER_NOT_DELIVERED/);
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,evt("evt.fake_rescue","D0 09:00",{
+  storyFlagChanges:[{flagId:"silverback.saved_by_player",value:true,
+   expectedRevision:0,evidenceRefs:["evt.fake_rescue"]}]
+ })),/LAB_STORY_PLAYER_RESCUE_NOT_WITNESSED/);
+});
+test("double-labelled lessons cannot produce two hours of practice in one hour",()=>{
+ let session=fresh();
+ session=applyConfirmedLabEvent(session,pack,evt("evt.bell_meets","D0 09:00",{
+  npcInteractions:[{initiatorNpcId:"npc.shakti",recipientNpcId:"npc.bell",
+   action:"They discuss basic training",outcome:"Bell agrees to practice",
+   salience:"ordinary",privacy:"small_group"}]
+ }));
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,evt("evt.two_drills","D0 10:00",{
+  kind:"training",
+  npcInteractions:[{initiatorNpcId:"npc.shakti",recipientNpcId:"npc.bell",
+   action:"Teaches two skills",outcome:"Bell practices",
+   salience:"ordinary",privacy:"small_group"}],
+  npcTechniqueTraining:[
+   {trainingId:"bell.stance",traineeNpcId:"npc.bell",mentorNpcId:"npc.shakti",
+    discipline:"Стойка",expectedRevision:0,sessionMinutes:50,passedDrill:true},
+   {trainingId:"bell.footwork",traineeNpcId:"npc.bell",mentorNpcId:"npc.shakti",
+    discipline:"Шаги",expectedRevision:0,sessionMinutes:50,passedDrill:true}
+  ]
+ })),/LAB_STORY_TRAINING_OVERLAPPING_CREDIT/);
 });
