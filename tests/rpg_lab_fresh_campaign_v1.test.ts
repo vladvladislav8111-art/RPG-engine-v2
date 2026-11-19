@@ -175,7 +175,7 @@ test("alternative Bell rescue unlocks possibilities without silverback Falna gai
    traineeNpcId:"npc.bell",mentorNpcId:"npc.shakti",
    discipline:"Уклонения, стойка и работа ног",
    expectedRevision:4,sessionMinutes:120,passedDrill:true}]
- })),/LAB_STORY_TRAINING_TIME_INSUFFICIENT/);
+ })),/LAB_STORY_TRAINING_OVERLAPPING_CREDIT/);
  assert.throws(()=>applyConfirmedLabEvent(session,pack,evt("evt.free_master","D0 17:00",{
   npcTechniqueTraining:[{trainingId:"bell.ganesha.footwork",
    traineeNpcId:"npc.bell",mentorNpcId:"npc.shakti",
@@ -249,6 +249,11 @@ test("canon facts are personally scoped and an absurd universal secret is absent
 test("contradictory silverback outcomes cannot both be canon even in a single event",()=>{
  const session=fresh();
  assert.throws(()=>applyConfirmedLabEvent(session,pack,evt("evt.bad_two_wins","D0 09:00",{
+  playerWitnessed:true,knownBy:["npc.bell"],
+  observations:[{npcId:"npc.bell",channel:"experienced",
+   perceivedFact:"Bell fought in Silverback incident",
+   learnedAt:"D0 09:00",confidence:"certain",
+   salience:"important",privacy:"public"}],
   storyFlagChanges:[
    {flagId:"silverback.saved_by_player",expectedRevision:0,value:true,
     evidenceRefs:["evt.bad_two_wins"]},
