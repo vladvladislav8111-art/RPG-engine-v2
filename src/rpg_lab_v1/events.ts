@@ -5,6 +5,8 @@
 import {validateLabSession,type LabSession,type LabMemory,type LabNpcState,type LabWorkOrder} from "./session.ts";
 import type {LabPack} from "./engine.ts";
 import {noteNpcFeature,type NpcFeatureObservation} from "./npc_perception.ts";
+import {dueLabWorldProjects,allowedLabProjectTransition,validateLabNpcMood,validateLabWorldProject,
+ type LabNpcMood,type LabWorldProject} from "./living_world.ts";
 import {newLinosState,validateLinosState,LINOS_RANKS,
  resolveLinosCast,regenerateLinosMp,type LinosAbilityRequest,type LinosState,type LinosScores,
  type LinosRank,type LinosSkill} from "./linos.ts";
@@ -42,12 +44,19 @@ export type LabWorkOrderChange={
 };
 export type LabIndependentAction={npcId:string;action:string;outcome:string;
  locationId?:string;privacy:"public"|"hidden"};
+export type LabNpcMoodChange={
+ npcId:string;evidenceRefs:string[];
+ mood:null|{label:string;intensity:number;settleAfterMinute?:number;context?:string};
+};
+export type LabWorldProjectChange={projectId:string;expectedRevision:number;record:LabWorldProject};
 export type LabConfirmedEvent={
  sourceRef:string;time:string;summary:string;kind:string;locationId?:string;
  knownBy:string[];observations?:LabNpcObservation[];
  features?:NpcFeatureObservation[];linos?:LabLinosTurn;
  worldActions?:LabIndependentAction[];
  npcSocial?:LabNpcSocialChange[];
+ moodChanges?:LabNpcMoodChange[];
+ worldProjectChanges?:LabWorldProjectChange[];
  workOrderChanges?:LabWorkOrderChange[];
  discovered?:string[];playerLocationId?:string;
  effects?:{resources?:Record<string,number>;inventory?:Record<string,number>};
@@ -319,6 +328,83 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
     throw Error("LAB_WORKORDER_STATUS_REGRESSION");
   }
   next.player.workOrders={...orders,[change.orderId]:structuredClone(change.record)};
+ }
+ // Emotional inertia: anger, curiosity and embarrassment never reset merely
+ // because the scene ends, the player apologizes or a narrator changes tone.
+ const moods=event.moodChanges??[];
+ if(!Array.isArray(moods)||moods.length>24||
+    new Set(moods.map(x=>x.npcId)).size!==moods.length)
+  throw Error("LAB_NPC_MOOD_BATCH_INVALID");
+ for(const change of moods){
+  if(!record(change)||!good(change.npcId)||!pack.npcProfiles[change.npcId]||
+   !bounded(change.evidenceRefs,12)||change.evidenceRefs.length<1||
+   new Set(change.evidenceRefs).size!==change.evidenceRefs.length||
+   (change.mood!==null&&!record(change.mood)))
+   throw Error("LAB_NPC_MOOD_CHANGE_INVALID");
+  const state:LabNpcState=next.npcs[change.npcId]??{knownFacts:[],memories:[]};
+  if(!change.evidenceRefs.every(ref=>state.memories.some(m=>m.sourceRef===ref)))
+   throw Error("LAB_NPC_MOOD_UNVERIFIED_MEMORY");
+  if(change.mood===null){
+   delete state.mood;
+  }else{
+   if(nextMinute===null)throw Error("LAB_NPC_MOOD_CLOCK_REQUIRED");
+   const m:LabNpcMood={...change.mood,causeRef:event.sourceRef,sinceMinute:nextMinute};
+   state.mood=validateLabNpcMood(m);
+  }
+  next.npcs[change.npcId]=state;
+ }
+ // Stateful NPC/faction work. Nothing advances in the background simply because
+ // the narrator says "we will test it"; advancing world time requires review
+ // of every overdue accepted task, or an explicit grounded closure.
+ const projectChanges=event.worldProjectChanges??[];
+ if(!Array.isArray(projectChanges)||projectChanges.length>24||
+    new Set(projectChanges.map(x=>x.projectId)).size!==projectChanges.length)
+   throw Error("LAB_WORLD_PROJECT_CHANGE_BATCH_INVALID");
+ for(const change of projectChanges){
+  if(!record(change)||!good(change.projectId)||
+     !Number.isSafeInteger(change.expectedRevision)||change.expectedRevision<0||
+     !record(change.record)||nextMinute===null)
+    throw Error("LAB_WORLD_PROJECT_CHANGE_INVALID");
+  const prev=session.worldProjects?.[change.projectId];
+  if((prev?.revision??0)!==change.expectedRevision||
+     change.record.revision!==change.expectedRevision+1||
+     change.record.latestEvidenceRef!==event.sourceRef||
+     change.record.lastReviewMinute!==nextMinute)
+    throw Error("LAB_WORLD_PROJECT_REVISION_CONFLICT");
+  const candidate=validateLabWorldProject(change.projectId,change.record,pack);
+  if(candidate.startedMinute>nextMinute)
+    throw Error("LAB_WORLD_PROJECT_FUTURE_START");
+  if(prev){
+   if(candidate.ownerNpcId!==prev.ownerNpcId||candidate.originRef!==prev.originRef||
+      candidate.startedMinute!==prev.startedMinute||
+      !allowedLabProjectTransition(prev.status,candidate.status)||
+      prev.status==="completed"||prev.status==="rejected"||prev.status==="cancelled")
+    throw Error("LAB_WORLD_PROJECT_TRANSITION_INVALID");
+  }else{
+   if(candidate.startedMinute!==nextMinute||candidate.originRef!==event.sourceRef)
+    throw Error("LAB_WORLD_PROJECT_ORIGIN_INVALID");
+   if(!event.knownBy.includes(candidate.ownerNpcId)||
+      !observations.some(o=>o.npcId===candidate.ownerNpcId&&
+       ["seen","heard","experienced"].includes(o.channel)))
+    throw Error("LAB_WORLD_PROJECT_OWNER_UNAWARE");
+  }
+  // Direct participation or an established responsibility is required. A player
+  // cannot assign arbitrary private work to a total stranger through narration.
+  if(!prev&&!["proposed","accepted"].includes(candidate.status))
+   throw Error("LAB_WORLD_PROJECT_INITIAL_STATUS");
+  if(prev&&!event.worldActions?.some(a=>a.npcId===candidate.ownerNpcId)&&
+      !observations.some(o=>o.npcId===candidate.ownerNpcId)&&
+      !event.kind.includes("world"))
+   throw Error("LAB_WORLD_PROJECT_NO_OWNER_ACTION");
+  next.worldProjects={...(next.worldProjects??{}),
+    [change.projectId]:structuredClone(candidate)};
+ }
+ if(nextMinute!==null){
+  const due=dueLabWorldProjects(session.worldProjects,nextMinute);
+  const reviewed=new Set(projectChanges.map(p=>p.projectId));
+  if(due.some(p=>!reviewed.has(p.projectId)))
+    throw Error("LAB_WORLD_PROJECT_REVIEW_REQUIRED:"+due.filter(p=>!reviewed.has(p.projectId))
+     .map(p=>p.projectId).join(","));
  }
  if(event.effects!==undefined){
   if(!record(event.effects))throw Error("LAB_EVENT_EFFECT_INVALID");
