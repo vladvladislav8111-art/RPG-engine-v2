@@ -4,6 +4,7 @@
  */
 import {buildLabSceneBrief,dueLabWorldProjects} from "./living_world.ts";
 import {narrativeMinute} from "./events.ts";
+import {previewLabLivingWorldCycle} from "./living_world_cycle_v2.ts";
 import {reviewLabNarration,type LabNarrativeReviewRequest} from "./narrative_guard.ts";
 import type {LabPack} from "./engine.ts";
 import {RPG_LAB_SCENE_REMINDER,RPG_BRIDGE_GM_GUIDE_VERSION} from "./gm_guide.ts";
@@ -42,6 +43,11 @@ export async function readLabRoleplayScene(load:LabRoleplayLoader,
    to<from||to-from>10080))
   throw Error("LAB_ROLEPLAY_SCENE_TICK_INVALID");
  const due=to!==undefined?dueLabWorldProjects(s.session.worldProjects,to):[];
+ const worldCycle=from!==null?
+   previewLabLivingWorldCycle(s.pack,s.session,{
+     npcIds:request.npcIds,fromMinute:from,toMinute:to??from,
+     focusEventRef:request.eventRef,maxPerActor:2,
+   }):null;
  const answer={...brief,schema:"RPG_LAB_ROLEPLAY_CONTEXT_V1",
   packRevision:s.packRevision,sessionRevision:s.sessionRevision,
   sourceAttestedBySave:true,
@@ -51,11 +57,28 @@ export async function readLabRoleplayScene(load:LabRoleplayLoader,
   currentInworldMinute:from,
   ...(to!==undefined?{reviewThroughMinute:to}:{}),
   dueWorldProjects:due,
+  livingWorldCycle:worldCycle,
   resolutionRequired:due.length>0,
   mustUseSourceBoundCommit:s.session.roleplayGuard==="strict",
   note:"GM ONLY; do not disclose private memories or proposal decisions to player."};
  if(JSON.stringify(answer).length>60000)throw Error("LAB_ROLEPLAY_CONTEXT_TOO_LARGE");
  return answer;
+}
+export type LabRoleplayWorldCycleRequest={
+ projectId:string;sessionId:string;npcIds:string[];
+ toMinute:number;maxPerActor?:number;focusEventRef?:string;
+};
+export async function readLabRoleplayWorldCycle(load:LabRoleplayLoader,
+ request:LabRoleplayWorldCycleRequest){
+ const s=await loadExact(load,request.projectId,request.sessionId);
+ const from=narrativeMinute(s.session.gameClock);
+ if(from===null)throw Error("LAB_LIVING_CYCLE_CLOCK_OPAQUE");
+ const cycle=previewLabLivingWorldCycle(s.pack,s.session,{
+  fromMinute:from,toMinute:request.toMinute,npcIds:request.npcIds,
+  focusEventRef:request.focusEventRef,maxPerActor:request.maxPerActor,
+ });
+ return {...cycle,packRevision:s.packRevision,
+  sessionRevision:s.sessionRevision,sourceAttestedBySave:true};
 }
 export type LabRoleplayNarrationRequest=LabNarrativeReviewRequest&{
  projectId:string;sessionId:string;
