@@ -13,6 +13,9 @@ import {prepareLabSessionHead,decodeLabSessionFromKv} from "./session_kv.ts";
 import {reviewLabSessionMemory} from "./memory_view.ts";
 import {newLinosState} from "./linos.ts";
 import {planLabEventArchive} from "./event_archive.ts";
+import {buildFreshDanmachiLabPack} from "./danmachi_starter.ts";
+import {archivedLabKey,validateLabArchiveRequest,validateLabArchiveMarker,
+ type LabArchiveTarget,type LabArchiveMarker} from "./campaign_lifecycle.ts";
 import {
  connectGoogleProject,syncGoogleProject,autoSyncGoogleProject,getGoogleProjectStatus,
  getGoogleProjectSources,disconnectGoogleProject,
@@ -51,6 +54,77 @@ export async function loadLabProjectFromKv(projectId:string,expectedRevision?:nu
  if(expectedRevision!==undefined&&expectedRevision!==result.value.revision)throw Error("LAB_REVISION_CONFLICT");
  return {pack:await decodeLabPack(result.value),revision:result.value.revision};
 }
+/** Inventory only: no cross-project migration, no historic events exposed. */
+export async function listLabCampaignInventory(includeArchived=false){
+ const kv=await storage(),campaigns:{
+  projectId:string;sessionId:string;revision:number;gameClock:string;
+  archived:boolean;archivedAt?:string;
+ }[]=[];
+ for await(const project of kv.list<LabStored>({prefix:[ROOT,"projects"]},{limit:50})){
+  const projectId=String(project.key[2]);
+  for await(const sess of kv.list<LabSessionStored>({
+    prefix:[ROOT,"sessions",projectId]},{limit:100})){
+   const sessionId=String(sess.key[3]);
+   const marker=await kv.get<LabArchiveMarker>(archivedLabKey(projectId,sessionId));
+   if(marker.value&&!includeArchived)continue;
+   campaigns.push({projectId,sessionId,revision:sess.value.revision,
+    gameClock:sess.value.gameClock??sess.value.session?.gameClock??"unknown",
+    archived:Boolean(marker.value),
+    ...(marker.value?{archivedAt:marker.value.archivedAt}:{})});
+  }
+ }
+ return {schema:"RPG_LAB_CAMPAIGN_INVENTORY_V1",campaigns,
+  readOnly:true,legacySaveTouched:false};
+}
+/** Archive existing RPG Lab campaigns by exact CAS revision. NEVER delete
+ * their events, compressed chunks, private memories, or linked Drive files.
+ */
+export async function archiveLabCampaigns(targets:LabArchiveTarget[],reason:string){
+ validateLabArchiveRequest(targets,reason);
+ const kv=await storage();
+ let tx=kv.atomic();
+ for(const target of targets){
+  const key=[ROOT,"sessions",target.projectId,target.sessionId];
+  const saved=await kv.get<LabSessionStored>(key);
+  if(!saved.value)throw Error("LAB_ARCHIVE_SESSION_NOT_FOUND");
+  if(saved.value.revision!==target.expectedRevision)
+   throw Error("LAB_ARCHIVE_REVISION_CONFLICT");
+  const markerKey=archivedLabKey(target.projectId,target.sessionId);
+  const existing=await kv.get<LabArchiveMarker>(markerKey);
+  if(existing.value)throw Error("LAB_CAMPAIGN_ALREADY_ARCHIVED");
+  const record=validateLabArchiveMarker({
+   projectId:target.projectId,sessionId:target.sessionId,
+   revision:saved.value.revision,archivedAt:new Date().toISOString(),
+   reason,mode:"reversible_archive"
+  });
+  tx=tx.check({key,versionstamp:saved.versionstamp})
+   .check({key:markerKey,versionstamp:existing.versionstamp})
+   .set(markerKey,record);
+ }
+ const result=await tx.commit();
+ if(!result.ok)throw Error("LAB_ARCHIVE_REVISION_CONFLICT");
+ return {ok:true,archived:targets.map(x=>({
+  projectId:x.projectId,sessionId:x.sessionId,revision:x.expectedRevision
+ })),reversible:true,deleted:false,legacySaveTouched:false};
+}
+/** Safe install: creates new DanMachi pack only if projectId is unused.
+ * No old campaign is migrated; player must later create a fresh session.
+ */
+export async function installFreshDanmachiWorld(projectId:string){
+ if(!projectRe.test(projectId))throw Error("LAB_NEW_WORLD_ID_INVALID");
+ const pack=buildFreshDanmachiLabPack(projectId);
+ const kv=await storage(),key=keyOf(projectId);
+ const saved=await kv.get<LabStored>(key);
+ if(saved.value)throw Error("LAB_NEW_WORLD_ID_ALREADY_EXISTS");
+ const value=await encodeLabPack(pack,1);
+ const done=await kv.atomic().check({key,versionstamp:saved.versionstamp})
+   .set(key,value).commit();
+ if(!done.ok)throw Error("LAB_REVISION_CONFLICT");
+ return {ok:true,projectId,packRevision:1,
+  npcCoreCount:Object.keys(pack.npcProfiles).length,
+  storyArcCount:Object.keys(pack.storyArcs??{}).length,
+  noCampaignCreated:true,oldSavesUntouched:true,legacySaveTouched:false};
+}
 /** Authenticated internal loader for read-only Runtime Bridge memory view. */
 export async function loadLabSessionFromKv(projectId:string,sessionId:string):
  Promise<{pack:LabPack;packRevision:number;session:LabSession;sessionRevision:number}>{
@@ -59,6 +133,8 @@ export async function loadLabSessionFromKv(projectId:string,sessionId:string):
  const kv=await storage();
  const saved=await kv.get<LabSessionStored>([ROOT,"sessions",projectId,sessionId]);
  if(!saved.value)throw Error("LAB_SESSION_NOT_FOUND");
+ const archive=await kv.get<LabArchiveMarker>(archivedLabKey(projectId,sessionId));
+ if(archive.value)throw Error("LAB_CAMPAIGN_ARCHIVED");
  return {pack,packRevision,session:await decodeLabSessionFromKv(kv,projectId,sessionId,saved.value,pack),sessionRevision:saved.value.revision};
 }
 /** Shared write gate for HTTP and the opt-in ChatGPT MCP tool.
@@ -108,6 +184,8 @@ export async function commitLabCampaignEvent(args:{
  const kv=await storage(),key=[ROOT,"sessions",projectId,sessionId];
  const existing=await kv.get<LabSessionStored>(key);
  if(!existing.value)throw Error("LAB_SESSION_NOT_FOUND");
+ const retired=await kv.get<LabArchiveMarker>(archivedLabKey(projectId,sessionId));
+ if(retired.value)throw Error("LAB_CAMPAIGN_ARCHIVED");
  if(existing.value.revision!==expectedRevision)throw Error("LAB_REVISION_CONFLICT");
  const session=await decodeLabSessionFromKv(kv,projectId,sessionId,existing.value,pack);
  if(!event||typeof event.sourceRef!=="string"||
@@ -125,6 +203,7 @@ export async function commitLabCampaignEvent(args:{
  const head=await prepareLabSessionHead(kv,projectId,sessionId,value);
  let tx=kv.atomic()
   .check({key,versionstamp:existing.versionstamp})
+  .check({key:archivedLabKey(projectId,sessionId),versionstamp:retired.versionstamp})
   .check({key:refKey,versionstamp:ref.versionstamp})
   .set(key,head)
   .set(refKey,{revision:expectedRevision+1,event});
