@@ -9,6 +9,7 @@ import {proposeIndependentWorldAgenda} from "./autonomy.ts";
 import {previewLabLivingWorldCycle} from "./living_world_cycle_v2.ts";
 import {validateLabStoryDefs,previewLabStoryPaths,type LabStoryArcDef} from "./story_consequences.ts";
 import type {LabCanonFact} from "./danmachi_canon_knowledge.ts";
+import type {LabOriginalNpcCore} from "./original_npc_promotion.ts";
 import {buildLabSceneBrief,dueLabWorldProjects,type LabWorldProject} from "./living_world.ts";
 import type {LabSession} from "./session.ts";
 export type LabResource={min:number;max:number};
@@ -29,7 +30,8 @@ export type LabNpcLogic={
 };
 export type LabNpc={name:string;canonRef:string;traits:string[];goals:string[];knownFacts:string[];
  speechStyle?:string;responsePatterns?:Record<string,LabResponsePattern[]>;
- voice?:LabNpcVoice;habitualLogic?:LabNpcLogic;entryArc?:string;faction?:string};
+ voice?:LabNpcVoice;habitualLogic?:LabNpcLogic;entryArc?:string;faction?:string;
+ originalCore?:LabOriginalNpcCore};
 export type LabPack={
  schema:"RPG_LAB_PACK_V1";projectId:string;worldId:string;
  formulas:Record<string,string>;resources:Record<string,LabResource>;
@@ -127,6 +129,17 @@ export function validateLabPack(pack:LabPack):LabPack{
   if(v.speechStyle!==undefined)text(v.speechStyle,600);
   if(v.faction!==undefined)text(v.faction,80);
   if(v.entryArc!==undefined)ident(v.entryArc);
+  if(v.originalCore!==undefined){
+   const c=v.originalCore;
+   if(!safeObj(c)||!v.canonRef.startsWith("original.")||
+      !pack.locations[c.homeLocationId])throw Error("LAB_ORIGINAL_CORE_INVALID");
+   for(const f of ["role","publicAppearance","normalSchedule","personalGoal",
+    "privateHistory","internalConflict","fear"] as const)text(c[f],500);
+   for(const f of ["values","priorConnections","autonomousActions",
+    "relationshipGates","boundaries","departureConditions"] as const)stringList(c[f],12);
+   if(!c.values.length||!c.autonomousActions.length||!c.boundaries.length||
+     !c.departureConditions.length)throw Error("LAB_ORIGINAL_CORE_INCOMPLETE");
+  }
   if(v.voice!==undefined){
    if(!safeObj(v.voice))throw Error("LAB_NPC_VOICE_INVALID");
    text(v.voice.register,150);text(v.voice.tempo,150);

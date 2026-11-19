@@ -169,6 +169,7 @@ export function buildLabSceneBrief(pack:LabPack,session:LabSession,req:LabSceneB
    canonAnchors:identity.traits,canonGoals:identity.goals,
    speechStyle:identity.speechStyle??null,
    voiceIdentity:identity.voice??null,habitualLogic:identity.habitualLogic??null,
+   originalCore:identity.originalCore??null,
    personallyKnownCanon:identity.knownFacts.map(factId=>({factId,
     summary:pack.canonFacts?.[factId]?.summary??factId,
     visibility:pack.canonFacts?.[factId]?.visibility??"gm_only"})),
