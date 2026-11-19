@@ -8,6 +8,7 @@ import {reviewLabSessionMemory} from "../src/rpg_lab_v1/memory_view.ts";
 import {hydrateLabBridgeRequest} from "../src/rpg_lab_v1/bridge.ts";
 import {dispatchWorldV3Batch,type WorldV3BatchRequest} from "../src/world_sim_v3/runtime_facade.ts";
 import {reviewLabNarration} from "../src/rpg_lab_v1/narrative_guard.ts";
+import {applyGuardedLabEvent} from "../src/rpg_lab_v1/turn_guard.ts";
 
 const pack:LabPack={
  schema:"RPG_LAB_PACK_V1",projectId:"orario_living_world",worldId:"danmachi.orario",
@@ -621,4 +622,113 @@ test("appearance edits require user authorization and do not invent automatic wi
       significance:"notable",visibility:"obvious"}}
    ]})),/LAB_PLAYER_FEATURE_CHANGE_INVALID/);
  assert.equal(session.npcs["npc.loki"],undefined);
+});
+
+test("strict campaign gate rejects a missing scene plan before saving any first sight",()=>{
+ const session:LabSession={...fresh(),roleplayGuard:"strict"};
+ const first=evt("evt.first.halo","D0 09:00",{
+  knownBy:["npc.loki"],
+  observations:[{npcId:"npc.loki",channel:"seen",
+   perceivedFact:"Saw luminous halo",learnedAt:"D0 09:00",
+   confidence:"certain",salience:"important",privacy:"private"}],
+  features:[{npcId:"npc.loki",featureId:"daedalus.halo",
+   channel:"seen",significance:"transformative",privacy:"private"}]
+ });
+ assert.throws(()=>applyGuardedLabEvent(session,pack,first,1),
+  /LAB_STRICT_NARRATION_PLAN_REQUIRED/);
+ assert.equal(session.events.length,0);
+ const planned={...first,narrationPlan:{npcIds:["npc.loki"],beats:[{
+  actorId:"npc.loki",kind:"reaction" as const,summary:"Loki looks at the strange halo",
+  factRefs:["evt.first.halo"],
+  featureRefs:[{featureId:"daedalus.halo",knowledge:"seen" as const}]
+ }]}};
+ const outcome=applyGuardedLabEvent(session,pack,planned,1);
+ assert.equal(outcome.guardRequired,true);
+ assert.equal(outcome.guardVerified,true);
+ assert.equal(outcome.next.events.length,1);
+ assert.equal(outcome.next.npcs["npc.loki"].perceptions?.["daedalus.halo"].notices,1);
+ assert.equal(session.events.length,0);
+});
+test("strict campaign rejects omitted NPCs, missed objections and unmentioned research",()=>{
+ const session:LabSession={...fresh(),roleplayGuard:"strict"};
+ const argument=evt("evt.bete.argument","D0 09:00",{
+  npcInteractions:[{initiatorNpcId:"npc.bete",recipientNpcId:"npc.loki",
+   action:"Bete insults Loki",outcome:"She refuses to forgive",
+   privacy:"private",salience:"important"}],
+  npcDecisionChanges:[{npcId:"npc.loki",subjectId:"bete.insult",
+   stance:"avoid",reason:"Does not accept his behavior",
+   evidenceRefs:["evt.bete.argument"],privacy:"private"}]
+ });
+ assert.throws(()=>applyGuardedLabEvent(session,pack,{
+  ...argument,narrationPlan:{npcIds:["npc.bete"],beats:[{
+   actorId:"npc.bete",kind:"speech",summary:"Bete taunts",factRefs:["evt.bete.argument"]
+  }]}},1),/LAB_STRICT_REQUIRED_ACTORS_MISSING/);
+ assert.throws(()=>applyGuardedLabEvent(session,pack,{
+  ...argument,narrationPlan:{npcIds:["npc.bete","npc.loki"],beats:[
+   {actorId:"npc.bete",kind:"speech",summary:"Bete taunts",factRefs:["evt.bete.argument"]},
+   {actorId:"npc.loki",kind:"reaction",summary:"Loki storms away",
+    factRefs:["evt.bete.argument"]}
+  ]}},1),/LAB_STRICT_NPC_DECISION_NOT_NARRATED/);
+ const accepted=applyGuardedLabEvent(session,pack,{
+  ...argument,narrationPlan:{npcIds:["npc.bete","npc.loki"],beats:[
+   {actorId:"npc.bete",kind:"speech",summary:"Bete mocks Loki",
+    factRefs:["evt.bete.argument"]},
+   {actorId:"npc.loki",kind:"reaction",
+    summary:"Loki decides to avoid Bete",factRefs:["evt.bete.argument"],
+    decision:{subjectId:"bete.insult",stance:"avoid"}}
+  ]}},1);
+ assert.equal(accepted.next.npcs["npc.loki"].decisions?.["bete.insult"].stance,"avoid");
+ const order=evt("evt.heph.work","D0 10:00",{
+  knownBy:["npc.smith"],
+  observations:[{npcId:"npc.smith",channel:"seen",
+   perceivedFact:"Smith accepted research samples",learnedAt:"D0 10:00",
+   confidence:"certain",salience:"important",privacy:"private"}],
+  worldProjectChanges:[{projectId:"proj.heph.thread",expectedRevision:0,
+   record:{...research("accepted",1,m(0,10),m(1,10)),
+    originRef:"evt.heph.work",latestEvidenceRef:"evt.heph.work"}}]
+ });
+ const next=accepted.next;
+ assert.throws(()=>applyGuardedLabEvent(next,pack,{
+  ...order,narrationPlan:{npcIds:["npc.smith"],beats:[{
+   actorId:"npc.smith",kind:"reaction",summary:"Interesting material",
+   factRefs:["evt.heph.work"]
+  }]}},2),/LAB_STRICT_WORLD_WORK_OMITTED/);
+});
+test("strict and legacy campaigns remain isolated: old save can use historical event shape",()=>{
+ const old=fresh();
+ const event=evt("evt.legacy.scene","D0 09:00",{
+  knownBy:["npc.loki"],
+  observations:[{npcId:"npc.loki",channel:"seen",
+   perceivedFact:"Witnessed a visitor",learnedAt:"D0 09:00",
+   confidence:"certain",salience:"important",privacy:"private"}]
+ });
+ const result=applyGuardedLabEvent(old,pack,event,12);
+ assert.equal(result.guardRequired,false);
+ assert.equal(result.guardVerified,false);
+ assert.equal(result.next.npcs["npc.loki"].memories.length,1);
+});
+test("strict gate rejects skipping transformative proof even when actor supplied a beat",()=>{
+ const session:LabSession={...fresh(),roleplayGuard:"strict"};
+ const event=evt("evt.rifle.proof","D0 09:00",{
+  knownBy:["npc.finn"],
+  observations:[{npcId:"npc.finn",channel:"seen",
+   perceivedFact:"Saw bullet pass through both walls of iron chestplate",
+   learnedAt:"D0 09:00",confidence:"certain",salience:"important",privacy:"private"}],
+  worldEvidence:[{factId:"rifle.plate.test",statement:"Shot pierced an iron breastplate",
+   scope:"Specific plate, range and setup; nothing about Ottar",
+   kind:"observed",level:"established",significance:"transformative",
+   observedBy:["npc.finn"]}],
+ });
+ const bad={...event,narrationPlan:{npcIds:["npc.finn"],beats:[{
+  actorId:"npc.finn",kind:"speech" as const,summary:"Lacks velocity measurements",
+  factRefs:["evt.rifle.proof"]}]}};
+ assert.throws(()=>applyGuardedLabEvent(session,pack,bad,1),
+  /LAB_STRICT_NARRATION_REJECTED:TRANSFORMATIVE_EVIDENCE_IGNORED/);
+ const good={...event,narrationPlan:{npcIds:["npc.finn"],beats:[{
+  actorId:"npc.finn",kind:"speech" as const,
+  summary:"Armor was pierced, but speed remains unmeasured",
+  factRefs:["evt.rifle.proof"],
+  worldClaims:[{factId:"rifle.plate.test",assertion:"established" as const}]
+ }]}};
+ assert.equal(applyGuardedLabEvent(session,pack,good,1).guardVerified,true);
 });
