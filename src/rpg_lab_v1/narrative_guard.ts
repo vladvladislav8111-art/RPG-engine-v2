@@ -76,7 +76,8 @@ export function reviewLabNarration(pack:LabPack,session:LabSession,
   const state=session.npcs[beat.actorId];
   const memories=state?.memories??[];
   for(const ref of beat.factRefs){
-   const own=memories.some(m=>m.sourceRef===ref);
+   const own=memories.some(m=>m.sourceRef===ref)||
+    (pack.npcProfiles[beat.actorId]?.knownFacts??[]).includes(ref);
    if(!own)failures.push({beat:index,actorId:beat.actorId,
     code:"NPC_NOT_PERSONALLY_INFORMED",detail:ref});
    else seen.add(beat.actorId+"|"+ref);
