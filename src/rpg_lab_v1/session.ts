@@ -2,13 +2,31 @@
  * No inferred NPC feelings; manual edits are user-provided state, not canonical proof.
  */
 import type {LabPack,LabJob} from "./engine.ts";
+import {validateLabAmbientRumor,type LabAmbientRumor} from "./ambient_rumors.ts";
 import {validateLinosState,type LinosState} from "./linos.ts";
 import {validateFeatureMemory,type NpcFeatureMemory} from "./npc_perception.ts";
+import {validateLabSocialVector,type LabSocialVector} from "./social_dynamics_v2.ts";
+import {validateLabWorldEvidence,type LabWorldEvidence} from "./world_evidence.ts";
+import {validateLabPlayerFog,type LabPlayerFog} from "./fog_of_war.ts";
+import {validateLabStoryState,type LabStoryState} from "./story_consequences.ts";
+import {validateLabNpcMood,validateLabWorldProject,validateLabNpcDecision,
+ type LabNpcMood,type LabWorldProject,type LabNpcDecision} from "./living_world.ts";
 export type LabMemory={sourceRef:string;summary:string;learnedAt:string;knownBy:string[];
   eventTime?:string;locationId?:string;channel?:string;sourceActor?:string;relayedSourceRef?:string;
   confidence?:string;salience?:string;privacy?:string;perceivedFact?:string;
  };
-export type LabNpcState={knownFacts:string[];memories:LabMemory[];currentGoal?:string;relationships?:Record<string,string>;perceptions?:Record<string,NpcFeatureMemory>};
+/** Permanent player-identity cues, NOT automatic awareness in every NPC.
+ * Obvious means potentially perceptible in a scene, not automatically seen.
+ */
+export type LabPlayerFeature={
+ description:string;significance:"routine"|"notable"|"transformative";
+ visibility:"obvious"|"conditional";revision:number;lastUpdatedRef:string;
+};
+export type LabNpcState={knownFacts:string[];memories:LabMemory[];currentGoal?:string;
+ relationships?:Record<string,string>;perceptions?:Record<string,NpcFeatureMemory>;
+ mood?:LabNpcMood;decisions?:Record<string,LabNpcDecision>;
+ socialDynamics?:Record<string,LabSocialVector>;
+ locationId?:string;locationSourceRef?:string;};
 /** Explicit commercial commitments. Amounts are ledger facts, NOT cash effects. */
 export type LabWorkOrder={
  title:string;clientNpcId:string;signedAt:string;dueFrom:string;dueTo:string;
@@ -20,10 +38,14 @@ export type LabWorkOrder={
 };
 export type LabSession={
  schema:"RPG_LAB_SESSION_V1";projectId:string;sessionId:string;gameClock:string;
- player:{resources:Record<string,number>;stats:Record<string,number>;inventory:Record<string,number>;locationId?:string;linos?:LinosState;workOrders?:Record<string,LabWorkOrder>};
- discovered:string[];npcs:Record<string,LabNpcState>;
+ /** New sessions default strict; legacy sessions without this flag remain compatible. */
+ roleplayGuard?:"strict";
+ player:{resources:Record<string,number>;stats:Record<string,number>;inventory:Record<string,number>;locationId?:string;linos?:LinosState;workOrders?:Record<string,LabWorkOrder>;visibleFeatures?:Record<string,LabPlayerFeature>};
+ discovered:string[];npcs:Record<string,LabNpcState>;worldProjects?:Record<string,LabWorldProject>;worldEvidence?:Record<string,LabWorldEvidence>;
+ playerFog?:LabPlayerFog;storyState?:LabStoryState;
+ ambientRumors?:Record<string,LabAmbientRumor>;
  events:{sourceRef:string;summary:string;time:string;knownBy:string[];locationId?:string;kind?:string}[];
- worldEvents?:{sourceRef:string;time:string;npcId:string;action:string;outcome:string;locationId?:string;privacy:"public"|"hidden"}[];
+ worldEvents?:{sourceRef:string;time:string;npcId:string;targetNpcId?:string;action:string;outcome:string;locationId?:string;privacy:"public"|"hidden"}[];
  archivedEventCount?:number;
 };
 const id=(v:unknown)=>typeof v==="string"&&/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(v)&&!["constructor","prototype","__proto__"].includes(v);
@@ -39,9 +61,22 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
  if(!s||s.schema!=="RPG_LAB_SESSION_V1"||!id(s.sessionId)||!txt(s.gameClock,100))
   throw Error("LAB_SESSION_SCHEMA");
  if(s.projectId!==pack.projectId)throw Error("LAB_SESSION_PROJECT_MISMATCH");
+ if(s.roleplayGuard!==undefined&&s.roleplayGuard!=="strict")
+  throw Error("LAB_ROLEPLAY_GUARD_INVALID");
  if(JSON.stringify(s).length>LAB_SESSION_MAX_TEXT_UNITS)
   throw Error("LAB_SESSION_SIZE_LIMIT");
  if(!s.player||!map(s.player.resources,128)||!map(s.player.stats,128)||!map(s.player.inventory,500))throw Error("LAB_SESSION_PLAYER_INVALID");
+ if(s.player.visibleFeatures!==undefined){
+  if(!map(s.player.visibleFeatures,48))throw Error("LAB_PLAYER_FEATURES_INVALID");
+  for(const [featureId,feature] of Object.entries(s.player.visibleFeatures)){
+   if(!id(featureId)||!feature||!txt(feature.description,280)||
+     !["routine","notable","transformative"].includes(feature.significance)||
+     !["obvious","conditional"].includes(feature.visibility)||
+     !Number.isSafeInteger(feature.revision)||feature.revision<1||feature.revision>10000||
+     !id(feature.lastUpdatedRef))
+     throw Error("LAB_PLAYER_FEATURE_INVALID:"+featureId);
+  }
+ }
  if(s.player.workOrders!==undefined){
   if(!map(s.player.workOrders,60))throw Error("LAB_WORKORDER_MAP_INVALID");
   for(const [orderId,order] of Object.entries(s.player.workOrders)){
@@ -74,6 +109,33 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
  for(const v of Object.values(s.player.stats))if(!n(v))throw Error("LAB_SESSION_STAT_INVALID");
  for(const v of Object.values(s.player.inventory))if(!n(v)||!Number.isInteger(v))throw Error("LAB_SESSION_ITEM_INVALID");
  if(!list(s.discovered,500)||s.discovered.some(k=>!pack.locations[k]))throw Error("LAB_SESSION_DISCOVERY_INVALID");
+ if(s.playerFog!==undefined)validateLabPlayerFog(s.playerFog,pack);
+ if(s.storyState!==undefined)validateLabStoryState(s.storyState,pack);
+ if(s.worldEvidence!==undefined){
+  if(!map(s.worldEvidence,256))throw Error("LAB_WORLD_EVIDENCE_MAP_INVALID");
+  for(const [factId,fact] of Object.entries(s.worldEvidence)){
+   if(factId!==fact.factId)throw Error("LAB_WORLD_EVIDENCE_KEY_MISMATCH");
+   validateLabWorldEvidence(fact);
+   if(fact.locationId!==undefined&&!pack.locations[fact.locationId])
+    throw Error("LAB_WORLD_EVIDENCE_LOCATION_UNKNOWN");
+   if(fact.observedBy.some(npcId=>!pack.npcProfiles[npcId]))
+    throw Error("LAB_WORLD_EVIDENCE_OBSERVER_UNKNOWN");
+  }
+ }
+ if(s.ambientRumors!==undefined){
+  if(!map(s.ambientRumors,128))throw Error("LAB_AMBIENT_RUMOR_MAP_INVALID");
+  for(const [rumorId,rumor] of Object.entries(s.ambientRumors)){
+   if(rumorId!==rumor.rumorId)throw Error("LAB_AMBIENT_RUMOR_ID_MISMATCH");
+   validateLabAmbientRumor(rumor,pack);
+   if(rumor.parentRumorId!==undefined&&!s.ambientRumors[rumor.parentRumorId])
+    throw Error("LAB_AMBIENT_RUMOR_PARENT_UNKNOWN");
+  }
+ }
+ if(s.worldProjects!==undefined){
+  if(!map(s.worldProjects,128))throw Error("LAB_WORLD_PROJECTS_INVALID");
+  for(const [projectId,project] of Object.entries(s.worldProjects))
+   validateLabWorldProject(projectId,project,pack);
+ }
  if(!map(s.npcs,128))throw Error("LAB_SESSION_NPCS_INVALID");
  for(const [npcId,raw] of Object.entries(s.npcs)){
   const state=raw as LabNpcState;
@@ -86,6 +148,27 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
     validateFeatureMemory(feature);
    }
   }
+  if(state.mood!==undefined)validateLabNpcMood(state.mood);
+  if(state.decisions!==undefined){
+   if(!map(state.decisions,32))throw Error("LAB_NPC_DECISIONS_INVALID");
+   for(const [subjectId,decision] of Object.entries(state.decisions)){
+    if(subjectId!==decision.subjectId)throw Error("LAB_NPC_DECISION_KEY_MISMATCH");
+    validateLabNpcDecision(decision);
+   }
+  }
+  if(state.socialDynamics!==undefined){
+   if(!map(state.socialDynamics,80))throw Error("LAB_NPC_SOCIAL_VECTORS_INVALID");
+   for(const [towardId,vector] of Object.entries(state.socialDynamics)){
+    if(towardId===npcId||!pack.npcProfiles[towardId])
+     throw Error("LAB_NPC_SOCIAL_TARGET_UNKNOWN");
+    validateLabSocialVector(towardId,vector);
+   }
+  }
+  if(state.locationId!==undefined&&(!id(state.locationId)||!pack.locations[state.locationId]))
+   throw Error("LAB_NPC_LOCATION_INVALID");
+  if(state.locationSourceRef!==undefined&&
+    (!id(state.locationSourceRef)||state.locationId===undefined))
+   throw Error("LAB_NPC_LOCATION_SOURCE_INVALID");
   if(state.currentGoal!==undefined&&!txt(state.currentGoal,300))throw Error("LAB_SESSION_NPC_GOAL_INVALID");
   if(state.relationships!==undefined&&(!map(state.relationships,80)||Object.values(state.relationships).some(v=>!txt(v,250))))
    throw Error("LAB_SESSION_NPC_RELATION_INVALID");
@@ -112,6 +195,7 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
   if(!Array.isArray(s.worldEvents)||s.worldEvents.length>256)throw Error("LAB_WORLD_JOURNAL_INVALID");
   for(const world of s.worldEvents){
    if(!id(world.sourceRef)||!id(world.npcId)||!pack.npcProfiles[world.npcId]||
+    (world.targetNpcId!==undefined&&(!id(world.targetNpcId)||!pack.npcProfiles[world.targetNpcId]||world.targetNpcId===world.npcId))||
     !txt(world.time,100)||!txt(world.action,150)||!txt(world.outcome,400)||
     !["public","hidden"].includes(world.privacy)||
     (world.locationId!==undefined&&(!id(world.locationId)||!pack.locations[world.locationId])))
@@ -119,6 +203,17 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
   }
  }
  return s;
+}
+/** The direct snapshot writer predates strict RPG Lab. It remains available
+ * only for legacy sessions; guarded sessions must use the event CAS path.
+ */
+export function assertLabDirectSessionPutAllowed(
+ previous:LabSession|null,candidate:LabSession){
+ if(previous?.roleplayGuard==="strict")
+  throw Error("LAB_STRICT_SESSION_PUT_FORBIDDEN");
+ if(candidate.roleplayGuard==="strict")
+  throw Error("LAB_STRICT_SESSION_CREATE_OR_UPGRADE_FORBIDDEN");
+ return true;
 }
 /** Fill convenient read-only inputs from a known session; never silently alter the snapshot. */
 export function withSessionDefaults(jobs:LabJob[],session:LabSession):LabJob[]{
@@ -130,6 +225,13 @@ export function withSessionDefaults(jobs:LabJob[],session:LabSession):LabJob[]{
    args.variables=session.player.stats;
   if(job.kind==="linos"&&args.state===undefined&&session.player.linos!==undefined)
    args.state=session.player.linos;
+  if(job.kind==="scene_brief")args.session=session;
+  if(job.kind==="world_tick"){
+   args.session=session;
+   args.worldProjects=session.worldProjects??{};
+   args.discovered=session.discovered;
+   args.sessionId=session.sessionId;
+  }
   if(job.kind==="npc"&&args.knownFactIds===undefined){
    const id=typeof args.npcId==="string"?args.npcId:"";
    args.knownFactIds=session.npcs[id]?.knownFacts??[];

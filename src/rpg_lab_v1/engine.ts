@@ -6,6 +6,11 @@ import {previewDungeonExplore,validateEncounterProfile,validateMonster,type LabE
 import {newLinosState,linosProfile,previewLinosCast,regenerateLinosMp,
  type LinosState,type LinosAbilityRequest} from "./linos.ts";
 import {proposeIndependentWorldAgenda} from "./autonomy.ts";
+import {previewLabLivingWorldCycle} from "./living_world_cycle_v2.ts";
+import {validateLabStoryDefs,previewLabStoryPaths,type LabStoryArcDef} from "./story_consequences.ts";
+import type {LabCanonFact} from "./danmachi_canon_knowledge.ts";
+import {buildLabSceneBrief,dueLabWorldProjects,type LabWorldProject} from "./living_world.ts";
+import type {LabSession} from "./session.ts";
 export type LabResource={min:number;max:number};
 export type LabLootEntry={itemId:string;weight:number;chance:number;min:number;max:number};
 export type LabLootTable={rolls:number;entries:LabLootEntry[]};
@@ -14,13 +19,24 @@ export type LabWorldProcess={dueMinute:number;locationId?:string;kind:string;vis
 export type LabPrice={base:number;currency:string;buyMultiplier?:number;sellMultiplier?:number};
 export type LabLocation={name:string;kind:string;parentId?:string;neighbors:Record<string,number>;tags?:string[];description?:string};
 export type LabResponsePattern={emotion:string;motive:string;condition?:string};
-export type LabNpc={name:string;canonRef:string;traits:string[];goals:string[];knownFacts:string[];speechStyle?:string;responsePatterns?:Record<string,LabResponsePattern[]>};
+export type LabNpcVoice={
+ register:string;tempo:string;verbalTics:string[];sampleLines:string[];
+ mannerisms:string[];avoidCaricature:string[];
+};
+export type LabNpcLogic={
+ priorities:string[];defaultInference:string[];conflictTriggers:string[];
+ socialBiases:string[];limits:string[];
+};
+export type LabNpc={name:string;canonRef:string;traits:string[];goals:string[];knownFacts:string[];
+ speechStyle?:string;responsePatterns?:Record<string,LabResponsePattern[]>;
+ voice?:LabNpcVoice;habitualLogic?:LabNpcLogic;entryArc?:string;faction?:string};
 export type LabPack={
  schema:"RPG_LAB_PACK_V1";projectId:string;worldId:string;
  formulas:Record<string,string>;resources:Record<string,LabResource>;
  lootTables:Record<string,LabLootTable>;prices:Record<string,LabPrice>;recipes?:Record<string,LabRecipe>;
  economy:{taxRate:number};locations:Record<string,LabLocation>;
  npcProfiles:Record<string,LabNpc>;worldProcesses?:Record<string,LabWorldProcess>;
+ storyArcs?:Record<string,LabStoryArcDef>;canonFacts?:Record<string,LabCanonFact>;
  encounterProfiles?:Record<string,LabEncounterProfile>;bestiary?:Record<string,LabMonster>;
  progression:{xpThresholdFormula?:string;thresholds?:number[]};
 };
@@ -55,7 +71,7 @@ const plain=(n:number)=>Math.round(n*1e6)/1e6;
 export function validateLabPack(pack:LabPack):LabPack{
  if(!safeObj(pack)||pack.schema!=="RPG_LAB_PACK_V1")throw Error("LAB_PACK_SCHEMA");
  ident(pack.projectId);ident(pack.worldId);validateFormulaRegistry(pack.formulas);
- if(JSON.stringify(pack).length>100000)throw Error("LAB_PACK_TOO_LARGE");
+ if(JSON.stringify(pack).length>220000)throw Error("LAB_PACK_TOO_LARGE");
  for(const [,v] of entries(pack.resources,128)){
   if(!safeObj(v))throw Error("LAB_RESOURCE_DEF");
   numeric(v.min,0,1e12);numeric(v.max,v.min as number,1e12);
@@ -96,10 +112,33 @@ export function validateLabPack(pack:LabPack):LabPack{
   if(v.tags!==undefined)stringList(v.tags,20);
   for(const [dest,cost] of entries(v.neighbors,32)) {ident(dest);numeric(cost,0.001,1e6);}
  }
+ if(pack.canonFacts!==undefined){
+  for(const [,fact] of entries(pack.canonFacts,300)){
+   if(!safeObj(fact)||!text(fact.summary,450)||
+      typeof fact.visibility!=="string"||!["public","private"].includes(fact.visibility))throw Error("LAB_CANON_FACT_INVALID");
+   ident(fact.entryArc);
+  }
+ }
  for(const [id,v] of entries(pack.npcProfiles,128)){
   ident(id);if(!safeObj(v))throw Error("LAB_NPC_DEF");
   text(v.name,150);ident(v.canonRef);stringList(v.traits,30);stringList(v.goals,20);stringList(v.knownFacts,128);
+  if(pack.canonFacts&&(v.knownFacts as string[]).some(ref=>!pack.canonFacts?.[ref]))
+   throw Error("LAB_CANON_NPC_FACT_UNKNOWN:"+id);
   if(v.speechStyle!==undefined)text(v.speechStyle,600);
+  if(v.faction!==undefined)text(v.faction,80);
+  if(v.entryArc!==undefined)ident(v.entryArc);
+  if(v.voice!==undefined){
+   if(!safeObj(v.voice))throw Error("LAB_NPC_VOICE_INVALID");
+   text(v.voice.register,150);text(v.voice.tempo,150);
+   for(const field of ["verbalTics","sampleLines","mannerisms","avoidCaricature"] as const){
+    stringList(v.voice[field],field==="sampleLines"?6:12);
+   }
+  }
+  if(v.habitualLogic!==undefined){
+   if(!safeObj(v.habitualLogic))throw Error("LAB_NPC_LOGIC_INVALID");
+   for(const field of ["priorities","defaultInference","conflictTriggers",
+    "socialBiases","limits"] as const)stringList(v.habitualLogic[field],12);
+  }
   if(v.responsePatterns!==undefined){
    for(const [,responses] of entries(v.responsePatterns,40)){
     if(!Array.isArray(responses)||responses.length>16)throw Error("LAB_NPC_RESPONSE_DEF");
@@ -111,6 +150,7 @@ export function validateLabPack(pack:LabPack):LabPack{
    }
   }
  }
+ if(pack.storyArcs!==undefined)validateLabStoryDefs(pack.storyArcs);
  if(pack.worldProcesses!==undefined){
   for(const [,v] of entries(pack.worldProcesses,256)){
    if(!safeObj(v))throw Error("LAB_PROCESS_DEF");
@@ -323,6 +363,14 @@ export function evaluateLabJob(pack:LabPack,job:LabJob):unknown{
     projectedMerchantStock:plain(stock+(buying?-quote.quantity:quote.quantity)),
     stockTransferred:false,fundsTransferred:false};
   }
+  case "scene_brief":{
+   const session=a.session as LabSession|undefined;
+   if(!session||session.projectId!==pack.projectId)throw Error("LAB_SCENE_SESSION_REQUIRED");
+   return buildLabSceneBrief(pack,session,{
+    npcIds:a.npcIds as string[],eventRef:a.eventRef as string|undefined,
+    featureIds:a.featureIds as string[]|undefined,maxMemories:a.maxMemories as number|undefined,
+   });
+  }
   case "world_tick":{
    const from=numeric(a.fromMinute,0,1e9),to=numeric(a.toMinute,from,1e9);
    if(to-from>10080)throw Error("LAB_WORLD_TICK_WINDOW_LIMIT");
@@ -330,10 +378,23 @@ export function evaluateLabJob(pack:LabPack,job:LabJob):unknown{
    const due=Object.entries(pack.worldProcesses??{}).filter(([,v])=>v.dueMinute>from&&v.dueMinute<=to)
     .map(([id,v])=>({id,kind:v.kind,dueMinute:v.dueMinute,sourceRef:v.sourceRef,
      visibleToPlayer:v.visibility==="public"&&(!v.locationId||discovered.has(v.locationId))}));
+   const pending=dueLabWorldProjects(a.worldProjects as Record<string,LabWorldProject>|undefined,to);
    const agenda=proposeIndependentWorldAgenda(pack,from,to,a.npcIds??[],
     (a.sessionId as string|undefined)??"preview");
+   const live=a.session as LabSession|undefined;
+   const storyPreview=live&&live.projectId===pack.projectId?
+    previewLabStoryPaths(pack,live):null;
+   const worldCycle=live&&live.projectId===pack.projectId?
+    previewLabLivingWorldCycle(pack,live,{
+     fromMinute:from,toMinute:to,
+     npcIds:a.npcIds as string[]??[],maxPerActor:1,
+    }):null;
    return {fromMinute:from,toMinute:to,dueProcesses:due,
+    dueWorldProjects:pending,unresolvedProjectReviews:pending.map(p=>p.projectId),
+    resolutionRequired:pending.length>0||due.length>0||agenda.intents.length>0,
     npcAgenda:agenda.intents,
+    ...(worldCycle?{livingWorldCycle:worldCycle}:{}),
+    ...(storyPreview?{storyPathOptions:storyPreview}:{}),
     eventsResolved:false,npcDecisionsMade:false,worldTimeAdvanced:false,
     proposalsRequireConfirmedWorldEvent:true};
   }

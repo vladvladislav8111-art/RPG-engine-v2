@@ -35,7 +35,7 @@ export async function decodeLabPack(stored:LabStored):Promise<LabPack>{
  if(stored.codec!=="gzip-v1"||!(stored.packedGzip instanceof Uint8Array))
   throw Error("LAB_PACK_CODEC_UNSUPPORTED");
  const plain=await boundedBytes(new Blob([stored.packedGzip.slice().buffer as ArrayBuffer]).stream()
-  .pipeThrough(new DecompressionStream("gzip")),250000);
+  .pipeThrough(new DecompressionStream("gzip")),650000);
  const pack=validateLabPack(JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(plain)) as LabPack);
  if(stored.projectId!==undefined&&stored.projectId!==pack.projectId)
   throw Error("LAB_PACK_CODEC_PROJECT_MISMATCH");

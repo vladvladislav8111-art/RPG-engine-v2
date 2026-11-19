@@ -4,14 +4,18 @@
 import {config} from "../config.ts";
 import {validateLabPack,evaluateLabPack,type LabPack,type LabJob} from "./engine.ts";
 import {importLabFile,type LabFileImport} from "./import.ts";
-import {validateLabSession,withSessionDefaults,type LabSession} from "./session.ts";
-import {applyConfirmedLabEvent,type LabConfirmedEvent} from "./events.ts";
+import {validateLabSession,withSessionDefaults,assertLabDirectSessionPutAllowed,type LabSession} from "./session.ts";
+import type {LabConfirmedEvent} from "./events.ts";
+import {applyGuardedLabEvent,type LabTurnWithPlan} from "./turn_guard.ts";
 import {encodeLabPack,decodeLabPack,type LabStored} from "./storage_codec.ts";
 import {encodeLabSession,type LabSessionStored} from "./session_storage.ts";
 import {prepareLabSessionHead,decodeLabSessionFromKv} from "./session_kv.ts";
 import {reviewLabSessionMemory} from "./memory_view.ts";
 import {newLinosState} from "./linos.ts";
 import {planLabEventArchive} from "./event_archive.ts";
+import {buildFreshDanmachiLabPack} from "./danmachi_starter.ts";
+import {archivedLabKey,validateLabArchiveRequest,validateLabArchiveMarker,
+ type LabArchiveTarget,type LabArchiveMarker} from "./campaign_lifecycle.ts";
 import {
  connectGoogleProject,syncGoogleProject,autoSyncGoogleProject,getGoogleProjectStatus,
  getGoogleProjectSources,disconnectGoogleProject,
@@ -50,6 +54,80 @@ export async function loadLabProjectFromKv(projectId:string,expectedRevision?:nu
  if(expectedRevision!==undefined&&expectedRevision!==result.value.revision)throw Error("LAB_REVISION_CONFLICT");
  return {pack:await decodeLabPack(result.value),revision:result.value.revision};
 }
+/** Inventory only: no cross-project migration, no historic events exposed. */
+export async function listLabCampaignInventory(includeArchived=false){
+ const kv=await storage(),campaigns:{
+  projectId:string;sessionId:string;revision:number;gameClock:string;
+  archived:boolean;archivedAt?:string;
+ }[]=[];
+ for await(const project of kv.list<LabStored>({prefix:[ROOT,"projects"]},{limit:50})){
+  const projectId=String(project.key[2]);
+  for await(const sess of kv.list<LabSessionStored>({
+    prefix:[ROOT,"sessions",projectId]},{limit:100})){
+   const sessionId=String(sess.key[3]);
+   const marker=await kv.get<LabArchiveMarker>(archivedLabKey(projectId,sessionId));
+   if(marker.value&&!includeArchived)continue;
+   campaigns.push({projectId,sessionId,revision:sess.value.revision,
+    gameClock:sess.value.gameClock??sess.value.session?.gameClock??"unknown",
+    archived:Boolean(marker.value),
+    ...(marker.value?{archivedAt:marker.value.archivedAt}:{})});
+  }
+ }
+ return {schema:"RPG_LAB_CAMPAIGN_INVENTORY_V1",campaigns,
+  readOnly:true,legacySaveTouched:false};
+}
+/** Archive existing RPG Lab campaigns by exact CAS revision. NEVER delete
+ * their events, compressed chunks, private memories, or linked Drive files.
+ */
+export async function archiveLabCampaigns(targets:LabArchiveTarget[],reason:string){
+ const kv=await storage();
+ return archiveLabCampaignsInKv(kv,targets,reason);
+}
+export async function archiveLabCampaignsInKv(kv:Deno.Kv,targets:LabArchiveTarget[],reason:string){
+ validateLabArchiveRequest(targets,reason);
+ let tx=kv.atomic();
+ for(const target of targets){
+  const key=[ROOT,"sessions",target.projectId,target.sessionId];
+  const saved=await kv.get<LabSessionStored>(key);
+  if(!saved.value)throw Error("LAB_ARCHIVE_SESSION_NOT_FOUND");
+  if(saved.value.revision!==target.expectedRevision)
+   throw Error("LAB_ARCHIVE_REVISION_CONFLICT");
+  const markerKey=archivedLabKey(target.projectId,target.sessionId);
+  const existing=await kv.get<LabArchiveMarker>(markerKey);
+  if(existing.value)throw Error("LAB_CAMPAIGN_ALREADY_ARCHIVED");
+  const record=validateLabArchiveMarker({
+   projectId:target.projectId,sessionId:target.sessionId,
+   revision:saved.value.revision,archivedAt:new Date().toISOString(),
+   reason,mode:"reversible_archive"
+  });
+  tx=tx.check({key,versionstamp:saved.versionstamp})
+   .check({key:markerKey,versionstamp:existing.versionstamp})
+   .set(markerKey,record);
+ }
+ const result=await tx.commit();
+ if(!result.ok)throw Error("LAB_ARCHIVE_REVISION_CONFLICT");
+ return {ok:true,archived:targets.map(x=>({
+  projectId:x.projectId,sessionId:x.sessionId,revision:x.expectedRevision
+ })),reversible:true,deleted:false,legacySaveTouched:false};
+}
+/** Safe install: creates new DanMachi pack only if projectId is unused.
+ * No old campaign is migrated; player must later create a fresh session.
+ */
+export async function installFreshDanmachiWorld(projectId:string){
+ if(!projectRe.test(projectId))throw Error("LAB_NEW_WORLD_ID_INVALID");
+ const pack=buildFreshDanmachiLabPack(projectId);
+ const kv=await storage(),key=keyOf(projectId);
+ const saved=await kv.get<LabStored>(key);
+ if(saved.value)throw Error("LAB_NEW_WORLD_ID_ALREADY_EXISTS");
+ const value=await encodeLabPack(pack,1);
+ const done=await kv.atomic().check({key,versionstamp:saved.versionstamp})
+   .set(key,value).commit();
+ if(!done.ok)throw Error("LAB_REVISION_CONFLICT");
+ return {ok:true,projectId,packRevision:1,
+  npcCoreCount:Object.keys(pack.npcProfiles).length,
+  storyArcCount:Object.keys(pack.storyArcs??{}).length,
+  noCampaignCreated:true,oldSavesUntouched:true,legacySaveTouched:false};
+}
 /** Authenticated internal loader for read-only Runtime Bridge memory view. */
 export async function loadLabSessionFromKv(projectId:string,sessionId:string):
  Promise<{pack:LabPack;packRevision:number;session:LabSession;sessionRevision:number}>{
@@ -58,6 +136,8 @@ export async function loadLabSessionFromKv(projectId:string,sessionId:string):
  const kv=await storage();
  const saved=await kv.get<LabSessionStored>([ROOT,"sessions",projectId,sessionId]);
  if(!saved.value)throw Error("LAB_SESSION_NOT_FOUND");
+ const archive=await kv.get<LabArchiveMarker>(archivedLabKey(projectId,sessionId));
+ if(archive.value)throw Error("LAB_CAMPAIGN_ARCHIVED");
  return {pack,packRevision,session:await decodeLabSessionFromKv(kv,projectId,sessionId,saved.value,pack),sessionRevision:saved.value.revision};
 }
 /** Shared write gate for HTTP and the opt-in ChatGPT MCP tool.
@@ -77,7 +157,7 @@ export async function createLabCampaign(args:{
  if(locationId!==undefined&&(!pack.locations[locationId]||!projectRe.test(locationId.replace(/[.:-]/g,"_"))))
   throw Error("LAB_NEW_CAMPAIGN_LOCATION_INVALID");
  const session:LabSession={schema:"RPG_LAB_SESSION_V1",projectId,sessionId,gameClock,
-  player:{resources:{},stats:{},inventory:{},
+  roleplayGuard:"strict",player:{resources:{},stats:{},inventory:{},
    ...(locationId?{locationId}:{}),
    ...(characterProfile==="linos"?{linos:newLinosState()}:{}),
   },
@@ -94,9 +174,10 @@ export async function createLabCampaign(args:{
 }
 export async function commitLabCampaignEvent(args:{
  projectId:string;sessionId:string;expectedRevision:number;
- event:LabConfirmedEvent;expectedPackRevision?:number;
+ event:LabTurnWithPlan;expectedPackRevision?:number;
 }):Promise<{ok:true;revision:number;projectId:string;sessionId:string;
- sourceRef:string;gameClock:string;rememberedBy:string[];legacySaveTouched:false}>{
+ sourceRef:string;gameClock:string;rememberedBy:string[];legacySaveTouched:false;
+ roleplayGuardRequired:boolean;roleplayGuardVerified:boolean}>{
  const {projectId,sessionId,expectedRevision,event,expectedPackRevision}=args;
  if(!projectRe.test(projectId)||!projectRe.test(sessionId)||!Number.isSafeInteger(expectedRevision)||
   expectedRevision<1)throw Error("LAB_EVENT_SESSION_REF_INVALID");
@@ -106,6 +187,8 @@ export async function commitLabCampaignEvent(args:{
  const kv=await storage(),key=[ROOT,"sessions",projectId,sessionId];
  const existing=await kv.get<LabSessionStored>(key);
  if(!existing.value)throw Error("LAB_SESSION_NOT_FOUND");
+ const retired=await kv.get<LabArchiveMarker>(archivedLabKey(projectId,sessionId));
+ if(retired.value)throw Error("LAB_CAMPAIGN_ARCHIVED");
  if(existing.value.revision!==expectedRevision)throw Error("LAB_REVISION_CONFLICT");
  const session=await decodeLabSessionFromKv(kv,projectId,sessionId,existing.value,pack);
  if(!event||typeof event.sourceRef!=="string"||
@@ -117,11 +200,13 @@ export async function commitLabCampaignEvent(args:{
  const ref=await kv.get(refKey);
  if(ref.value)throw Error("LAB_EVENT_ALREADY_APPLIED");
  const planned=planLabEventArchive(session);
- const next=applyConfirmedLabEvent(planned.working,pack,event);
+ const checked=applyGuardedLabEvent(planned.working,pack,event,expectedRevision);
+ const next=checked.next;
  const value=await encodeLabSession(next,pack,expectedRevision+1);
  const head=await prepareLabSessionHead(kv,projectId,sessionId,value);
  let tx=kv.atomic()
   .check({key,versionstamp:existing.versionstamp})
+  .check({key:archivedLabKey(projectId,sessionId),versionstamp:retired.versionstamp})
   .check({key:refKey,versionstamp:ref.versionstamp})
   .set(key,head)
   .set(refKey,{revision:expectedRevision+1,event});
@@ -133,7 +218,8 @@ export async function commitLabCampaignEvent(args:{
  if(!done.ok)throw Error("LAB_REVISION_CONFLICT");
  return {ok:true,revision:value.revision,projectId,sessionId,
   sourceRef:event.sourceRef,gameClock:next.gameClock,
-  rememberedBy:event.observations?.map(x=>x.npcId)??[],legacySaveTouched:false};
+  rememberedBy:event.observations?.map(x=>x.npcId)??[],legacySaveTouched:false,
+  roleplayGuardRequired:checked.guardRequired,roleplayGuardVerified:checked.guardVerified};
 }
 
 /** Lookup an archived confirmed event by exact sourceRef, without creating a new turn. */
@@ -152,6 +238,22 @@ export async function readLabConfirmedEvent(projectId:string,sessionId:string,so
 export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
  try{
   const kv=await storage(),path=url.pathname;
+  if(path==="/rpg-lab/v1/campaigns"&&req.method==="GET")
+   return reply(await listLabCampaignInventory(url.searchParams.get("includeArchived")==="true"));
+  if(path==="/rpg-lab/v1/campaigns/archive"&&req.method==="POST"){
+   const body=await limited(req);
+   if(!obj(body)||body.confirm!=="ARCHIVE_RPG_LAB_ONLY"||
+     !Array.isArray(body.targets)||typeof body.reason!=="string")
+    throw Error("LAB_ARCHIVE_EXPLICIT_CONFIRMATION_REQUIRED");
+   return reply(await archiveLabCampaigns(body.targets as LabArchiveTarget[],body.reason));
+  }
+  if(path==="/rpg-lab/v1/danmachi/starter"&&req.method==="POST"){
+   const body=await limited(req);
+   if(!obj(body)||body.confirm!=="INSTALL_NEW_DANMACHI_WORLD"||
+      typeof body.projectId!=="string")
+    throw Error("LAB_WORLD_INSTALL_CONFIRMATION_REQUIRED");
+   return reply(await installFreshDanmachiWorld(body.projectId));
+  }
   if(path==="/rpg-lab/v1/google/service-account"&&req.method==="GET")
    return reply({email:config.google.email,role:"reader",sharingInstruction:"Share only the desired project folder with this service account"});
   if(path==="/rpg-lab/v1/projects"&&req.method==="GET"){
@@ -198,8 +300,11 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    const packEntry=await kv.get<LabStored>(keyOf(projectId));
    if(!packEntry.value)return reply({error:"LAB_PROJECT_NOT_FOUND"},404);
    for await(const e of kv.list<LabSessionStored>({prefix:[ROOT,"sessions",projectId]},{limit:100})){
+    const marker=await kv.get<LabArchiveMarker>(archivedLabKey(projectId,String(e.key[3])));
+    if(marker.value&&url.searchParams.get("includeArchived")!=="true")continue;
     sessions.push({sessionId:e.value.sessionId??e.value.session?.sessionId,revision:e.value.revision,
-     gameClock:e.value.gameClock??e.value.session?.gameClock,updatedAt:e.value.updatedAt});
+     gameClock:e.value.gameClock??e.value.session?.gameClock,updatedAt:e.value.updatedAt,
+     archived:Boolean(marker.value)});
    }
    return reply({schema:"RPG_LAB_SESSION_INDEX_V1",projectId,sessions});
   }
@@ -211,6 +316,8 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    if(!storedPack.value)return reply({error:"LAB_PROJECT_NOT_FOUND"},404);
    const record=await kv.get<LabSessionStored>([ROOT,"sessions",projectId,sessionId]);
    if(!record.value)return reply({error:"LAB_SESSION_NOT_FOUND"},404);
+   if((await kv.get(archivedLabKey(projectId,sessionId))).value)
+    return reply({error:"LAB_CAMPAIGN_ARCHIVED"},409);
    const pack=await decodeLabPack(storedPack.value);
    const session=await decodeLabSessionFromKv(kv,projectId,sessionId,record.value,pack);
    const ids=url.searchParams.get("npcIds");
@@ -247,6 +354,8 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    if(!packEntry.value)return reply({error:"LAB_PROJECT_NOT_FOUND"},404);
    const sessionKey=[ROOT,"sessions",projectId,sessionId];
    const current=await kv.get<LabSessionStored>(sessionKey);
+   if((await kv.get(archivedLabKey(projectId,sessionId))).value)
+    return reply({error:"LAB_CAMPAIGN_ARCHIVED"},409);
    if(req.method==="GET"){
     if(!current.value)return reply({error:"LAB_SESSION_NOT_FOUND"},404);
     return reply({schema:"RPG_LAB_SESSION_STORED_V1",revision:current.value.revision,updatedAt:current.value.updatedAt,
@@ -257,6 +366,9 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
     if(!Number.isSafeInteger(data.expectedRevision)||data.expectedRevision!==(current.value?.revision??0))throw Error("LAB_REVISION_CONFLICT");
     const pack=await decodeLabPack(packEntry.value);
     const session=validateLabSession(data.session as LabSession,pack);
+    const previous=current.value?
+     await decodeLabSessionFromKv(kv,projectId,sessionId,current.value,pack):null;
+    assertLabDirectSessionPutAllowed(previous,session);
     if(session.sessionId!==sessionId)throw Error("LAB_SESSION_ID_MISMATCH");
     const value=await encodeLabSession(session,pack,(current.value?.revision??0)+1);
     const head=await prepareLabSessionHead(kv,projectId,sessionId,value);

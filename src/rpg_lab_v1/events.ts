@@ -2,9 +2,18 @@
  * Confirmed, source-tagged, CAS-ready RPG Lab turn event.
  * Pure function. Never grants preview loot, rewrites canon or touches legacy saves.
  */
-import {validateLabSession,type LabSession,type LabMemory,type LabNpcState,type LabWorkOrder} from "./session.ts";
+import {validateLabSession,type LabSession,type LabMemory,type LabNpcState,
+ type LabWorkOrder,type LabPlayerFeature} from "./session.ts";
 import type {LabPack} from "./engine.ts";
+import {applyLabAmbientRumorChanges,type LabAmbientRumorChange} from "./ambient_rumors.ts";
 import {noteNpcFeature,type NpcFeatureObservation} from "./npc_perception.ts";
+import {validateLabWorldEvidence,type LabWorldEvidenceInput} from "./world_evidence.ts";
+import {applyLabFogChanges,type LabFogFactChange,type LabFogAreaChange} from "./fog_of_war.ts";
+import {applyLabStoryChanges,type LabStoryFlagChange,type LabStoryArcChange,type LabTechniqueTraining} from "./story_consequences.ts";
+import {applyLabSocialSignal,type LabSocialSignal} from "./social_dynamics_v2.ts";
+import {dueLabWorldProjects,allowedLabProjectTransition,validateLabNpcMood,validateLabWorldProject,
+ validateLabNpcDecision,type LabNpcMood,type LabNpcDecision,type LabNpcDecisionStance,
+ type LabWorldProject} from "./living_world.ts";
 import {newLinosState,validateLinosState,LINOS_RANKS,
  resolveLinosCast,regenerateLinosMp,type LinosAbilityRequest,type LinosState,type LinosScores,
  type LinosRank,type LinosSkill} from "./linos.ts";
@@ -40,16 +49,53 @@ export type LabWorkOrderChange={
  /** Initial registration must cite at least two existing confirmed events. */
  evidenceRefs?:string[];
 };
+export type LabNpcInteraction={
+ initiatorNpcId:string;recipientNpcId:string;action:string;outcome:string;
+ salience:"fleeting"|"ordinary"|"important"|"life_defining";
+ privacy:"private"|"small_group"|"public";witnessNpcIds?:string[];
+};
+export type LabNpcPositionChange={npcId:string;locationId:string};
+export type LabRumorRelay={
+ speakerNpcId:string;listenerNpcId:string;sourceMemoryRef:string;
+ /** A private confidence can be betrayed, but a deliberate breach must be recorded. */
+ breachConfidence?:true;
+};
 export type LabIndependentAction={npcId:string;action:string;outcome:string;
  locationId?:string;privacy:"public"|"hidden"};
+export type LabPlayerFeatureChange={
+ featureId:string;expectedRevision:number;action:"set"|"remove";playerApproved:true;
+ feature?:Pick<LabPlayerFeature,"description"|"significance"|"visibility">;
+};
+export type LabNpcDecisionChange={
+ npcId:string;subjectId:string;stance:LabNpcDecisionStance;reason:string;
+ evidenceRefs:string[];privacy:"public"|"private";nextReviewMinute?:number;
+};
+export type LabNpcMoodChange={
+ npcId:string;evidenceRefs:string[];
+ mood:null|{label:string;intensity:number;settleAfterMinute?:number;context?:string};
+};
+export type LabWorldProjectChange={projectId:string;expectedRevision:number;record:LabWorldProject};
 export type LabConfirmedEvent={
  sourceRef:string;time:string;summary:string;kind:string;locationId?:string;
  knownBy:string[];observations?:LabNpcObservation[];
  features?:NpcFeatureObservation[];linos?:LabLinosTurn;
  worldActions?:LabIndependentAction[];
+ npcInteractions?:LabNpcInteraction[];
+ npcPositions?:LabNpcPositionChange[];
+ socialDynamics?:LabSocialSignal[];
+ rumorRelays?:LabRumorRelay[];
+ ambientRumorChanges?:LabAmbientRumorChange[];
  npcSocial?:LabNpcSocialChange[];
+ moodChanges?:LabNpcMoodChange[];
+ npcDecisionChanges?:LabNpcDecisionChange[];
+ worldProjectChanges?:LabWorldProjectChange[];
+ worldEvidence?:LabWorldEvidenceInput[];
  workOrderChanges?:LabWorkOrderChange[];
- discovered?:string[];playerLocationId?:string;
+ discovered?:string[];playerLocationId?:string;playerWitnessed?:boolean;
+ playerFogChanges?:LabFogFactChange[];playerAreaChanges?:LabFogAreaChange[];
+ storyFlagChanges?:LabStoryFlagChange[];storyArcChanges?:LabStoryArcChange[];
+ npcTechniqueTraining?:LabTechniqueTraining[];
+ playerFeatureChanges?:LabPlayerFeatureChange[];
  effects?:{resources?:Record<string,number>;inventory?:Record<string,number>};
  gmConfirmed:true;
 };
@@ -82,6 +128,17 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
  const previousMinute=narrativeMinute(session.gameClock),nextMinute=narrativeMinute(event.time);
  if(previousMinute!==null&&nextMinute!==null&&nextMinute<previousMinute)
   throw Error("LAB_EVENT_CLOCK_REGRESSION");
+ // Once persistent world work exists, every future clock advance must be
+ // comparable. An opaque date cannot silently bypass the due-review gate.
+ if(Object.values(session.worldProjects??{}).some(p=>
+    ["accepted","active","blocked"].includes(p.status))){
+   if(previousMinute===null||nextMinute===null)
+    throw Error("LAB_WORLD_PROJECT_CLOCK_COMPARABILITY_REQUIRED");
+   if(nextMinute-previousMinute>10080&&
+      Object.values(session.worldProjects??{}).some(p=>
+       p.nextReviewMinute!==undefined&&p.nextReviewMinute<=nextMinute))
+    throw Error("LAB_WORLD_PROJECT_CATCHUP_WINDOW_EXCEEDED");
+ }
  if(session.events.some(e=>e.sourceRef===event.sourceRef))throw Error("LAB_EVENT_ALREADY_APPLIED");
  if(session.events.length>=256)throw Error("LAB_EVENT_JOURNAL_FULL");
  if(new Set(event.knownBy).size!==event.knownBy.length||event.knownBy.some(k=>!pack.npcProfiles[k]))
@@ -95,6 +152,40 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
  if(new Set(observations.map(x=>x.npcId)).size!==observations.length)
   throw Error("LAB_EVENT_DUPLICATE_NPC_OBSERVATION");
  const next=structuredClone(session);
+ const visibleFog=applyLabFogChanges(session,pack,event);
+ if(visibleFog!==undefined)next.playerFog=visibleFog;
+ const nextStory=applyLabStoryChanges(session,pack,event);
+ if(nextStory!==undefined)next.storyState=nextStory;
+ // Main-character appearance is persistent state, not a transient narrator
+ // reminder. Registering it changes no NPC's personal knowledge.
+ const changes=event.playerFeatureChanges??[];
+ if(!Array.isArray(changes)||changes.length>24||
+  new Set(changes.map(x=>x.featureId)).size!==changes.length)
+  throw Error("LAB_PLAYER_FEATURE_BATCH_INVALID");
+ if(changes.length&&!["character_setup","continuity_repair","player_turn"].includes(event.kind))
+  throw Error("LAB_PLAYER_FEATURE_EDIT_KIND_INVALID");
+ for(const change of changes){
+  if(!record(change)||!good(change.featureId)||change.playerApproved!==true||
+      !Number.isSafeInteger(change.expectedRevision)||change.expectedRevision<0||
+      !["set","remove"].includes(change.action))
+   throw Error("LAB_PLAYER_FEATURE_CHANGE_INVALID");
+  const current=next.player.visibleFeatures?.[change.featureId];
+  if((current?.revision??0)!==change.expectedRevision)
+   throw Error("LAB_PLAYER_FEATURE_REVISION_CONFLICT");
+  const updated={...(next.player.visibleFeatures??{})};
+  if(change.action==="remove"){
+   if(!current||change.feature!==undefined)throw Error("LAB_PLAYER_FEATURE_REMOVE_INVALID");
+   delete updated[change.featureId];
+  }else{
+   if(!record(change.feature)||!phrase(change.feature.description,280)||
+     !["routine","notable","transformative"].includes(change.feature.significance)||
+     !["obvious","conditional"].includes(change.feature.visibility))
+    throw Error("LAB_PLAYER_FEATURE_SET_INVALID");
+   updated[change.featureId]={...change.feature,
+    revision:change.expectedRevision+1,lastUpdatedRef:event.sourceRef};
+  }
+  next.player.visibleFeatures=updated;
+ }
  if(event.linos!==undefined){
   const action=event.linos;
   if(!record(action)||!["blessing","cast","time","learn","status_update","audit_reconcile"].includes(action.type))
@@ -233,6 +324,156 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
   if(state.knownFacts.length>128)throw Error("LAB_EVENT_NPC_KNOWLEDGE_FULL");
   next.npcs[observation.npcId]=state;
  }
+ // Confirmed NPC-to-NPC contact is an independent world event, not flavor
+ // revolving around the player. Each participant remembers the interaction,
+ // but no claim made during it is silently converted into objective truth.
+ const interactions=event.npcInteractions??[];
+ if(!Array.isArray(interactions)||interactions.length>12)
+  throw Error("LAB_NPC_INTERACTIONS_INVALID");
+ for(const interaction of interactions){
+  if(!record(interaction)||!good(interaction.initiatorNpcId)||
+      !good(interaction.recipientNpcId)||
+      interaction.initiatorNpcId===interaction.recipientNpcId||
+      !pack.npcProfiles[interaction.initiatorNpcId]||
+      !pack.npcProfiles[interaction.recipientNpcId]||
+      !phrase(interaction.action,160)||!phrase(interaction.outcome,300)||
+      !["private","small_group","public"].includes(interaction.privacy)||
+      !["fleeting","ordinary","important","life_defining"].includes(interaction.salience)||
+      (interaction.witnessNpcIds!==undefined&&
+       (!bounded(interaction.witnessNpcIds,12)||
+        interaction.witnessNpcIds.some(x=>!pack.npcProfiles[x]||
+          !event.knownBy.includes(x)))))
+   throw Error("LAB_NPC_INTERACTION_INVALID");
+  const listeners=new Set([interaction.initiatorNpcId,interaction.recipientNpcId,
+    ...(interaction.witnessNpcIds??[])]);
+  for(const npcId of listeners){
+   const state:LabNpcState=next.npcs[npcId]??{knownFacts:[],memories:[]};
+   if(state.memories.length>=128||state.knownFacts.length>=128)
+    throw Error("LAB_NPC_INTERACTION_MEMORY_FULL");
+   const participant=npcId===interaction.initiatorNpcId||
+    npcId===interaction.recipientNpcId;
+   const text=interaction.action+"; "+interaction.outcome;
+   const memory:LabMemory={
+    sourceRef:event.sourceRef,summary:text,perceivedFact:text,
+    learnedAt:event.time,eventTime:event.time,knownBy:[npcId],
+    channel:participant?"experienced":"heard",confidence:"certain",
+    salience:interaction.salience,privacy:interaction.privacy,
+    sourceActor:interaction.initiatorNpcId,
+    ...(event.locationId?{locationId:event.locationId}:{})
+   };
+   if(!state.memories.some(m=>m.sourceRef===event.sourceRef))state.memories.push(memory);
+   if(!state.knownFacts.includes(event.sourceRef))
+    state.knownFacts.push(event.sourceRef);
+   next.npcs[npcId]=state;
+  }
+  next.worldEvents??=[];
+  if(next.worldEvents.length>=256)throw Error("LAB_WORLD_JOURNAL_FULL");
+  next.worldEvents.push({sourceRef:event.sourceRef,time:event.time,
+   npcId:interaction.initiatorNpcId,targetNpcId:interaction.recipientNpcId,
+   action:interaction.action,outcome:interaction.outcome,
+   privacy:interaction.privacy==="public"?"public":"hidden",
+   ...(event.locationId?{locationId:event.locationId}:{})});
+ }
+ // Directed feelings are only changed by a participant with grounded
+ // remembered evidence; they do not mutate a canon's immutable personality.
+ const signals=event.socialDynamics??[];
+ if(!Array.isArray(signals)||signals.length>24||
+   new Set(signals.map(x=>x.npcId+"|"+x.towardNpcId)).size!==signals.length)
+  throw Error("LAB_SOCIAL_DYNAMICS_BATCH_INVALID");
+ for(const signal of signals){
+  if(!record(signal)||!good(signal.npcId)||!good(signal.towardNpcId)||
+    !pack.npcProfiles[signal.npcId]||!pack.npcProfiles[signal.towardNpcId]||
+    signal.npcId===signal.towardNpcId||nextMinute===null)
+   throw Error("LAB_SOCIAL_DYNAMICS_INVALID");
+  const state:LabNpcState=next.npcs[signal.npcId]??{knownFacts:[],memories:[]};
+  if(!Array.isArray(signal.evidenceRefs)||!signal.evidenceRefs.length||
+    !signal.evidenceRefs.every(ref=>state.memories.some(m=>m.sourceRef===ref)))
+   throw Error("LAB_SOCIAL_DYNAMICS_UNVERIFIED");
+  if(!state.socialDynamics?.[signal.towardNpcId]&&
+     Object.keys(state.socialDynamics??{}).length>=80)
+   throw Error("LAB_SOCIAL_DYNAMICS_LIMIT");
+  state.socialDynamics={...(state.socialDynamics??{}),
+   [signal.towardNpcId]:applyLabSocialSignal(
+    state.socialDynamics?.[signal.towardNpcId],signal,event.sourceRef,nextMinute)};
+  next.npcs[signal.npcId]=state;
+ }
+ // Positions must be supported by a confirmed physical action or by a
+ // direct witness of arrival. A claimed location is not teleportation.
+ const positions=event.npcPositions??[];
+ if(!Array.isArray(positions)||positions.length>24||
+    new Set(positions.map(x=>x.npcId)).size!==positions.length)
+  throw Error("LAB_NPC_POSITIONS_BATCH_INVALID");
+ for(const position of positions){
+  if(!record(position)||!good(position.npcId)||!pack.npcProfiles[position.npcId]||
+    !good(position.locationId)||!pack.locations[position.locationId])
+   throw Error("LAB_NPC_POSITION_INVALID");
+  const actualMove=event.worldActions?.some(a=>
+   a.npcId===position.npcId&&a.locationId===position.locationId);
+  const witness=event.locationId===position.locationId&&
+   event.knownBy.includes(position.npcId)&&
+   observations.some(o=>o.npcId===position.npcId&&
+    ["seen","heard","experienced"].includes(o.channel));
+  if(!actualMove&&!witness)throw Error("LAB_NPC_POSITION_NOT_EVIDENCED");
+  const state:LabNpcState=next.npcs[position.npcId]??{knownFacts:[],memories:[]};
+  state.locationId=position.locationId;
+  state.locationSourceRef=event.sourceRef;
+  next.npcs[position.npcId]=state;
+ }
+ // Rumor propagation requires a real exchange. A reported origin never
+ // becomes a test, and a privately sourced secret requires an explicit breach.
+ const relays=event.rumorRelays??[];
+ if(!Array.isArray(relays)||relays.length>12||
+    new Set(relays.map(x=>x.speakerNpcId+"|"+x.listenerNpcId+"|"+
+     x.sourceMemoryRef)).size!==relays.length)
+   throw Error("LAB_RUMOR_BATCH_INVALID");
+ for(const relay of relays){
+  if(!record(relay)||!good(relay.speakerNpcId)||!good(relay.listenerNpcId)||
+   relay.speakerNpcId===relay.listenerNpcId||
+   !pack.npcProfiles[relay.speakerNpcId]||!pack.npcProfiles[relay.listenerNpcId]||
+   !good(relay.sourceMemoryRef))
+   throw Error("LAB_RUMOR_RELAY_INVALID");
+  const source=session.npcs[relay.speakerNpcId]?.memories.find(m=>
+   m.sourceRef===relay.sourceMemoryRef);
+  if(!source)throw Error("LAB_RUMOR_SOURCE_NOT_KNOWN");
+  if(source.privacy==="private"&&relay.breachConfidence!==true)
+   throw Error("LAB_RUMOR_PRIVATE_SOURCE_NO_DISCLOSURE");
+  const paired=interactions.some(x=>
+   (x.initiatorNpcId===relay.speakerNpcId&&x.recipientNpcId===relay.listenerNpcId)||
+   (x.recipientNpcId===relay.speakerNpcId&&x.initiatorNpcId===relay.listenerNpcId));
+  const relayed=observations.some(x=>x.npcId===relay.listenerNpcId&&
+   ["report","rumor"].includes(x.channel)&&x.sourceActor===relay.speakerNpcId&&
+   x.relayedSourceRef===relay.sourceMemoryRef);
+  if(!paired||!relayed)throw Error("LAB_RUMOR_ENCOUNTER_MISSING");
+  const from=session.npcs[relay.speakerNpcId]?.locationId;
+  const to=session.npcs[relay.listenerNpcId]?.locationId;
+  if(from&&to&&from!==to&&
+    !positions.some(x=>x.npcId===relay.speakerNpcId||x.npcId===relay.listenerNpcId))
+   throw Error("LAB_RUMOR_REMOTE_CONTACT_NOT_ESTABLISHED");
+ }
+ // World-level evidence is scoped: two 2mm tested strands do not prove
+ // a claimed 10mm capacity, nor does a breastplate test prove damage to gods.
+ const evidence=event.worldEvidence??[];
+ if(!Array.isArray(evidence)||evidence.length>24||
+   new Set(evidence.map(x=>x.factId)).size!==evidence.length)
+  throw Error("LAB_WORLD_EVIDENCE_BATCH_INVALID");
+ for(const input of evidence){
+  if(!record(input)||!good(input.factId)||
+     next.worldEvidence?.[input.factId])
+   throw Error("LAB_WORLD_EVIDENCE_DUPLICATE_OR_BAD_ID");
+  const fact=validateLabWorldEvidence({...input,sourceRef:event.sourceRef});
+  if(fact.observedBy.some(npcId=>!event.knownBy.includes(npcId)||
+    !observations.some(o=>o.npcId===npcId&&
+     ["seen","heard","experienced"].includes(o.channel))))
+   throw Error("LAB_WORLD_EVIDENCE_OBSERVER_NOT_ESTABLISHED");
+  if(fact.locationId!==undefined&&!pack.locations[fact.locationId])
+   throw Error("LAB_WORLD_EVIDENCE_LOCATION_UNKNOWN");
+  if(fact.supersedesFactId!==undefined&&
+     (!session.worldEvidence?.[fact.supersedesFactId]||
+      fact.supersedesFactId===fact.factId))
+   throw Error("LAB_WORLD_EVIDENCE_SUPERSEDED_SOURCE_UNKNOWN");
+  next.worldEvidence={...(next.worldEvidence??{}),
+   [fact.factId]:fact};
+ }
  // Interpretations and current objectives are updated only from the NPC's own
  // confirmed memories. This does not alter immutable canonical personality.
  const social=event.npcSocial??[];
@@ -320,6 +561,117 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
   }
   next.player.workOrders={...orders,[change.orderId]:structuredClone(change.record)};
  }
+ // Emotional inertia: anger, curiosity and embarrassment never reset merely
+ // because the scene ends, the player apologizes or a narrator changes tone.
+ const moods=event.moodChanges??[];
+ if(!Array.isArray(moods)||moods.length>24||
+    new Set(moods.map(x=>x.npcId)).size!==moods.length)
+  throw Error("LAB_NPC_MOOD_BATCH_INVALID");
+ for(const change of moods){
+  if(!record(change)||!good(change.npcId)||!pack.npcProfiles[change.npcId]||
+   !bounded(change.evidenceRefs,12)||change.evidenceRefs.length<1||
+   new Set(change.evidenceRefs).size!==change.evidenceRefs.length||
+   (change.mood!==null&&!record(change.mood)))
+   throw Error("LAB_NPC_MOOD_CHANGE_INVALID");
+  const state:LabNpcState=next.npcs[change.npcId]??{knownFacts:[],memories:[]};
+  if(!change.evidenceRefs.every(ref=>state.memories.some(m=>m.sourceRef===ref)))
+   throw Error("LAB_NPC_MOOD_UNVERIFIED_MEMORY");
+  if(change.mood===null){
+   delete state.mood;
+  }else{
+   if(nextMinute===null)throw Error("LAB_NPC_MOOD_CLOCK_REQUIRED");
+   const m:LabNpcMood={...change.mood,causeRef:event.sourceRef,sinceMinute:nextMinute};
+   state.mood=validateLabNpcMood(m);
+  }
+  next.npcs[change.npcId]=state;
+ }
+ // Decisions survive interruptions, apologies and narration resets. They may be
+ // revised only by another source-linked decision from the same NPC.
+ const decisions=event.npcDecisionChanges??[];
+ if(!Array.isArray(decisions)||decisions.length>24||
+  new Set(decisions.map(d=>d.npcId+"|"+d.subjectId)).size!==decisions.length)
+  throw Error("LAB_NPC_DECISION_BATCH_INVALID");
+ for(const change of decisions){
+  if(!record(change)||!good(change.npcId)||!pack.npcProfiles[change.npcId]||
+      !good(change.subjectId)||!phrase(change.reason,320)||
+      !bounded(change.evidenceRefs,12)||change.evidenceRefs.length<1||
+      !["public","private"].includes(change.privacy)||nextMinute===null)
+   throw Error("LAB_NPC_DECISION_CHANGE_INVALID");
+  const state:LabNpcState=next.npcs[change.npcId]??{knownFacts:[],memories:[]};
+  const ownAction=event.worldActions?.some(a=>a.npcId===change.npcId)===true;
+  if(!change.evidenceRefs.every(ref=>state.memories.some(m=>m.sourceRef===ref)||
+     (ref===event.sourceRef&&ownAction)))
+   throw Error("LAB_NPC_DECISION_UNVERIFIED_EVIDENCE");
+  const old=state.decisions?.[change.subjectId];
+  if(!old&&Object.keys(state.decisions??{}).length>=32)
+   throw Error("LAB_NPC_DECISION_LIMIT");
+  const decision:LabNpcDecision={
+   subjectId:change.subjectId,stance:change.stance,reason:change.reason,
+   sourceRef:event.sourceRef,madeAtMinute:nextMinute,
+   revision:(old?.revision??0)+1,privacy:change.privacy,
+   ...(change.nextReviewMinute!==undefined?{nextReviewMinute:change.nextReviewMinute}:{})
+  };
+  state.decisions={...(state.decisions??{}),
+   [change.subjectId]:validateLabNpcDecision(decision)};
+  next.npcs[change.npcId]=state;
+ }
+ // Stateful NPC/faction work. Nothing advances in the background simply because
+ // the narrator says "we will test it"; advancing world time requires review
+ // of every overdue accepted task, or an explicit grounded closure.
+ const projectChanges=event.worldProjectChanges??[];
+ if(!Array.isArray(projectChanges)||projectChanges.length>24||
+    new Set(projectChanges.map(x=>x.projectId)).size!==projectChanges.length)
+   throw Error("LAB_WORLD_PROJECT_CHANGE_BATCH_INVALID");
+ for(const change of projectChanges){
+  if(!record(change)||!good(change.projectId)||
+     !Number.isSafeInteger(change.expectedRevision)||change.expectedRevision<0||
+     !record(change.record)||nextMinute===null)
+    throw Error("LAB_WORLD_PROJECT_CHANGE_INVALID");
+  const prev=session.worldProjects?.[change.projectId];
+  if((prev?.revision??0)!==change.expectedRevision||
+     change.record.revision!==change.expectedRevision+1||
+     change.record.latestEvidenceRef!==event.sourceRef||
+     change.record.lastReviewMinute!==nextMinute)
+    throw Error("LAB_WORLD_PROJECT_REVISION_CONFLICT");
+  const candidate=validateLabWorldProject(change.projectId,change.record,pack);
+  if(candidate.startedMinute>nextMinute)
+    throw Error("LAB_WORLD_PROJECT_FUTURE_START");
+  if(prev){
+   if(candidate.ownerNpcId!==prev.ownerNpcId||candidate.originRef!==prev.originRef||
+      candidate.startedMinute!==prev.startedMinute||
+      !allowedLabProjectTransition(prev.status,candidate.status)||
+      prev.status==="completed"||prev.status==="rejected"||prev.status==="cancelled")
+    throw Error("LAB_WORLD_PROJECT_TRANSITION_INVALID");
+  }else{
+   if(candidate.startedMinute!==nextMinute||candidate.originRef!==event.sourceRef)
+    throw Error("LAB_WORLD_PROJECT_ORIGIN_INVALID");
+   const witnessedAcceptance=event.knownBy.includes(candidate.ownerNpcId)&&
+    observations.some(o=>o.npcId===candidate.ownerNpcId&&
+     ["seen","heard","experienced"].includes(o.channel));
+   const independentAcceptance=event.worldActions?.some(a=>
+    a.npcId===candidate.ownerNpcId);
+   if(!witnessedAcceptance&&!independentAcceptance)
+    throw Error("LAB_WORLD_PROJECT_OWNER_UNAWARE");
+  }
+  // Direct participation or an established responsibility is required. A player
+  // cannot assign arbitrary private work to a total stranger through narration.
+  if(!prev&&!["proposed","accepted"].includes(candidate.status))
+   throw Error("LAB_WORLD_PROJECT_INITIAL_STATUS");
+  if(prev&&!event.worldActions?.some(a=>a.npcId===candidate.ownerNpcId)&&
+      !observations.some(o=>o.npcId===candidate.ownerNpcId)&&
+      !event.npcInteractions?.some(a=>a.initiatorNpcId===candidate.ownerNpcId||
+       a.recipientNpcId===candidate.ownerNpcId))
+   throw Error("LAB_WORLD_PROJECT_NO_OWNER_ACTION");
+  next.worldProjects={...(next.worldProjects??{}),
+    [change.projectId]:structuredClone(candidate)};
+ }
+ if(nextMinute!==null&&previousMinute!==null&&nextMinute>previousMinute){
+  const due=dueLabWorldProjects(session.worldProjects,nextMinute);
+  const reviewed=new Set(projectChanges.map(p=>p.projectId));
+  if(due.some(p=>!reviewed.has(p.projectId)))
+    throw Error("LAB_WORLD_PROJECT_REVIEW_REQUIRED:"+due.filter(p=>!reviewed.has(p.projectId))
+     .map(p=>p.projectId).join(","));
+ }
  if(event.effects!==undefined){
   if(!record(event.effects))throw Error("LAB_EVENT_EFFECT_INVALID");
   for(const category of ["resources","inventory"] as const){
@@ -356,6 +708,8 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
     ...(act.locationId?{locationId:act.locationId}:{})});
   }
  }
+ const localRumors=applyLabAmbientRumorChanges(session,pack,event);
+ if(localRumors!==undefined)next.ambientRumors=localRumors;
  next.events.push({sourceRef:event.sourceRef,kind:event.kind,summary:event.summary,
   time:event.time,knownBy:[...event.knownBy],
   ...(event.locationId?{locationId:event.locationId}:{})});

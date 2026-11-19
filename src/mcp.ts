@@ -17,7 +17,11 @@ import {
 import { intBetween } from "./rng.ts";
 import { WORLD_V3_OPERATIONS, type WorldV3BatchRequest } from "./world_sim_v3/runtime_facade.ts";
 import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
-import {createLabCampaign,commitLabCampaignEvent,readLabConfirmedEvent,loadLabSessionFromKv} from "./rpg_lab_v1/http.ts";
+import {createLabCampaign,commitLabCampaignEvent,readLabConfirmedEvent,loadLabSessionFromKv,
+ listLabCampaignInventory,archiveLabCampaigns,installFreshDanmachiWorld} from "./rpg_lab_v1/http.ts";
+import {readLabRoleplayScene,reviewLabRoleplayScene,readLabRoleplayWorldCycle,
+ readLabPlayerFog,readLabStoryOptions} from "./rpg_lab_v1/roleplay_adapter.ts";
+import {getRpgBridgeGmGuide} from "./rpg_lab_v1/gm_guide.ts";
 import type {LabConfirmedEvent} from "./rpg_lab_v1/events.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import { resolveRoutineAction } from "./routine.ts";
@@ -656,10 +660,93 @@ function buildServer() {
   );
 
   server.registerTool(
+    "rpg_lab_campaign_inventory",
+    {
+      title:"RPG Lab: list current and archived isolated campaigns",
+      description:"READ ONLY. Shows saved RPG Lab project/session IDs, revisions, game clocks and archive flags. Use to find old campaigns before a clean start. Does not list legacy Shura saves or hidden memories. No deletion, creation or migration.",
+      inputSchema:z.object({includeArchived:z.boolean().default(false)}),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await listLabCampaignInventory(input.includeArchived));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_INVENTORY_FAILED"});}
+    },
+  );
+  server.registerTool(
+    "rpg_lab_archive_campaigns",
+    {
+      title:"RPG Lab: reversible archive of selected older campaigns",
+      description:"WRITE ACTION. Archive ONLY explicitly supplied RPG Lab project/session pairs using their current expectedRevision. Requires explicit player request and confirmation phrase. No delete; blocks further gameplay commits, hides archived sessions from active index, leaves old event archive and Shura intact. Never call to wipe all data without inventory review.",
+      inputSchema:z.object({
+        confirm:z.literal("ARCHIVE_RPG_LAB_ONLY"),
+        reason:z.string().min(8).max(300),
+        targets:z.array(z.object({
+          projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+          sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+          expectedRevision:z.number().int().min(1),
+        })).min(1).max(4),
+      }),
+      annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await archiveLabCampaigns(input.targets,input.reason));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_ARCHIVE_FAILED"});}
+    },
+  );
+  server.registerTool(
+    "rpg_lab_install_danmachi_world",
+    {
+      title:"RPG Lab: install fresh DanMachi canon templates into a new project",
+      description:"WRITE ACTION. Create a brand new DanMachi project/pack with broad anime character cores, character speech idiolects, fog-ready setting and conditional story arcs. Does NOT create a campaign session, overwrite any old project or import earlier Linos/Daedalus memories. The project ID must be unused. Use only after the user chooses a new fresh world.",
+      inputSchema:z.object({
+        confirm:z.literal("INSTALL_NEW_DANMACHI_WORLD"),
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+      }),
+      annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await installFreshDanmachiWorld(input.projectId));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_WORLD_INSTALL_FAILED"});}
+    },
+  );
+  server.registerTool(
+    "rpg_lab_story_paths",
+    {
+      title:"RPG Lab: preview causal and alternative DanMachi plot routes",
+      description:"READ ONLY, GM PRIVATE. Review arcs and beats actually enabled by confirmed story flags, with missing prerequisites, mutually exclusive routes and independently trained NPC techniques. Canon scenes are anchors, not mandatory occurrences. Do not show hidden future events to the player.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+      }),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await readLabStoryOptions(loadLabSessionFromKv,input.projectId,input.sessionId));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_STORY_READ_FAILED"});}
+    },
+  );
+  server.registerTool(
+    "rpg_lab_player_fog",
+    {
+      title:"RPG Lab: player-known map and lore only",
+      description:"READ ONLY. Reveal only previously observed, reported or documented player knowledge and discovered areas. Explicitly excludes GM-only secrets, NPC private memories and hidden story arc blueprint. Use this for player-facing journal and map instead of leaking the GM scene brief.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+      }),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await readLabPlayerFog(loadLabSessionFromKv,input.projectId,input.sessionId));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_FOG_READ_FAILED"});}
+    },
+  );
+
+  server.registerTool(
     "rpg_lab_create_campaign",
     {
       title:"RPG Lab: create a clean, isolated campaign",
-      description:"WRITE ACTION. Creates a NEW versioned RPG Lab campaign in its own KV keyspace, including an optional natural, unblessed Linos profile when characterProfile=linos and the world is DanMachi. Does not select location unless supplied. Never modifies Shura or an existing campaign. Only invoke on an explicit user decision to begin a campaign.",
+      description:"WRITE ACTION. Creates a NEW versioned RPG Lab campaign in its own KV keyspace, including an optional natural, unblessed Linos profile when characterProfile=linos and the world is DanMachi. Does not select location unless supplied. NEW campaigns use strict NPC roleplay commit validation by default; existing campaigns remain compatible. Never modifies Shura or an existing campaign. Only invoke on an explicit user decision to begin a campaign.",
       inputSchema:z.object({
         projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
         sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
@@ -734,6 +821,7 @@ function buildServer() {
             hasCurrentGoal:!!npc.currentGoal,
           })),
           worldEventCount:session.worldEvents?.length??0,
+          roleplayGuard:session.roleplayGuard??"legacy",
           readOnly:true,
           legacySaveTouched:false,
         });
@@ -744,10 +832,109 @@ function buildServer() {
   );
 
   server.registerTool(
+    "rpg_runtime_guide",
+    {
+      title:"RPG Runtime Bridge: GM instruction and tool usage guide",
+      description:"READ ONLY. Return a durable GM-only operating manual listing every supported Legacy/Shura and RPG Lab workflow, exact tool names, boundaries between read/previews/writes, and how to use canon, NPC private memory, strict scene validation and offscreen project continuity. Use at the beginning of a new roleplay conversation, after a context reset, or when unsure which tool to call. This is not proof of any game event.",
+      inputSchema:z.object({}),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async ()=>{
+      try{return toolJson(getRpgBridgeGmGuide());}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_GM_GUIDE_FAILED"});}
+    },
+  );
+
+  server.registerTool(
+    "rpg_lab_world_cycle",
+    {
+      title:"RPG Lab: source-backed independent NPC world cycle",
+      description:"READ ONLY, GM PRIVATE. Unified NPC situation assessment, autonomous intent, canonical temperament cues, social encounters, owned offscreen research and traceable rumor candidates for the specified actual RPG Lab campaign and game-time window. Returns only proposals and no guaranteed research, NPC speech or rewards. Use before advancing in-world time and during major discoveries. Decisions and outcomes must be adjudicated and committed in rpg_lab_commit_event with source refs and strict narrationPlan.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        npcIds:z.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/)).min(1).max(16),
+        toMinute:z.number().int().min(0).max(1e9),
+        maxPerActor:z.number().int().min(1).max(8).optional(),
+        focusEventRef:z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/).optional(),
+      }),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await readLabRoleplayWorldCycle(loadLabSessionFromKv,input));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_WORLD_CYCLE_FAILED"});}
+    },
+  );
+  server.registerTool(
+    "rpg_lab_scene_context",
+    {
+      title:"RPG Lab: load an NPC scene with private character memories",
+      description:"READ ONLY, GM PRIVATE. Preferred first step BEFORE every meaningful RPG Lab NPC scene. Source-backed per-NPC canon anchors, current mood, remembered conversations, prior refusals, first-sighting cues, ongoing research and individual knowledge. Supports toMinute for offscreen project reviews. Unlike generic world_v3 this requires NO legacy Shura saveId. Never copy NPC private thoughts into player-visible narration.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        npcIds:z.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/)).min(1).max(8),
+        eventRef:z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/).optional(),
+        featureIds:z.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/)).max(24).optional(),
+        maxMemories:z.number().int().min(1).max(24).optional(),
+        toMinute:z.number().int().min(0).max(1e9).optional(),
+      }),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await readLabRoleplayScene(loadLabSessionFromKv,input));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_ROLEPLAY_SCENE_FAILED"});}
+    },
+  );
+  server.registerTool(
+    "rpg_lab_review_narration",
+    {
+      title:"RPG Lab: check a planned NPC scene against saved knowledge",
+      description:"READ ONLY, GM PRIVATE. Check actor beats, sourceRef memories, sighting familiarity, prior stance, claims of measured vs rumored facts, and important scene focus. Use to revise an NPC scene before showing it. Does not generate dialogue or guarantee canonical phrasing. Strict/new campaigns also validate the same structured plan when the confirmed event is committed.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        expectedSessionRevision:z.number().int().min(1),
+        npcIds:z.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/)).min(1).max(8),
+        contextEventRef:z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/).optional(),
+        requiredMemoryRefs:z.array(z.object({
+          npcId:z.string().min(1),sourceRef:z.string().min(1),
+        })).max(16).optional(),
+        beats:z.array(z.object({
+          actorId:z.string().min(1),
+          kind:z.enum(["speech","action","reaction"]),
+          summary:z.string().min(1).max(400),
+          factRefs:z.array(z.string().min(1)).max(16),
+          featureRefs:z.array(z.object({
+            featureId:z.string().min(1),
+            knowledge:z.enum(["seen","heard","either"]),
+          })).max(16).optional(),
+          worldClaims:z.array(z.object({
+            factId:z.string().min(1),
+            assertion:z.enum(["established","tentative","reported"]),
+          })).max(16).optional(),
+          decision:z.object({
+            subjectId:z.string().min(1),
+            stance:z.enum(["accept","refuse","counteroffer","defer",
+              "challenge","withdraw","ignore","approach","confront","cooperate","avoid"]),
+            revision:z.number().int().min(1).optional(),
+          }).optional(),
+          projectId:z.string().min(1).optional(),
+        })).min(1).max(32),
+      }),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await reviewLabRoleplayScene(loadLabSessionFromKv,input));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_NARRATION_REVIEW_FAILED"});}
+    },
+  );
+
+  server.registerTool(
     "rpg_lab_commit_event",
     {
       title:"RPG Lab: commit ONE confirmed campaign event",
-      description:"WRITE ACTION. Advances only the named isolated RPG Lab session using optimistic expectedRevision, confirmed scene sourceRef, witnesses, NPC observations, Linos mana/skills and optional world acts. Duplicate sourceRef rejected. Must NEVER be used for hypothetical scenes, preview calculations, or without a player-confirmed outcome. The legacy Shura save remains unchanged. Use after each actual user turn of this specific campaign.",
+      description:"WRITE ACTION. Advance only the named isolated RPG Lab session by a source-backed confirmed event (CAS revision). Strict/new campaigns REQUIRE event.narrationPlan:{npcIds,beats} whenever an NPC actively reacts, decides, interacts or owns work; in long game-time advances with active NPCs, event.worldCycleReview:{fromMinute,toMinute,actorReviews} is also required; each beat identifies actorId, kind, summary, factRefs and relevant featureRefs/worldClaims/decision/projectId. First load a private scene brief via simulate_world_v3 world_review rpgLabSceneV1; strict commits reject skipped reactions, unverified extraordinary claims and omitted due work. No simulated loot/rewards from previews. Do not modify unrelated campaigns or Shura. Never use for hypothetical scenes or unsupported player actions.",
       inputSchema:z.object({
         projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
         sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
@@ -775,7 +962,7 @@ function buildServer() {
     "simulate_world_v3",
     {
       title: "RPG V3: batch world simulations",
-      description: "READ ONLY. Calculate up to 12 causal proposals in one call on the current save: time, NPC schedules, craft, combat, travel, knowledge, world processes, inventory, source-backed quest offers, progression, titles and SUP. Inputs are GM snapshots, not independently source-attested. NEVER treat this calculation as a game commit.",
+      description: "READ ONLY. Calculate bounded world proposals. For RPG Lab scenes use world_review payload.rpgLabSceneV1 with projectId,sessionId,npcIds to obtain private personal memory, canon, mood and commitments. For time advance use rpgLabTickV1; to check planned narration use rpgLabNarrationV1 with saved revision, actor beats and event context. These are optional read-only probes but strict/new RPG Lab sessions REQUIRE a source-linked narrationPlan when committing meaningful NPC events. Never treat this calculation as a game commit.",
       inputSchema: z.object({
         expectedSaveId: z.string().min(1),
         jobs: z.array(z.object({
