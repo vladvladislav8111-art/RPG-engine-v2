@@ -4,8 +4,8 @@ import {applyConfirmedLabEvent,type LabConfirmedEvent} from "../src/rpg_lab_v1/e
 import {previewLabLivingWorldCycle} from "../src/rpg_lab_v1/living_world_cycle_v2.ts";
 import {readLabRoleplayScene,readLabRoleplayWorldCycle} from "../src/rpg_lab_v1/roleplay_adapter.ts";
 import {applyGuardedLabEvent} from "../src/rpg_lab_v1/turn_guard.ts";
-import {validateLabSession,type LabSession} from "../src/rpg_lab_v1/session.ts";
-import type {LabPack} from "../src/rpg_lab_v1/engine.ts";
+import {validateLabSession,withSessionDefaults,type LabSession} from "../src/rpg_lab_v1/session.ts";
+import {evaluateLabPack,type LabPack} from "../src/rpg_lab_v1/engine.ts";
 
 const pack:LabPack={
  schema:"RPG_LAB_PACK_V1",projectId:"orario_lw2",worldId:"danmachi.orario",
@@ -305,4 +305,24 @@ test("first-time Daedalus identity is personally significant, name knowledge not
  assert.ok(out.decisions.find(x=>x.npcId==="npc.loki")!.options
   .includes("ask_about_name_origin_or_alias_if_character_cares"));
  assert.equal(out.decisions.find(x=>x.npcId==="npc.finn")!.personallyKnownFocusedEvent,false);
+});
+
+test("existing world_tick gets unified source-backed cycle but raw calculators stay compatible",()=>{
+ let s=fresh();
+ s=applyConfirmedLabEvent(s,pack,e("evt.intro","D0 09:00",{
+  knownBy:["npc.loki"],
+  observations:[seen("npc.loki","A stranger introduces himself as Daedalus")],
+ }));
+ const job={id:"tick",kind:"world_tick",args:{
+  fromMinute:time(0,9),toMinute:time(0,10),npcIds:["npc.loki"]}};
+ const withSource=evaluateLabPack(pack,withSessionDefaults([job],s)).results[0];
+ assert.equal(withSource.ok,true);
+ if(!withSource.ok)throw Error("source tick failed");
+ const scoped=withSource.value as any;
+ assert.equal(scoped.livingWorldCycle.schema,"RPG_LAB_LIVING_WORLD_CYCLE_V2");
+ assert.equal(scoped.livingWorldCycle.committed,false);
+ const standalone=evaluateLabPack(pack,[job]).results[0];
+ assert.equal(standalone.ok,true);
+ if(!standalone.ok)throw Error("standalone tick failed");
+ assert.equal(Object.hasOwn(standalone.value as object,"livingWorldCycle"),false);
 });
