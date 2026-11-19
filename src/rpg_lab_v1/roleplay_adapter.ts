@@ -3,6 +3,7 @@
  * Purely read-only, GM-private; does not decide dialogue or mutate state.
  */
 import {buildLabSceneBrief,dueLabWorldProjects} from "./living_world.ts";
+import {readLabAmbientRumors} from "./ambient_rumors.ts";
 import {narrativeMinute} from "./events.ts";
 import {previewLabLivingWorldCycle} from "./living_world_cycle_v2.ts";
 import {previewLabStoryPaths} from "./story_consequences.ts";
@@ -59,6 +60,9 @@ export async function readLabRoleplayScene(load:LabRoleplayLoader,
   currentInworldMinute:from,
   ...(to!==undefined?{reviewThroughMinute:to}:{}),
   dueWorldProjects:due,
+  localAmbientRumors:s.session.player.locationId?
+   readLabAmbientRumors(s.session,s.session.player.locationId,6):[],
+  ambientRumorsAreUnverified:true,
   livingWorldCycle:worldCycle,
   storyRoutes:previewLabStoryPaths(s.pack,s.session),
   playerKnownSummary:{knownFacts:Object.keys(s.session.playerFog?.entries??{}).length,

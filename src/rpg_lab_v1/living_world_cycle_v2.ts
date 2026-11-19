@@ -8,6 +8,7 @@
 import type {LabPack,LabNpc} from "./engine.ts";
 import type {LabSession,LabNpcState,LabMemory} from "./session.ts";
 import {dueLabWorldProjects} from "./living_world.ts";
+import {readLabAmbientRumors} from "./ambient_rumors.ts";
 import {proposeIndependentWorldAgenda} from "./autonomy.ts";
 import type {LabWorldEvidence} from "./world_evidence.ts";
 
@@ -273,6 +274,12 @@ export function previewLabLivingWorldCycle(pack:LabPack,
   sessionId:session.sessionId,fromMinute:req.fromMinute,toMinute:req.toMinute,
   focusEventRef:req.focusEventRef??null,
   significance,decisions,work,contacts,rumors,
+  localAmbientRumors:[...new Set([
+   session.player.locationId,
+   ...req.npcIds.map(id=>session.npcs[id]?.locationId)
+  ].filter((id):id is string=>Boolean(id)))].slice(0,8)
+   .flatMap(id=>readLabAmbientRumors(session,id,4)),
+  ambientRumorsAreUnverified:true,
   independentIntents:agenda.intents.filter(x=>selected.has(x.npcId)),
   unresolvedWork:duties.map(x=>x.projectId),
   runOnlyOnGameTimeAdvance:req.toMinute>req.fromMinute,
