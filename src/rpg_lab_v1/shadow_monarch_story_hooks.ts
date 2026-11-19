@@ -2,7 +2,7 @@
  * These are situations to adjudicate, NOT automatic arcs, spawned NPCs,
  * XP, rewards, or facts in any character's knowledge.
  */
-import type {JinwooPhase,JinwooState} from "./shadow_monarch_rules.ts";
+import {shopAvailable,type JinwooPhase,type JinwooState} from "./shadow_monarch_rules.ts";
 export type JinwooNarrativeHook={
  id:string;
  tags:string[];
@@ -113,6 +113,8 @@ export function previewJinwooNarrativeHooks(state:JinwooState,tags:string[]):{
  const set=new Set(tags);
  return {hooks:JINWOO_STORY_HOOKS.filter(h=>
   phaseOrder[h.minPhase]<=phaseOrder[state.phase]&&
+  (h.id!=="class.trial"||state.phase==="player_system")&&
+  (!["daily.deadline","shop.currency"].includes(h.id)||shopAvailable(state))&&
   h.tags.some(x=>set.has(x))&&
   (!h.requiresSkill||state.unlockedSkills.includes(h.requiresSkill))),
   readOnly:true,noNpcKnowledgeGrant:true,noAutomaticEvents:true,gmOnly:true};
