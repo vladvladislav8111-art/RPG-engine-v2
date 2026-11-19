@@ -223,6 +223,8 @@ export function applyLabStoryChanges(session:LabSession,pack:LabPack,
  // A trainee cannot accumulate two separate ninety-minute technique lessons
  // during the same ninety-minute elapsed window, even under two labels.
  const elapsedFrom=timeInMinutes(session.gameClock),elapsedTo=timeInMinutes(event.time);
+ if(training.length&&!["training","world_training","practice"].includes(event.kind))
+  throw Error("LAB_STORY_TRAINING_EVENT_KIND");
  const minutesByTrainee=new Map<string,number>();
  for(const t of training){
   const total=(minutesByTrainee.get(t.traineeNpcId)??0)+t.sessionMinutes;
