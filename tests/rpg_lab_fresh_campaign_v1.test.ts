@@ -9,6 +9,7 @@ import {previewLabStoryPaths} from "../src/rpg_lab_v1/story_consequences.ts";
 import {readLabRoleplayScene} from "../src/rpg_lab_v1/roleplay_adapter.ts";
 import {archiveLabCampaignsInKv} from "../src/rpg_lab_v1/http.ts";
 import {archivedLabKey} from "../src/rpg_lab_v1/campaign_lifecycle.ts";
+import {encodeLabPack,decodeLabPack} from "../src/rpg_lab_v1/storage_codec.ts";
 import type {LabSession} from "../src/rpg_lab_v1/session.ts";
 
 const pack=buildFreshDanmachiLabPack("new_orario_2026");
@@ -209,4 +210,42 @@ test("reversible RPG Lab-only archive is CAS bounded, leaves all payloads intact
    projectId:"old_world",sessionId:"old_session",expectedRevision:3
   }],"New clean campaign preparation"),/LAB_CAMPAIGN_ALREADY_ARCHIVED/);
  }finally{kv.close();}
+});
+
+test("large anime voice/canon pack survives encoded KV gzip round-trip",async()=>{
+ const stored=await encodeLabPack(pack,1);
+ assert.equal(stored.revision,1);
+ assert.equal(stored.codec,"gzip-v1");
+ assert.ok(stored.packedGzip&&stored.packedGzip.length<50000);
+ const decoded=await decodeLabPack(stored);
+ assert.equal(Object.keys(decoded.npcProfiles).length,DANMACHI_STARTING_NPC_COUNT);
+ assert.equal(Object.keys(decoded.storyArcs??{}).length,DANMACHI_CANON_ARC_COUNT);
+ assert.equal(decoded.npcProfiles["npc.loki"].voice?.sampleLines[0],
+  pack.npcProfiles["npc.loki"].voice?.sampleLines[0]);
+ assert.ok(decoded.npcProfiles["npc.tsubaki"].knownFacts.includes("canon.orario.daedalus"));
+ assert.equal(decoded.canonFacts?.["canon.freya.syr"].visibility,"private");
+});
+test("canon facts are personally scoped and an absurd universal secret is absent",async()=>{
+ const session=fresh();
+ const loader=async()=>({pack,session,packRevision:1,sessionRevision:1});
+ const brief=await readLabRoleplayScene(loader,{
+  projectId:pack.projectId,sessionId:session.sessionId,
+  npcIds:["npc.tsubaki","npc.loki","npc.bell","npc.eina"]});
+ const tsubaki=brief.actors.find(x=>x.npcId==="npc.tsubaki")!;
+ assert.equal(tsubaki.personallyKnownCanon.some(x=>x.factId==="canon.orario.daedalus"),true);
+ assert.equal(tsubaki.personallyKnownCanon.some(x=>x.factId==="canon.freya.syr"),false);
+ assert.equal(brief.actors.find(x=>x.npcId==="npc.bell")!
+  .personallyKnownCanon.some(x=>x.factId==="canon.freya.syr"),false);
+ assert.equal(brief.actors.find(x=>x.npcId==="npc.loki")!.voiceIdentity?.verbalTics.length>0,true);
+});
+test("contradictory silverback outcomes cannot both be canon even in a single event",()=>{
+ const session=fresh();
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,evt("evt.bad_two_wins","D0 09:00",{
+  storyFlagChanges:[
+   {flagId:"silverback.saved_by_player",expectedRevision:0,value:true,
+    evidenceRefs:["evt.bad_two_wins"]},
+   {flagId:"bell.won_silverback",expectedRevision:0,value:true,
+    evidenceRefs:["evt.bad_two_wins"]}
+  ]
+ })),/LAB_STORY_MUTUALLY_EXCLUSIVE_CAUSE/);
 });
