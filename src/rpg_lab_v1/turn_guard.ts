@@ -59,6 +59,7 @@ export function applyGuardedLabEvent(session:LabSession,pack:LabPack,
  const changed=applyConfirmedLabEvent(session,pack,event);
  if(session.roleplayGuard!=="strict")
   return {next:changed,guardRequired:false,guardVerified:false,checkedActorIds:[]};
+ let cycleVerified=false;
  const prior=narrativeMinute(session.gameClock);
  const after=narrativeMinute(event.time);
  if(prior!==null&&after!==null&&after-prior>=720){
@@ -73,6 +74,7 @@ export function applyGuardedLabEvent(session:LabSession,pack:LabPack,
    if(cover.some(x=>!reviewed.has(x)))
     throw Error("LAB_STRICT_WORLD_CYCLE_ACTORS_MISSING:"+
      cover.filter(x=>!reviewed.has(x)).join(","));
+   cycleVerified=true;
    for(const item of check.actorReviews){
     if(!good(item.npcId)||!pack.npcProfiles[item.npcId]||
        !["acted","blocked","no_change"].includes(item.status)||
@@ -100,7 +102,7 @@ export function applyGuardedLabEvent(session:LabSession,pack:LabPack,
  }
  const required=activeNpcRoles(event);
  if(required.length===0)
-  return {next:changed,guardRequired:false,guardVerified:false,checkedActorIds:[]};
+  return {next:changed,guardRequired:cycleVerified,guardVerified:cycleVerified,checkedActorIds:[]};
  const plan=event.narrationPlan;
  if(!plan||!Array.isArray(plan.npcIds)||!Array.isArray(plan.beats))
   throw Error("LAB_STRICT_NARRATION_PLAN_REQUIRED");
