@@ -51,7 +51,7 @@ export async function hydrateLabBridgeRequest(req:WorldV3BatchRequest,load:LabPa
    const spec=payload.rpgLabTickV1;
    if(typeof spec.projectId!=="string"||!projectId.test(spec.projectId)||
       typeof spec.sessionId!=="string"||!projectId.test(spec.sessionId)||
-      !Number.isSafeInteger(spec.toMinute))
+      typeof spec.toMinute!=="number"||!Number.isSafeInteger(spec.toMinute))
     throw Error("LAB_TICK_BRIDGE_REF_INVALID");
    const loaded=await loadSession(spec.projectId,spec.sessionId);
    if(loaded.pack.projectId!==spec.projectId||loaded.session.projectId!==spec.projectId||
