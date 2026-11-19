@@ -284,3 +284,25 @@ test("strict time skip requires NPC-independent world review, not a silent freez
  assert.equal(session.gameClock,"D0 09:00");
  assert.equal(result.next.npcs["npc.smith"].memories.length,1);
 });
+
+test("first-time Daedalus identity is personally significant, name knowledge not invented",()=>{
+ let s=fresh();
+ s=applyConfirmedLabEvent(s,pack,e("evt.arrival","D0 09:00",{
+  knownBy:["npc.loki"],
+  observations:[seen("npc.loki",
+   "Visitor introduced himself as Daedalus, displaying mechanical eyes and halo")],
+  playerFeatureChanges:undefined,
+ }));
+ const out=previewLabLivingWorldCycle(pack,s,{
+  npcIds:["npc.loki","npc.finn"],fromMinute:time(0,9),toMinute:time(0,9),
+  focusEventRef:"evt.arrival"});
+ const heard=out.significance.find(x=>x.npcId==="npc.loki")!;
+ const absent=out.significance.find(x=>x.npcId==="npc.finn")!;
+ assert.equal(heard.focusedObservations.length,1);
+ assert.equal(heard.focusedObservations[0].namingOrIdentityCue,true);
+ assert.equal(heard.focusedObservations[0].canonKnowledgeMatches.length,0);
+ assert.equal(absent.focusedObservations.length,0);
+ assert.ok(out.decisions.find(x=>x.npcId==="npc.loki")!.options
+  .includes("ask_about_name_origin_or_alias_if_character_cares"));
+ assert.equal(out.decisions.find(x=>x.npcId==="npc.finn")!.personallyKnownFocusedEvent,false);
+});
