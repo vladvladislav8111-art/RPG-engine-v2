@@ -4,6 +4,11 @@ import {buildFreshDanmachiLabPack} from "../src/rpg_lab_v1/danmachi_starter.ts";
 import {applyConfirmedLabEvent,type LabConfirmedEvent} from "../src/rpg_lab_v1/events.ts";
 import {buildLabSceneBrief} from "../src/rpg_lab_v1/living_world.ts";
 import {previewOriginalNpcPromotion,type LabOriginalNpcSeed} from "../src/rpg_lab_v1/original_npc_promotion.ts";
+import {promoteOriginalNpcInKv} from "../src/rpg_lab_v1/original_npc_promotion_kv.ts";
+import {encodeLabPack,decodeLabPack,type LabStored} from "../src/rpg_lab_v1/storage_codec.ts";
+import {encodeLabSession,type LabSessionStored} from "../src/rpg_lab_v1/session_storage.ts";
+import {prepareLabSessionHead,decodeLabSessionFromKv} from "../src/rpg_lab_v1/session_kv.ts";
+import {archivedLabKey} from "../src/rpg_lab_v1/campaign_lifecycle.ts";
 import type {LabNpc} from "../src/rpg_lab_v1/engine.ts";
 import type {LabSession} from "../src/rpg_lab_v1/session.ts";
 
@@ -366,4 +371,94 @@ test("adaptation must follow its last accepted causal proof, not reuse an unrela
  const linked=smithObserved("evt.ivar.second_prototype","D3 12:00",1,"evt.ivar.first_prototype");
  const valid=applyConfirmedLabEvent(first,p.proposedPack,linked);
  assert.equal(valid.npcs[smithId].adaptations?.["method.prototype_open"].score,2);
+});
+
+/** Integration: actual in-memory Deno KV, no mocked CAS or deployment. */
+const promotionArgs=(packRev:number,sessionRev:number)=>({
+ confirm:"PROMOTE_CONFIRMED_ORIGINAL_NPC" as const,
+ projectId:world.projectId,sessionId:"smith_test",
+ expectedPackRevision:packRev,expectedSessionRevision:sessionRev,
+ seed,profile:smith
+});
+async function storedSmithFixture(kv:Deno.Kv,session=significantHistory(),packRev=4,sessionRev=7){
+ const projectKey=["rpg-lab-v1","projects",world.projectId],
+  sessionKey=["rpg-lab-v1","sessions",world.projectId,session.sessionId];
+ await kv.set(projectKey,await encodeLabPack(world,packRev));
+ await kv.set(sessionKey,await prepareLabSessionHead(kv,world.projectId,session.sessionId,
+  await encodeLabSession(session,world,sessionRev)));
+ return {projectKey,sessionKey};
+}
+test("KV promotion writes pack and session together, preserves player, clock and Shura",async()=>{
+ const kv=await Deno.openKv(":memory:");
+ try{
+  const before=significantHistory();
+  const keys=await storedSmithFixture(kv,before);
+  await kv.set(["CONTROL","B2"],"V2-S0909");
+  const result=await promoteOriginalNpcInKv(kv,promotionArgs(4,7));
+  assert.equal(result.committed,true);
+  assert.equal(result.packRevision,5);
+  assert.equal(result.sessionRevision,8);
+  assert.equal(result.noClockAdvance,true);
+  const pack=await decodeLabPack((await kv.get<LabStored>(keys.projectKey)).value!);
+  const stored=(await kv.get<LabSessionStored>(keys.sessionKey)).value!;
+  const after=await decodeLabSessionFromKv(kv,world.projectId,before.sessionId,stored,pack);
+  assert.ok(pack.npcProfiles[smithId].originalCore);
+  assert.deepEqual(after.npcs[smithId].memories.map(m=>m.sourceRef),
+   [seed.firstEncounterRef,seed.independentChoiceRef]);
+  assert.equal(after.npcs[smithId].relationships,undefined);
+  assert.deepEqual(after.events,before.events);
+  assert.deepEqual(after.player,before.player);
+  assert.equal(after.gameClock,before.gameClock);
+  assert.equal((await kv.get(["CONTROL","B2"])).value,"V2-S0909");
+  await assert.rejects(()=>promoteOriginalNpcInKv(kv,promotionArgs(4,7)),
+   /LAB_ORIGINAL_PROMOTION_REVISION_CONFLICT/);
+  await assert.rejects(()=>promoteOriginalNpcInKv(kv,promotionArgs(5,8)),
+   /LAB_ORIGINAL_PROMOTION_ALREADY_REGISTERED/);
+ }finally{kv.close();}
+});
+
+test("KV promotion uses signed archived event_refs without reintroducing old events",async()=>{
+ const kv=await Deno.openKv(":memory:");
+ try{
+  const old={...significantHistory(),events:[],archivedEventCount:8};
+  const keys=await storedSmithFixture(kv,old,2,240);
+  const proofs=[
+   scene(seed.firstEncounterRef,"D0 08:15","npc_background_contact",
+    "Ивар Келл осмотрел наруч, заметил трещину и отказался обещать надёжность без испытания."),
+   scene(seed.independentChoiceRef,"D0 09:10","npc_independent_choice",
+    "Ивар Келл отказался скрыть опасную трещину за двойную плату и упустил заказ.")
+  ];
+  for(const [index,event] of proofs.entries())
+   await kv.set(["rpg-lab-v1","event_refs",world.projectId,old.sessionId,event.sourceRef],
+    {revision:index+1,event});
+  const result=await promoteOriginalNpcInKv(kv,promotionArgs(2,240));
+  assert.equal(result.committed,true);
+  const pack=await decodeLabPack((await kv.get<LabStored>(keys.projectKey)).value!);
+  const after=await decodeLabSessionFromKv(kv,world.projectId,old.sessionId,
+   (await kv.get<LabSessionStored>(keys.sessionKey)).value!,pack);
+  assert.equal(after.archivedEventCount,8);
+  assert.deepEqual(after.events,[]);
+  assert.equal(after.npcs[smithId].memories.length,2);
+ }finally{kv.close();}
+});
+
+test("KV promotion rejects missing archived evidence, archived session, Drive binding",async()=>{
+ for(const blocker of ["missing_event","archived","drive"] as const){
+  const kv=await Deno.openKv(":memory:");
+  try{
+   const before=blocker==="missing_event"?
+    {...significantHistory(),events:[],archivedEventCount:8}:significantHistory();
+   const keys=await storedSmithFixture(kv,before,2,3);
+   if(blocker==="archived")
+    await kv.set(archivedLabKey(world.projectId,before.sessionId),{archive:true});
+   if(blocker==="drive")
+    await kv.set(["rpg-lab-v1","google_bindings",world.projectId],{folderId:"test"});
+   await assert.rejects(()=>promoteOriginalNpcInKv(kv,promotionArgs(2,3)),
+    blocker==="missing_event"?/LAB_ORIGINAL_PROMOTION_ARCHIVED_EVIDENCE_MISSING/:
+    blocker==="archived"?/LAB_CAMPAIGN_ARCHIVED/:
+    /LAB_ORIGINAL_PROMOTION_DRIVE_CONTROLLED/);
+   assert.equal((await kv.get<LabStored>(keys.projectKey)).value?.revision,2);
+   assert.equal((await kv.get<LabSessionStored>(keys.sessionKey)).value?.revision,3);
+  }finally{kv.close();}
+ }
 });

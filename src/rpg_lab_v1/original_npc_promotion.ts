@@ -18,7 +18,8 @@ const validId=(s:unknown):s is string=>typeof s==="string"&&ID.test(s)&&
  * Never promotes for repeated shopping, generosity or GM preference.
  */
 export function previewOriginalNpcPromotion(pack:LabPack,session:LabSession,
- seed:LabOriginalNpcSeed,profile:LabNpc){
+ seed:LabOriginalNpcSeed,profile:LabNpc,
+ historicalEvents:LabSession["events"]=[]){
  validateLabPack(pack);validateLabSession(session,pack);
  if(!seed||!profile||!validId(seed.npcId)||!seed.npcId.startsWith("npc.original.")||
  !validId(seed.firstEncounterRef)||!validId(seed.independentChoiceRef)||
@@ -36,8 +37,10 @@ export function previewOriginalNpcPromotion(pack:LabPack,session:LabSession,
  !profile.habitualLogic?.limits.length||!profile.responsePatterns?.work_request||
  !profile.responsePatterns?.boundary_violation||!profile.responsePatterns?.disengagement)
   throw Error("LAB_ORIGINAL_PROMOTION_PROFILE_INCOMPLETE");
- const first=session.events.find(e=>e.sourceRef===seed.firstEncounterRef);
- const choice=session.events.find(e=>e.sourceRef===seed.independentChoiceRef);
+ const first=session.events.find(e=>e.sourceRef===seed.firstEncounterRef)??
+  historicalEvents.find(e=>e.sourceRef===seed.firstEncounterRef);
+ const choice=session.events.find(e=>e.sourceRef===seed.independentChoiceRef)??
+  historicalEvents.find(e=>e.sourceRef===seed.independentChoiceRef);
  if(!first||!choice||first.kind!=="npc_background_contact"||
  choice.kind!=="npc_independent_choice"||
  first.locationId!==seed.workplaceId||choice.locationId!==seed.workplaceId||

@@ -18,7 +18,8 @@ import { intBetween } from "./rng.ts";
 import { WORLD_V3_OPERATIONS, type WorldV3BatchRequest } from "./world_sim_v3/runtime_facade.ts";
 import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
 import {createLabCampaign,commitLabCampaignEvent,readLabConfirmedEvent,loadLabSessionFromKv,
- listLabCampaignInventory,archiveLabCampaigns,installFreshDanmachiWorld} from "./rpg_lab_v1/http.ts";
+ listLabCampaignInventory,archiveLabCampaigns,installFreshDanmachiWorld,promoteLabOriginalNpc} from "./rpg_lab_v1/http.ts";
+import type {LabNpc} from "./rpg_lab_v1/engine.ts";
 import {readLabRoleplayScene,reviewLabRoleplayScene,readLabRoleplayWorldCycle,
  readLabPlayerFog,readLabStoryOptions,readLabMentionedNpcDialogue} from "./rpg_lab_v1/roleplay_adapter.ts";
 import {getRpgBridgeGmGuide} from "./rpg_lab_v1/gm_guide.ts";
@@ -904,6 +905,33 @@ function buildServer() {
     async input=>{
       try{return toolJson(await readLabMentionedNpcDialogue(loadLabSessionFromKv,input));}
       catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_MENTION_CONTEXT_FAILED"});}
+    },
+  );
+  server.registerTool(
+    "rpg_lab_promote_original_npc",
+    {
+      title:"RPG Lab: atomically register a fully evidenced original NPC",
+      description:"WRITE ACTION, GM ONLY. Promote a background original NPC to a full private character core only after a confirmed encounter AND a separately witnessed independent decision. Requires explicit confirmation and both current pack/session revisions. Atomically writes pack and this session; refuses archived and Drive-controlled campaigns. Does not advance time, grant friendship, modify existing NPCs or touch Shura. Never call for a hypothetical NPC.",
+      inputSchema:z.object({
+        confirm:z.literal("PROMOTE_CONFIRMED_ORIGINAL_NPC"),
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        expectedPackRevision:z.number().int().min(1),
+        expectedSessionRevision:z.number().int().min(1),
+        seed:z.object({
+          npcId:z.string().min(1).max(80),publicName:z.string().min(1).max(150),
+          workplaceId:z.string().min(1).max(80),observedAppearance:z.string().min(1).max(500),
+          firstEncounterRef:z.string().min(1).max(80),
+          independentChoiceRef:z.string().min(1).max(80),
+          witnessNpcId:z.string().min(1).max(80)
+        }),
+        profile:z.record(z.string(),z.unknown()),
+      }),
+      annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await promoteLabOriginalNpc({...input,profile:input.profile as LabNpc}));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_ORIGINAL_PROMOTION_FAILED"});}
     },
   );
   server.registerTool(

@@ -14,6 +14,7 @@ import {reviewLabSessionMemory} from "./memory_view.ts";
 import {newLinosState} from "./linos.ts";
 import {planLabEventArchive} from "./event_archive.ts";
 import {buildFreshDanmachiLabPack} from "./danmachi_starter.ts";
+import {promoteOriginalNpcInKv,type LabPromoteOriginalNpcArgs} from "./original_npc_promotion_kv.ts";
 import {archivedLabKey,validateLabArchiveRequest,validateLabArchiveMarker,
  type LabArchiveTarget,type LabArchiveMarker} from "./campaign_lifecycle.ts";
 import {
@@ -222,6 +223,14 @@ export async function commitLabCampaignEvent(args:{
   roleplayGuardRequired:checked.guardRequired,roleplayGuardVerified:checked.guardVerified};
 }
 
+/** Explicit atomic NPC promotion, with no gameplay event or save migration. */
+export async function promoteLabOriginalNpc(args:LabPromoteOriginalNpcArgs){
+ if(!projectRe.test(args.projectId))throw Error("LAB_PROJECT_ID_INVALID");
+ const kv=await storage();
+ await autoSyncGoogleProject(kv,args.projectId);
+ return promoteOriginalNpcInKv(kv,args);
+}
+
 /** Lookup an archived confirmed event by exact sourceRef, without creating a new turn. */
 export async function readLabConfirmedEvent(projectId:string,sessionId:string,sourceRef:string){
  if(!projectRe.test(projectId)||!projectRe.test(sessionId)||
@@ -331,6 +340,19 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    return reply({...view,packRevision:storedPack.value.revision,
     sessionRevision:record.value.revision,legacySaveTouched:false});
   }
+  const promotionPath=/^\/rpg-lab\/v1\/projects\/([A-Za-z0-9_-]{3,64})\/sessions\/([A-Za-z0-9_-]{3,64})\/original-npcs\/promote$/.exec(path);
+  if(promotionPath&&req.method==="POST"){
+   const data=await limited(req);
+   if(!obj(data))throw Error("LAB_ORIGINAL_PROMOTION_REQUEST_INVALID");
+   return reply(await promoteLabOriginalNpc({
+    confirm:data.confirm as LabPromoteOriginalNpcArgs["confirm"],
+    projectId:promotionPath[1],sessionId:promotionPath[2],
+    expectedPackRevision:data.expectedPackRevision as number,
+    expectedSessionRevision:data.expectedSessionRevision as number,
+    seed:data.seed as LabPromoteOriginalNpcArgs["seed"],
+    profile:data.profile as LabPromoteOriginalNpcArgs["profile"]
+   }));
+  }
   const eventReadPath=/^\/rpg-lab\/v1\/projects\/([A-Za-z0-9_-]{3,64})\/sessions\/([A-Za-z0-9_-]{3,64})\/event_refs\/([A-Za-z_][A-Za-z0-9_.:-]{0,79})$/.exec(path);
   if(eventReadPath&&req.method==="GET")
    return reply(await readLabConfirmedEvent(eventReadPath[1],eventReadPath[2],eventReadPath[3]));
@@ -430,7 +452,9 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
   return reply({error:"LAB_METHOD_NOT_ALLOWED"},405);
  }catch(e){
   const msg=unexpected(e);
-  const status=msg==="LAB_EVENT_ALREADY_APPLIED"||msg==="LAB_REVISION_CONFLICT"||msg==="LAB_CAMPAIGN_ALREADY_EXISTS"?409:msg==="LAB_KV_DISABLED"?503:msg==="LAB_BODY_TOO_LARGE"?413:msg==="LAB_PROJECT_NOT_FOUND"||msg==="LAB_DRIVE_NOT_BOUND"?404:400;
+  const status=["LAB_EVENT_ALREADY_APPLIED","LAB_REVISION_CONFLICT","LAB_CAMPAIGN_ALREADY_EXISTS",
+    "LAB_ORIGINAL_PROMOTION_REVISION_CONFLICT","LAB_ORIGINAL_PROMOTION_ALREADY_REGISTERED",
+    "LAB_ORIGINAL_PROMOTION_DRIVE_CONTROLLED","LAB_CAMPAIGN_ARCHIVED"].includes(msg)?409:msg==="LAB_KV_DISABLED"?503:msg==="LAB_BODY_TOO_LARGE"?413:msg==="LAB_PROJECT_NOT_FOUND"||msg==="LAB_DRIVE_NOT_BOUND"?404:400;
   return reply({ok:false,error:msg},status);
  }
 }

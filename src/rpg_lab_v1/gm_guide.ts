@@ -54,6 +54,7 @@ export function getRpgBridgeGmGuide(){
    {name:"rpg_lab_world_cycle",kind:"READ",use:"One bounded causal preview: significance, autonomous choices, voice cues, offscreen tasks, NPC contacts and source-traced rumor opportunities"},
    {name:"rpg_lab_review_narration",kind:"READ",use:"Evaluate structured draft beats against saved facts/claims; not a literary critic"},
    {name:"rpg_lab_commit_event",kind:"WRITE",use:"Commit one source-backed RPG Lab event with exact expectedRevision; strict NPC turns require narrationPlan"},
+   {name:"rpg_lab_promote_original_npc",kind:"WRITE",use:"After two qualifying confirmed events, atomically register an original NPC core and per-session memory using pack+session CAS; never automatic or hypothetical"},
    {name:"rpg_lab_read_event",kind:"READ",use:"Recover confirmed event by exact sourceRef, even after active journal compaction"},
    {name:"render_current_hud",kind:"DISPLAY",use:"Show authoritative current legacy player HUD, not a guessed RPG Lab HUD"},
    {name:"render_system_event",kind:"DISPLAY",use:"Display confirmed or informational system event with correct source and receipts"},
