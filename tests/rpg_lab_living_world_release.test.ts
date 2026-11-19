@@ -363,3 +363,69 @@ test("narrator guard denies made-up feature familiarity and unrelated project ow
  assert.ok(result.failures.some(x=>x.code==="NPC_FEATURE_KNOWLEDGE_MISSING"));
  assert.ok(result.failures.some(x=>x.code==="NPC_NOT_PROJECT_OWNER"));
 });
+
+test("2mm test result remains verified but 10mm/25-tonne claim stays unverified",()=>{
+ let session=fresh();
+ session=applyConfirmedLabEvent(session,pack,evt("evt.load_tests","D0 09:00",{
+  knownBy:["npc.smith"],
+  observations:[{npcId:"npc.smith",channel:"experienced",
+   perceivedFact:"Two 2mm load tests passed; the 10mm rating was only a claim",
+   learnedAt:"D0 09:00",confidence:"certain",salience:"important",privacy:"private"}],
+  worldEvidence:[
+   {factId:"material.2mm.test",statement:"Two tested 2mm threads held 1500 kgf",
+    scope:"Only two samples, tested fixtures and loads",kind:"measured",
+    level:"established",significance:"transformative",
+    method:"Workshop tensile loading rig",observedBy:["npc.smith"]},
+   {factId:"material.10mm.claim",statement:"10mm thread reportedly holds 25 tonnes",
+    scope:"Single untested claimed 10mm sample",kind:"reported",
+    level:"unverified",significance:"transformative",observedBy:[]},
+  ],
+ }));
+ const brief=buildLabSceneBrief(pack,session,{npcIds:["npc.smith","npc.loki"]});
+ assert.equal(brief.actors[0].knownWorldEvidence.length,2);
+ assert.equal(brief.actors[1].knownWorldEvidence.length,0);
+ assert.equal(brief.actors[0].knownWorldEvidence.find(
+  x=>x.factId==="material.10mm.claim")?.level,"unverified");
+ const common={npcIds:["npc.smith"],expectedSessionRevision:2};
+ const bad=reviewLabNarration(pack,session,{...common,beats:[{
+  actorId:"npc.smith",kind:"speech",summary:"25 tonnes are guaranteed",
+  factRefs:["evt.load_tests"],
+  worldClaims:[{factId:"material.10mm.claim",assertion:"established"}]}]},2);
+ assert.equal(bad.readyToRender,false);
+ assert.ok(bad.failures.some(x=>x.code==="UNVERIFIED_CLAIM_UPGRADED"));
+ const good=reviewLabNarration(pack,session,{...common,beats:[{
+  actorId:"npc.smith",kind:"speech",
+  summary:"Two 2mm tests are measured; 10mm capacity is unverified",
+  factRefs:["evt.load_tests"],worldClaims:[
+   {factId:"material.2mm.test",assertion:"established"},
+   {factId:"material.10mm.claim",assertion:"reported"}]}]},2);
+ assert.equal(good.readyToRender,true);
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,evt("evt.lie","D0 09:01",{
+  worldEvidence:[{factId:"material.fake.test",
+   statement:"25 tonnes proved",scope:"No test",kind:"reported",
+   level:"established",significance:"transformative",observedBy:[]}]
+ })),/LAB_WORLD_EVIDENCE_UNVERIFIED_UPGRADE/);
+});
+test("important weapon demonstration is not magically known by every god",()=>{
+ let session=fresh();
+ session=applyConfirmedLabEvent(session,pack,evt("evt.armor","D0 09:00",{
+  knownBy:["npc.finn"],observations:[{npcId:"npc.finn",channel:"seen",
+   perceivedFact:"Projectile traversed both iron breastplate walls",
+   learnedAt:"D0 09:00",confidence:"certain",salience:"important",privacy:"private"}],
+  worldEvidence:[{factId:"rifle.iron.plate",
+   statement:"One rifle shot pierced both sides of a particular iron breastplate",
+   scope:"At demonstrated distance, specific plate; no tested effect against Ottar",
+   kind:"observed",level:"established",significance:"transformative",
+   observedBy:["npc.finn"]}],
+ }));
+ const bad=reviewLabNarration(pack,session,{
+  npcIds:["npc.loki"],expectedSessionRevision:1,beats:[{
+  actorId:"npc.loki",kind:"speech",summary:"I already know the armor penetration test",
+  factRefs:[],worldClaims:[{factId:"rifle.iron.plate",assertion:"established"}]}]
+ },1);
+ assert.equal(bad.readyToRender,false);
+ assert.ok(bad.failures.some(x=>x.code==="NPC_NOT_INFORMED_OF_WORLD_EVIDENCE"));
+ const fin=buildLabSceneBrief(pack,session,{npcIds:["npc.finn"]});
+ assert.equal(fin.actors[0].knownWorldEvidence[0].scope.includes("no tested effect against Ottar"),true);
+ assert.equal(fin.actors[0].knownWorldEvidence[0].noExtrapolation,true);
+});
