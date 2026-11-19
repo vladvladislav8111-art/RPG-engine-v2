@@ -5,7 +5,8 @@ import {config} from "../config.ts";
 import {validateLabPack,evaluateLabPack,type LabPack,type LabJob} from "./engine.ts";
 import {importLabFile,type LabFileImport} from "./import.ts";
 import {validateLabSession,withSessionDefaults,type LabSession} from "./session.ts";
-import {applyConfirmedLabEvent,type LabConfirmedEvent} from "./events.ts";
+import type {LabConfirmedEvent} from "./events.ts";
+import {applyGuardedLabEvent,type LabTurnWithPlan} from "./turn_guard.ts";
 import {encodeLabPack,decodeLabPack,type LabStored} from "./storage_codec.ts";
 import {encodeLabSession,type LabSessionStored} from "./session_storage.ts";
 import {prepareLabSessionHead,decodeLabSessionFromKv} from "./session_kv.ts";
@@ -77,7 +78,7 @@ export async function createLabCampaign(args:{
  if(locationId!==undefined&&(!pack.locations[locationId]||!projectRe.test(locationId.replace(/[.:-]/g,"_"))))
   throw Error("LAB_NEW_CAMPAIGN_LOCATION_INVALID");
  const session:LabSession={schema:"RPG_LAB_SESSION_V1",projectId,sessionId,gameClock,
-  player:{resources:{},stats:{},inventory:{},
+  roleplayGuard:"strict",player:{resources:{},stats:{},inventory:{},
    ...(locationId?{locationId}:{}),
    ...(characterProfile==="linos"?{linos:newLinosState()}:{}),
   },
@@ -94,9 +95,10 @@ export async function createLabCampaign(args:{
 }
 export async function commitLabCampaignEvent(args:{
  projectId:string;sessionId:string;expectedRevision:number;
- event:LabConfirmedEvent;expectedPackRevision?:number;
+ event:LabTurnWithPlan;expectedPackRevision?:number;
 }):Promise<{ok:true;revision:number;projectId:string;sessionId:string;
- sourceRef:string;gameClock:string;rememberedBy:string[];legacySaveTouched:false}>{
+ sourceRef:string;gameClock:string;rememberedBy:string[];legacySaveTouched:false;
+ roleplayGuardRequired:boolean;roleplayGuardVerified:boolean}>{
  const {projectId,sessionId,expectedRevision,event,expectedPackRevision}=args;
  if(!projectRe.test(projectId)||!projectRe.test(sessionId)||!Number.isSafeInteger(expectedRevision)||
   expectedRevision<1)throw Error("LAB_EVENT_SESSION_REF_INVALID");
@@ -117,7 +119,8 @@ export async function commitLabCampaignEvent(args:{
  const ref=await kv.get(refKey);
  if(ref.value)throw Error("LAB_EVENT_ALREADY_APPLIED");
  const planned=planLabEventArchive(session);
- const next=applyConfirmedLabEvent(planned.working,pack,event);
+ const checked=applyGuardedLabEvent(planned.working,pack,event,expectedRevision);
+ const next=checked.next;
  const value=await encodeLabSession(next,pack,expectedRevision+1);
  const head=await prepareLabSessionHead(kv,projectId,sessionId,value);
  let tx=kv.atomic()
@@ -133,7 +136,8 @@ export async function commitLabCampaignEvent(args:{
  if(!done.ok)throw Error("LAB_REVISION_CONFLICT");
  return {ok:true,revision:value.revision,projectId,sessionId,
   sourceRef:event.sourceRef,gameClock:next.gameClock,
-  rememberedBy:event.observations?.map(x=>x.npcId)??[],legacySaveTouched:false};
+  rememberedBy:event.observations?.map(x=>x.npcId)??[],legacySaveTouched:false,
+  roleplayGuardRequired:checked.guardRequired,roleplayGuardVerified:checked.guardVerified};
 }
 
 /** Lookup an archived confirmed event by exact sourceRef, without creating a new turn. */
@@ -257,6 +261,12 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
     if(!Number.isSafeInteger(data.expectedRevision)||data.expectedRevision!==(current.value?.revision??0))throw Error("LAB_REVISION_CONFLICT");
     const pack=await decodeLabPack(packEntry.value);
     const session=validateLabSession(data.session as LabSession,pack);
+    // Strict gameplay forbids replacement of the authoritative snapshot
+    // through a bypass that does not commit source-attested NPC events.
+    if(current.value){
+     const previous=await decodeLabSessionFromKv(kv,projectId,sessionId,current.value,pack);
+     if(previous.roleplayGuard==="strict")throw Error("LAB_STRICT_SESSION_PUT_FORBIDDEN");
+    }
     if(session.sessionId!==sessionId)throw Error("LAB_SESSION_ID_MISMATCH");
     const value=await encodeLabSession(session,pack,(current.value?.revision??0)+1);
     const head=await prepareLabSessionHead(kv,projectId,sessionId,value);
