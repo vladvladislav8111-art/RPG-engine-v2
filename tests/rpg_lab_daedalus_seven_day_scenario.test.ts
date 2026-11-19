@@ -244,6 +244,26 @@ function runScenario(){
  }));
  // Building communication equipment is a confirmed player accomplishment,
  // not evidence any NPC saw it or that long-range transmission was tested.
+ // Tsubaki reports the Guild answer to Hephaestus that same afternoon.
+ // Hephaestus is informed of Loki membership, NOT of closed gun tests.
+ commit(evt("evt.heph_notified","D4 15:00",{
+  locationId:"heph",
+  worldActions:[{npcId:"npc.tsubaki",action:"Returns to workshop to brief Hephaestus",
+   outcome:"Explains applicant is already blessed by Loki",
+   locationId:"heph",privacy:"hidden"}],
+  npcPositions:[{npcId:"npc.tsubaki",locationId:"heph"}],
+  npcInteractions:[{initiatorNpcId:"npc.tsubaki",recipientNpcId:"npc.hephaestus",
+   action:"Tsubaki presents Guild-confirmed Loki membership",
+   outcome:"Hephaestus orders an eligibility decision and response to applicant",
+   salience:"important",privacy:"small_group"}],
+  observations:[{npcId:"npc.hephaestus",channel:"report",
+   sourceActor:"npc.tsubaki",relayedSourceRef:"evt.heph_eligibility",
+   perceivedFact:"Tsubaki confirmed Daedalus already belongs to Loki Familia",
+   learnedAt:"D4 15:00",confidence:"certain",salience:"important",
+   privacy:"small_group"}],
+  rumorRelays:[{speakerNpcId:"npc.tsubaki",listenerNpcId:"npc.hephaestus",
+   sourceMemoryRef:"evt.heph_eligibility"}],
+ }));
  commit(evt("evt.communication","D5 13:00",{
   locationId:"manor",
   summary:"Daedalus assembled communication equipment in private; range and reliability untested",
@@ -300,7 +320,7 @@ function runScenario(){
  return {state,rev,commit};
 }
 test("Daedalus first week: dossier, patron, musket, communication and rifle stay source-bound",async()=>{
- const {state:s}=runScenario();
+ const {state:s,rev}=runScenario();
  assert.equal(s.player.visibleFeatures?.["daedalus.halo"].description,
   "Floating luminous halo");
  assert.equal(s.worldProjects?.["heph.application"].status,"blocked");
@@ -319,7 +339,7 @@ test("Daedalus first week: dossier, patron, musket, communication and rifle stay
  assert.equal(s.npcs["npc.riveria"].memories.some(m=>m.sourceRef==="evt.awp"),false);
  assert.equal(s.npcs["npc.riveria"].memories.some(m=>
   m.sourceRef==="evt.communication"),true);
- const load=async()=>({pack,session:s,sessionRevision:11,packRevision:3});
+ const load=async()=>({pack,session:s,sessionRevision:rev,packRevision:3});
  const heph=await readLabRoleplayScene(load,{
   projectId:pack.projectId,sessionId:s.sessionId,
   npcIds:["npc.hephaestus","npc.tsubaki","npc.finn"]});
@@ -332,7 +352,7 @@ test("Daedalus first week: dossier, patron, musket, communication and rifle stay
  assert.equal(heph.livingWorldCycle?.work.length,0);
 });
 test("Day 7: pending application must be reviewed and professionally resolved",()=>{
- const {state:s}=runScenario();
+ const {state:s,rev}=runScenario();
  assert.throws(()=>applyConfirmedLabEvent(s,pack,evt("evt.day7.skip","D7 12:00")),
   /LAB_WORLD_PROJECT_REVIEW_REQUIRED/);
  const closed=project("rejected",4,at(7,11));
@@ -352,22 +372,15 @@ test("Day 7: pending application must be reviewed and professionally resolved",(
    action:"Tsubaki submits Guild-confirmed affiliation",
    outcome:"Hephaestus rules Daedalus cannot join while blessed by Loki",
    salience:"important",privacy:"small_group"}],
-  observations:[{npcId:"npc.hephaestus",channel:"report",
-   sourceActor:"npc.tsubaki",relayedSourceRef:"evt.heph_eligibility",
-   perceivedFact:"Tsubaki verified Daedalus already belongs to Loki",
-   learnedAt:"D7 11:00",confidence:"certain",
-   salience:"important",privacy:"small_group"}],
-  rumorRelays:[{speakerNpcId:"npc.tsubaki",listenerNpcId:"npc.hephaestus",
-   sourceMemoryRef:"evt.heph_eligibility"}],
   worldProjectChanges:[{projectId:"heph.application",expectedRevision:3,record:closed}],
  });
  // State cannot be mutated without a review of the living world after 12+ hours.
- assert.throws(()=>applyGuardedLabEvent(s,pack,event,12),
+ assert.throws(()=>applyGuardedLabEvent(s,pack,event,rev),
   /LAB_STRICT_WORLD_CYCLE_REVIEW_REQUIRED/);
  const actors=requiredLabWorldCycleActors(s,at(7,11));
  assert.ok(actors.includes("npc.tsubaki"));
  const guarded={...event,
-  worldCycleReview:{fromMinute:at(6,15),toMinute:at(7,11),
+  worldCycleReview:{fromMinute:at(6,17),toMinute:at(7,11),
    actorReviews:actors.map(npcId=>({
     npcId,status:(npcId==="npc.tsubaki"||
      npcId==="npc.hephaestus"?"acted":"no_change") as "acted"|"no_change",
@@ -382,7 +395,7 @@ test("Day 7: pending application must be reviewed and professionally resolved",(
     factRefs:["evt.heph_decision"]},
   ]}
  };
- const accepted=applyGuardedLabEvent(s,pack,guarded,12);
+ const accepted=applyGuardedLabEvent(s,pack,guarded,rev);
  assert.equal(accepted.guardVerified,true);
  assert.equal(accepted.next.worldProjects?.["heph.application"].status,"rejected");
  assert.equal(accepted.next.worldProjects?.["heph.application"].revision,4);
