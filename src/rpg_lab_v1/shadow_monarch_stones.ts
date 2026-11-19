@@ -4,6 +4,9 @@
  * template ONLY for a Shadow-Class Player. One stone => either one shadow OR
  * a local-valis sale. No shadow before Job Change, no shattered-stone imprint,
  * and all sources must be committed before runtime usage.
+ * ONE attempt per monster while a Shadow-class Player; no retry after failure.
+ * At true Monarch phase, intact valid stones have no random failure roll.
+ * This single-attempt rule is the user's chosen crossover rule (source has 3).
  */
 import type {JinwooMagicStone,JinwooShadow,JinwooState} from
  "./shadow_monarch_rules.ts";
@@ -66,13 +69,13 @@ export function sellConfirmedMagicStone(s:JinwooState,e:{
  n.appliedRewardRefs.push(e.sourceRef);return n;
 }
 export type MagicStoneExtraction={
- sourceRef:string;stoneId:string;roll:number;
+ sourceRef:string;stoneId:string;roll?:number;
  confirmedShadowCommand:boolean;
 };
 export type MagicStoneExtractionResult={
  next:JinwooState;success:boolean;
  reason?:"corrupted_mana"|"beyond_current_power"|"no_army_capacity"|
-  "three_attempts_expended"|"chance_failed";
+  "attempt_already_spent"|"chance_failed";
  chance:number;stoneConsumed:boolean;
 };
 export function extractShadowFromMagicStone(s:JinwooState,
@@ -81,8 +84,10 @@ export function extractShadowFromMagicStone(s:JinwooState,
  if(s.phase==="player_system"||
   !s.unlockedSkills.includes("shadow_extraction"))
   throw Error("PLAYER_SHADOW_CLASS_REQUIRED");
- if(!e.confirmedShadowCommand||!Number.isSafeInteger(e.roll)||
-  e.roll<1||e.roll>100||!valid(e.stoneId))
+ const sovereign=s.phase==="true_monarch";
+ if(!e.confirmedShadowCommand||!valid(e.stoneId)||
+  (!sovereign&&(!Number.isSafeInteger(e.roll)||e.roll!<1||e.roll!>100))||
+  (sovereign&&e.roll!==undefined&&(!Number.isSafeInteger(e.roll)||e.roll<1||e.roll>100)))
   throw Error("PLAYER_SHADOW_ATTEMPT_NOT_VERIFIED");
  const stone=s.magicStones[e.stoneId];
  if(!stone||stone.state!=="held"||!stone.intact)
@@ -90,18 +95,19 @@ export function extractShadowFromMagicStone(s:JinwooState,
  if(s.shadowRoster.some(x=>x.id===stone.monsterRef))
   throw Error("PLAYER_SHADOW_ALREADY_REGISTERED");
  const attempts=s.extractionAttempts[stone.monsterRef]??0;
- if(attempts>=3)return {next:s,success:false,
-  reason:"three_attempts_expended",chance:0,stoneConsumed:false};
+ if(attempts>=1)return {next:s,success:false,
+  reason:"attempt_already_spent",chance:0,stoneConsumed:false};
  const cap=shadowCapacity(s);
  const n=clone(s);
  n.extractionAttempts[stone.monsterRef]=attempts+1;
  n.appliedRewardRefs.push(e.sourceRef);
  const relative=stone.powerRating/Math.max(1,s.systemLevel);
- const chance=relative<=0.6?90:relative<=1.1?65:relative<=1.75?25:0;
+ const chance=sovereign?100:relative<=0.6?90:
+  relative<=1.1?65:relative<=1.75?25:0;
  const reason=stone.corruptedMana?"corrupted_mana":
-  relative>1.75?"beyond_current_power":
+  (!sovereign&&relative>1.75)?"beyond_current_power":
   n.shadowRoster.length>=cap?"no_army_capacity":
-  e.roll>chance?"chance_failed":undefined;
+  (!sovereign&&e.roll!>chance)?"chance_failed":undefined;
  if(reason)return {next:n,success:false,reason,chance,stoneConsumed:false};
  n.shadowRoster.push({
   id:stone.monsterRef,name:stone.monsterName,
@@ -115,7 +121,7 @@ export function playerStoneLedger(s:JinwooState){
  return Object.values(s.magicStones).map(x=>({
   stoneId:x.id,monster:x.monsterName,state:x.state,
   canAttempt:x.state==="held"&&x.intact&&
-   (s.extractionAttempts[x.monsterRef]??0)<3&&
+   (s.extractionAttempts[x.monsterRef]??0)<1&&
    s.phase!=="player_system"&&s.unlockedSkills.includes("shadow_extraction"),
   guildValis:x.state==="held"?x.guildValueValis:0
  }));
