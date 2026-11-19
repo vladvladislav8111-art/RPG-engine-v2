@@ -234,6 +234,7 @@ export function previewBalancedMonsterReward(s:JinwooState,params:{
 export function commitBalancedMonsterDefeat(s:JinwooState,e:{
  sourceRef:string;monsterId:string;floor:number;monsterRef:string;
  confirmedDefeat:boolean;killer:"player"|"shadow";
+ shadowId?:string;
  partySize?:number;contributionPercent?:number;
  confirmedIrregularRef?:string;
 }):JinwooState{
@@ -242,7 +243,8 @@ export function commitBalancedMonsterDefeat(s:JinwooState,e:{
  return awardJinwooEncounter(s,{
   sourceRef:e.sourceRef,targetRef:e.monsterRef,
   confirmed:true,xp:reward.xp,systemGold:reward.systemGold,
-  killer:e.killer,isNewDefeat:!reward.playerAlreadyReceivedXp,
+  killer:e.killer,shadowId:e.shadowId,
+  isNewDefeat:!reward.playerAlreadyReceivedXp,
   gmThreatRated:true
  });
 }
