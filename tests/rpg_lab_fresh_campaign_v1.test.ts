@@ -24,7 +24,7 @@ test("fresh DanMachi pack includes all anchor families, distinctive speech and c
  assert.ok(DANMACHI_STARTING_NPC_COUNT>=60);
  assert.ok(DANMACHI_CANON_ARC_COUNT>=10);
  for(const id of ["loki","finn","riveria","gareth","ais","tiona","tione","bete",
-  "lefiya","raul","hephai"+"stus","tsubaki","ganesha","shakti","bell",
+  "lefiya","raul","hephaestus","tsubaki","ganesha","shakti","bell",
   "hestia","freya","ottar","hermes","asfi","ryuu","syr",
   "wiene","filvis","horn","hedin","eina","aisha","cassandra"]){
   const npc=pack.npcProfiles["npc."+id];
@@ -60,6 +60,7 @@ test("fog: secret NPC/world facts remain undiscovered; direct player observation
  assert.equal(JSON.stringify(before).includes("underground passage"),false);
  session=applyConfirmedLabEvent(session,pack,evt("evt.city_view","D0 08:20",{
   kind:"player_turn",playerWitnessed:true,playerLocationId:"orario.plaza",
+  discovered:["orario.plaza"],
   playerFogChanges:[{key:"landmark.guild",expectedRevision:0,
    label:"Здание Гильдии",summary:"Большое административное здание на площади",
    kind:"place",certainty:"observed",channel:"direct",
