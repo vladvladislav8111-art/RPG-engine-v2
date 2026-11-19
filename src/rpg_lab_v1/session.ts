@@ -4,6 +4,7 @@
 import type {LabPack,LabJob} from "./engine.ts";
 import {validateLinosState,type LinosState} from "./linos.ts";
 import {validateFeatureMemory,type NpcFeatureMemory} from "./npc_perception.ts";
+import {validateLabSocialVector,type LabSocialVector} from "./social_dynamics_v2.ts";
 import {validateLabWorldEvidence,type LabWorldEvidence} from "./world_evidence.ts";
 import {validateLabNpcMood,validateLabWorldProject,validateLabNpcDecision,
  type LabNpcMood,type LabWorldProject,type LabNpcDecision} from "./living_world.ts";
@@ -18,7 +19,11 @@ export type LabPlayerFeature={
  description:string;significance:"routine"|"notable"|"transformative";
  visibility:"obvious"|"conditional";revision:number;lastUpdatedRef:string;
 };
-export type LabNpcState={knownFacts:string[];memories:LabMemory[];currentGoal?:string;relationships?:Record<string,string>;perceptions?:Record<string,NpcFeatureMemory>;mood?:LabNpcMood;decisions?:Record<string,LabNpcDecision>};
+export type LabNpcState={knownFacts:string[];memories:LabMemory[];currentGoal?:string;
+ relationships?:Record<string,string>;perceptions?:Record<string,NpcFeatureMemory>;
+ mood?:LabNpcMood;decisions?:Record<string,LabNpcDecision>;
+ socialDynamics?:Record<string,LabSocialVector>;
+ locationId?:string;locationSourceRef?:string;};
 /** Explicit commercial commitments. Amounts are ledger facts, NOT cash effects. */
 export type LabWorkOrder={
  title:string;clientNpcId:string;signedAt:string;dueFrom:string;dueTo:string;
@@ -135,6 +140,19 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
     validateLabNpcDecision(decision);
    }
   }
+  if(state.socialDynamics!==undefined){
+   if(!map(state.socialDynamics,80))throw Error("LAB_NPC_SOCIAL_VECTORS_INVALID");
+   for(const [towardId,vector] of Object.entries(state.socialDynamics)){
+    if(towardId===npcId||!pack.npcProfiles[towardId])
+     throw Error("LAB_NPC_SOCIAL_TARGET_UNKNOWN");
+    validateLabSocialVector(towardId,vector);
+   }
+  }
+  if(state.locationId!==undefined&&(!id(state.locationId)||!pack.locations[state.locationId]))
+   throw Error("LAB_NPC_LOCATION_INVALID");
+  if(state.locationSourceRef!==undefined&&
+    (!id(state.locationSourceRef)||state.locationId===undefined))
+   throw Error("LAB_NPC_LOCATION_SOURCE_INVALID");
   if(state.currentGoal!==undefined&&!txt(state.currentGoal,300))throw Error("LAB_SESSION_NPC_GOAL_INVALID");
   if(state.relationships!==undefined&&(!map(state.relationships,80)||Object.values(state.relationships).some(v=>!txt(v,250))))
    throw Error("LAB_SESSION_NPC_RELATION_INVALID");
