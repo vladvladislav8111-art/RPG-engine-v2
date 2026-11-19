@@ -5,7 +5,9 @@ import type {WorldV3BatchRequest} from "../world_sim_v3/runtime_facade.ts";
 import {evaluateLabPack,type LabPack,type LabJob} from "./engine.ts";
 import type {GoogleSourceIndex} from "./google_sync.ts";
 import {reviewLabSessionMemory,type LabMemoryViewRequest} from "./memory_view.ts";
-import type {LabSession} from "./session.ts";
+import {withSessionDefaults,type LabSession} from "./session.ts";
+import {buildLabSceneBrief} from "./living_world.ts";
+import {narrativeMinute} from "./events.ts";
 export type LabPackLoader=(projectId:string,expectedRevision?:number)=>Promise<{pack:LabPack;revision:number}>;
 export type LabSourceLoader=(projectId:string)=>Promise<GoogleSourceIndex>;
 export type LabSessionLoader=(projectId:string,sessionId:string)=>Promise<{
@@ -18,6 +20,64 @@ export async function hydrateLabBridgeRequest(req:WorldV3BatchRequest,load:LabPa
  const jobs=[];
  for(const job of req.jobs){
   const payload=job.payload;
+  // Bounded GM-only roleplay state for an existing RPG Lab session.
+  // Neither scene reaction nor private knowledge is generated from caller prose.
+  if(job.operation==="world_review"&&record(payload)&&record(payload.rpgLabSceneV1)){
+   if(Object.keys(payload).length!==1||!loadSession)throw Error("LAB_SCENE_BRIDGE_ENVELOPE");
+   const spec=payload.rpgLabSceneV1;
+   if(typeof spec.projectId!=="string"||!projectId.test(spec.projectId)||
+      typeof spec.sessionId!=="string"||!projectId.test(spec.sessionId)||
+      !Array.isArray(spec.npcIds)||spec.npcIds.length>8)
+    throw Error("LAB_SCENE_BRIDGE_REF_INVALID");
+   const loaded=await loadSession(spec.projectId,spec.sessionId);
+   if(loaded.pack.projectId!==spec.projectId||loaded.session.projectId!==spec.projectId||
+      loaded.session.sessionId!==spec.sessionId)
+    throw Error("LAB_SCENE_BRIDGE_PROJECT_MISMATCH");
+   const brief=buildLabSceneBrief(loaded.pack,loaded.session,{
+    npcIds:spec.npcIds as string[],eventRef:spec.eventRef as string|undefined,
+    featureIds:spec.featureIds as string[]|undefined,
+    maxMemories:spec.maxMemories===undefined?8:spec.maxMemories as number,
+   });
+   const envelope={...brief,packRevision:loaded.packRevision,
+     sessionRevision:loaded.sessionRevision,sourceAttestedBySave:true};
+   if(JSON.stringify(envelope).length>45000)throw Error("LAB_SCENE_BRIEF_TOO_LARGE");
+   jobs.push({...job,payload:{rpgLabSceneResolvedV1:envelope}});
+   continue;
+  }
+  // World tick is source-bound to this campaign's actual game time and work
+  // queue, not to an arbitrary caller-supplied process list.
+  if(job.operation==="world_review"&&record(payload)&&record(payload.rpgLabTickV1)){
+   if(Object.keys(payload).length!==1||!loadSession)throw Error("LAB_TICK_BRIDGE_ENVELOPE");
+   const spec=payload.rpgLabTickV1;
+   if(typeof spec.projectId!=="string"||!projectId.test(spec.projectId)||
+      typeof spec.sessionId!=="string"||!projectId.test(spec.sessionId)||
+      !Number.isSafeInteger(spec.toMinute))
+    throw Error("LAB_TICK_BRIDGE_REF_INVALID");
+   const loaded=await loadSession(spec.projectId,spec.sessionId);
+   if(loaded.pack.projectId!==spec.projectId||loaded.session.projectId!==spec.projectId||
+      loaded.session.sessionId!==spec.sessionId)
+    throw Error("LAB_TICK_BRIDGE_PROJECT_MISMATCH");
+   const from=narrativeMinute(loaded.session.gameClock);
+   if(from===null||spec.toMinute<from||spec.toMinute-from>10080||
+      (spec.fromMinute!==undefined&&spec.fromMinute!==from))
+    throw Error("LAB_TICK_BRIDGE_CLOCK_INVALID");
+   const ids=spec.npcIds??[];
+   if(!Array.isArray(ids)||ids.length>16||
+     ids.some(x=>typeof x!=="string"||!loaded.pack.npcProfiles[x]))
+    throw Error("LAB_TICK_BRIDGE_NPCS_INVALID");
+   const sourceJobs=withSessionDefaults([{
+    id:"lab.tick",kind:"world_tick",
+    args:{fromMinute:from,toMinute:spec.toMinute,npcIds:ids},
+   }],loaded.session);
+   const resolved=evaluateLabPack(loaded.pack,sourceJobs);
+   if(!resolved.results[0].ok)
+    throw Error("LAB_TICK_EVALUATION_FAILED:"+resolved.results[0].error);
+   jobs.push({...job,payload:{rpgLabEvaluatedV1:{
+    ...resolved,packRevision:loaded.packRevision,
+    sessionRevision:loaded.sessionRevision,sourceAttestedBySave:true,
+   }}});
+   continue;
+  }
   if(job.operation==="world_review"&&record(payload)&&record(payload.rpgLabSessionV1)){
    if(Object.keys(payload).length!==1||!loadSession)throw Error("LAB_SESSION_BRIDGE_ENVELOPE");
    const spec=payload.rpgLabSessionV1;
