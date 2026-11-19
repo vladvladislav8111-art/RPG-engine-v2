@@ -30,6 +30,8 @@ export type LabNarrativeBeat={
 };
 export type LabNarrativeReviewRequest={
  npcIds:string[];expectedSessionRevision:number;beats:LabNarrativeBeat[];
+ /** Saved focus of this conversation; creates mandatory attention checks. */
+ contextEventRef?:string;
  /** These persisted events must be acknowledged by an eligible actor when
   * they are materially relevant to the scene; does NOT require repeating
   * all backstory trivia every turn. */
@@ -50,9 +52,18 @@ export function reviewLabNarration(pack:LabPack,session:LabSession,
       !req.npcIds.includes(x.npcId))||
     new Set(required.map(x=>x.npcId+"|"+x.sourceRef)).size!==required.length)
   throw Error("LAB_NARRATIVE_REQUIRED_REFS_INVALID");
+ if(req.contextEventRef!==undefined&&!goodId(req.contextEventRef))
+  throw Error("LAB_NARRATIVE_CONTEXT_EVENT_INVALID");
+ if(req.contextEventRef!==undefined&&
+  !session.events.some(e=>e.sourceRef===req.contextEventRef)&&
+  !Object.values(session.npcs).some(n=>n.memories.some(m=>
+    m.sourceRef===req.contextEventRef)))
+   throw Error("LAB_NARRATIVE_CONTEXT_EVENT_NOT_SAVED");
  const failures:{beat:number;actorId:string;code:string;detail:string}[]=[];
  const counts:Record<string,number>={};
  const seen=new Set<string>();
+ const seenFeatures=new Set<string>();
+ const claimedFacts=new Set<string>();
  for(let index=0;index<req.beats.length;index++){
   const beat=req.beats[index];
   if(!beat||!goodId(beat.actorId)||!req.npcIds.includes(beat.actorId)||
@@ -77,6 +88,7 @@ export function reviewLabNarration(pack:LabPack,session:LabSession,
       !unique(features.map(x=>x.featureId)))
    throw Error("LAB_NARRATIVE_FEATURE_REFS_INVALID");
   for(const f of features){
+   seenFeatures.add(beat.actorId+"|"+f.featureId);
    const memory=state?.perceptions?.[f.featureId];
    const personal=(memory?.notices??0)>0;
    const relayed=(memory?.heardCount??0)>0;
@@ -92,6 +104,7 @@ export function reviewLabNarration(pack:LabPack,session:LabSession,
     !unique(claims.map(x=>x.factId)))
    throw Error("LAB_NARRATIVE_WORLD_CLAIMS_INVALID");
   for(const claim of claims){
+   claimedFacts.add(beat.actorId+"|"+claim.factId);
    const fact=session.worldEvidence?.[claim.factId];
    if(!fact){
     failures.push({beat:index,actorId:beat.actorId,
@@ -132,6 +145,40 @@ export function reviewLabNarration(pack:LabPack,session:LabSession,
    failures.push({beat:-1,actorId:ref.npcId,code:"RELEVANT_MEMORY_OMITTED",
     detail:ref.sourceRef});
  }
+ // Context focus is authoritative enough to require noticing personally
+ // experienced first sightings and important observations. A character can
+ // dismiss or dislike them; they may not be erased from the scene.
+ const attention:{npcId:string;kind:string;ref:string}[]=[];
+ if(req.contextEventRef!==undefined){
+  for(const npcId of req.npcIds){
+   const actor=session.npcs[npcId];
+   if(!actor)continue;
+   const relevant=actor.memories.some(m=>m.sourceRef===req.contextEventRef&&
+      ["important","life_defining"].includes(m.salience??""));
+   if(relevant){
+    attention.push({npcId,kind:"memory",ref:req.contextEventRef});
+    if(!seen.has(npcId+"|"+req.contextEventRef))
+     failures.push({beat:-1,actorId:npcId,code:"FOCUSED_EVENT_IGNORED",
+      detail:req.contextEventRef});
+   }
+   for(const f of Object.values(actor.perceptions??{})){
+    if(f.firstSeenRef===req.contextEventRef&&f.notices===1&&f.exposureWeight>=2){
+     attention.push({npcId,kind:"first_feature",ref:f.featureId});
+     if(!seenFeatures.has(npcId+"|"+f.featureId))
+      failures.push({beat:-1,actorId:npcId,code:"FIRST_SIGNIFICANT_FEATURE_IGNORED",
+       detail:f.featureId});
+    }
+   }
+   for(const f of Object.values(session.worldEvidence??{})){
+    if(f.sourceRef!==req.contextEventRef||f.significance!=="transformative"||
+       !actor.memories.some(m=>m.sourceRef===f.sourceRef))continue;
+    attention.push({npcId,kind:"transformative_evidence",ref:f.factId});
+    if(!claimedFacts.has(npcId+"|"+f.factId))
+     failures.push({beat:-1,actorId:npcId,code:"TRANSFORMATIVE_EVIDENCE_IGNORED",
+       detail:f.factId});
+   }
+  }
+ }
  const currentMinute=narrativeMinute(session.gameClock);
  const overdue=Object.entries(session.worldProjects??{})
   .filter(([,p])=>p.nextReviewMinute!==undefined&&currentMinute!==null&&
@@ -142,7 +189,7 @@ export function reviewLabNarration(pack:LabPack,session:LabSession,
   projectId:session.projectId,sessionId:session.sessionId,
   sessionRevision,gameClock:session.gameClock,
   readyToRender:failures.length===0&&overdue.length===0,
-  failures,overdueProjects:overdue,
+  failures,overdueProjects:overdue,focusedAttention:attention,
   actorBeatCounts:counts,
   narrativeTextSemanticsVerified:false,
   metadataOnly:true,requiresGMResolution:failures.length>0||overdue.length>0,
