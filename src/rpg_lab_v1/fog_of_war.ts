@@ -91,6 +91,7 @@ export function applyLabFogChanges(
    if(!actor||!pack.npcProfiles[actor]||!safe(sref)||
       !session.npcs[actor]?.memories.some(m=>m.sourceRef===sref||
         m.relayedSourceRef===sref)||
+      event.playerWitnessed!==true||!event.knownBy.includes(actor)||
       !["dialogue","player_turn","report"].includes(event.kind)||
       !["rumor","suspected"].includes(change.certainty))
     throw Error("LAB_FOG_UNVERIFIED_RELAY");
