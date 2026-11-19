@@ -250,3 +250,37 @@ test("Living World V2 source-bound tool + RPG Lab scene context share one cycle"
   npcIds:["npc.smith"],toMinute:time(9,9)}),
  /LAB_LIVING_CYCLE_REQUEST_INVALID/);
 });
+
+test("strict time skip requires NPC-independent world review, not a silent freeze",()=>{
+ let session=fresh();
+ session=applyConfirmedLabEvent(session,pack,e("evt.smith.origin","D0 09:00",{
+  knownBy:["npc.smith"],
+  observations:[seen("npc.smith","A difficult materials problem", "D0 09:00")],
+ }));
+ const base=e("evt.next.day","D1 09:00",{
+  summary:"Player spent a day away from the forge",
+ });
+ assert.throws(()=>applyGuardedLabEvent(session,pack,base,2),
+  /LAB_STRICT_WORLD_CYCLE_REVIEW_REQUIRED/);
+ const empty={...base,worldCycleReview:{
+  fromMinute:time(0,9),toMinute:time(1,9),actorReviews:[]}};
+ assert.throws(()=>applyGuardedLabEvent(session,pack,empty,2),
+  /LAB_STRICT_WORLD_CYCLE_ACTORS_MISSING/);
+ const unsupported={...base,worldCycleReview:{
+  fromMinute:time(0,9),toMinute:time(1,9),actorReviews:[{
+   npcId:"npc.smith",status:"acted" as const,
+   reason:"Invented an entire new technology overnight"}]}};
+ assert.throws(()=>applyGuardedLabEvent(session,pack,unsupported,2),
+  /LAB_STRICT_WORLD_CYCLE_CLAIMED_ACTION_MISSING/);
+ const reviewed={...base,worldCycleReview:{
+  fromMinute:time(0,9),toMinute:time(1,9),actorReviews:[{
+   npcId:"npc.smith",status:"no_change" as const,
+   reason:"The smith still has unresolved work and no new experimental evidence",
+   sourceRefs:["evt.smith.origin"]}]}};
+ const result=applyGuardedLabEvent(session,pack,reviewed,2);
+ assert.equal(result.guardRequired,true);
+ assert.equal(result.guardVerified,true);
+ assert.equal(result.next.gameClock,"D1 09:00");
+ assert.equal(session.gameClock,"D0 09:00");
+ assert.equal(result.next.npcs["npc.smith"].memories.length,1);
+});
