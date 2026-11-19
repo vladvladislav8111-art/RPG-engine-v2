@@ -8,6 +8,7 @@ import type {LabConfirmedEvent} from "./events.ts";
 export type LabStoryBeatDef={
  beatId:string;description:string;
  requiresFlags?:string[];blocksFlags?:string[];
+ requiresTechnique?:{trainingId:string;minGrade:"basic"|"trained"|"proficient"};
  alternativeTo?:string;
  dramaticQuestion:string;
  possibleConsequences:string[];
@@ -76,6 +77,8 @@ export function validateLabStoryDefs(defs:Record<string,LabStoryArcDef>){
      !Array.isArray(beat.possibleConsequences)||beat.possibleConsequences.length>8||
      beat.possibleConsequences.some(x=>!isText(x,240))||
      (beat.alternativeTo!==undefined&&!okId(beat.alternativeTo))||
+     (beat.requiresTechnique!==undefined&&(!okId(beat.requiresTechnique.trainingId)||
+      !["basic","trained","proficient"].includes(beat.requiresTechnique.minGrade)))||
      (beat.requiresFlags!==undefined&&(!Array.isArray(beat.requiresFlags)||
       beat.requiresFlags.length>12||!beat.requiresFlags.every(okId)))||
      (beat.blocksFlags!==undefined&&(!Array.isArray(beat.blocksFlags)||
@@ -118,6 +121,22 @@ export function validateLabStoryState(state:LabStoryState,pack:LabPack){
     throw Error("LAB_STORY_TRAINING_INVALID:"+id);
  }
  return state;
+}
+const techniqueRank:{[k:string]:number}={introduced:0,basic:1,trained:2,proficient:3};
+function hasTechnique(state:LabStoryState,requirement?:LabStoryBeatDef["requiresTechnique"]){
+ if(!requirement)return true;
+ const grade=state.techniques[requirement.trainingId]?.technique;
+ return grade!==undefined&&techniqueRank[grade]>=techniqueRank[requirement.minGrade];
+}
+/** Story-arc progress and training are not canonical if the saved event has no elapsed
+ * time to accommodate the physical work. Story flag only events are unaffected.
+ */
+function timeInMinutes(clock:string):number|null{
+ const m=/^(?:D\s*|Day\s+|День\s+)(\d+)\s*,?\s+(\d\d):(\d\d)$/iu.exec(clock);
+ if(!m)return null;
+ const day=Number(m[1]),h=Number(m[2]),min=Number(m[3]);
+ if(!Number.isSafeInteger(day)||day<0||day>100000||h>23||min>59)return null;
+ return day*1440+h*60+min;
 }
 export function applyLabStoryChanges(session:LabSession,pack:LabPack,
  event:LabConfirmedEvent):LabStoryState|undefined{
@@ -171,7 +190,8 @@ export function applyLabStoryChanges(session:LabSession,pack:LabPack,
    throw Error("LAB_STORY_ARC_REVISION_CONFLICT");
   const met=beat.requiresFlags?.every(k=>next.flags[k]?.value===true)??true;
   const blocked=beat.blocksFlags?.some(k=>next.flags[k]?.value===true)??false;
-  if(!met||blocked)throw Error("LAB_STORY_BEAT_CAUSAL_PREREQUISITES");
+  if(!met||blocked||!hasTechnique(next,beat.requiresTechnique))
+   throw Error("LAB_STORY_BEAT_CAUSAL_PREREQUISITES");
   next.arcs[change.arcId]={
    phase:change.phase,completedBeats:[...(old?.completedBeats??[]),change.beatId],
    revision:change.expectedRevision+1,lastSourceRef:event.sourceRef,
@@ -185,6 +205,9 @@ export function applyLabStoryChanges(session:LabSession,pack:LabPack,
    !Number.isSafeInteger(t.sessionMinutes)||t.sessionMinutes<30||
    t.sessionMinutes>480||typeof t.passedDrill!=="boolean")
    throw Error("LAB_STORY_TRAINING_CHANGE_INVALID");
+  const from=timeInMinutes(session.gameClock),until=timeInMinutes(event.time);
+  if(from===null||until===null||until-from<t.sessionMinutes)
+   throw Error("LAB_STORY_TRAINING_TIME_INSUFFICIENT");
   if(!["training","world_training","practice"].includes(event.kind))
    throw Error("LAB_STORY_TRAINING_EVENT_KIND");
   const interaction=event.npcInteractions?.some(i=>
@@ -224,14 +247,18 @@ export function previewLabStoryPaths(pack:LabPack,session:LabSession){
    if(complete.has(beat.beatId))continue;
    const missing=(beat.requiresFlags??[]).filter(k=>flags[k]?.value!==true);
    const blocking=(beat.blocksFlags??[]).filter(k=>flags[k]?.value===true);
+   const missingTechnique=!hasTechnique(session.storyState??{
+    flags:{},arcs:{},techniques:{}},beat.requiresTechnique)?
+    beat.requiresTechnique??null:null;
    const descriptor={arcId,title:def.title,beatId:beat.beatId,
     dramaticQuestion:beat.dramaticQuestion,
     possibleConsequences:beat.possibleConsequences,
     prerequisiteFlags:beat.requiresFlags??[],blockFlags:beat.blocksFlags??[],
+    requiredTechnique:beat.requiresTechnique??null,
     isPureProposal:true,notScheduledAutomatically:true};
-   if(!missing.length&&!blocking.length)possible.push(descriptor);
+   if(!missing.length&&!blocking.length&&!missingTechnique)possible.push(descriptor);
    else if(progress[arcId]?.phase!=="resolved"&&progress[arcId]?.phase!=="diverged")
-    blocked.push({...descriptor,missing,blocking});
+    blocked.push({...descriptor,missing,blocking,missingTechnique});
   }
  }
  return {schema:"RPG_LAB_STORY_PATHS_V1",
