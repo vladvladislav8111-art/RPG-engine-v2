@@ -51,9 +51,18 @@ test("confirmed monster kill grants System XP once, including shadow kills; no F
   "Changing the sourceRef cannot re-award XP from a defeated target");
  assert.throws(()=>awardJinwooEncounter(old,{...e,confirmed:false}),/UNCONFIRMED/);
  assert.throws(()=>awardJinwooEncounter(old,{...e,isNewDefeat:false}),/UNCONFIRMED/);
- const shadow=awardJinwooEncounter(old,{...e,killer:"shadow",sourceRef:"kill.goblin.2",
+ assert.throws(()=>awardJinwooEncounter(old,{...e,killer:"shadow",
+  sourceRef:"kill.goblin.no_shadow",targetRef:"enemy.goblin.no_shadow"}),
+  /SHADOW_KILL_NOT_OWNED/);
+ const shadowOwner=classed();
+ shadowOwner.shadowRoster.push({id:"shadow.ally.1",name:"Тень союзника",
+  originRef:"evt.shadow.ally",originalKind:"monster",powerTier:"common",
+  defeatedCount:0,stored:false});
+ const shadow=awardJinwooEncounter(shadowOwner,{...e,killer:"shadow",
+  shadowId:"shadow.ally.1",sourceRef:"kill.goblin.2",
   targetRef:"enemy.goblin.2"});
- assert.equal(shadow.systemLevel,2);
+ assert.equal(shadow.systemLevel,shadowOwner.systemLevel);
+ assert.equal(shadow.xp,100);
 });
 test("daily quest gives 3 points once a day; spend only earned points",()=>{
  const s=completeJinwooDaily(newJinwooPreparation(),{
