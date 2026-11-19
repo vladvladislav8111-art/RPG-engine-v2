@@ -2,7 +2,8 @@
  * Confirmed, source-tagged, CAS-ready RPG Lab turn event.
  * Pure function. Never grants preview loot, rewrites canon or touches legacy saves.
  */
-import {validateLabSession,type LabSession,type LabMemory,type LabNpcState,type LabWorkOrder} from "./session.ts";
+import {validateLabSession,type LabSession,type LabMemory,type LabNpcState,
+ type LabWorkOrder,type LabPlayerFeature} from "./session.ts";
 import type {LabPack} from "./engine.ts";
 import {noteNpcFeature,type NpcFeatureObservation} from "./npc_perception.ts";
 import {validateLabWorldEvidence,type LabWorldEvidenceInput} from "./world_evidence.ts";
@@ -51,6 +52,10 @@ export type LabNpcInteraction={
 };
 export type LabIndependentAction={npcId:string;action:string;outcome:string;
  locationId?:string;privacy:"public"|"hidden"};
+export type LabPlayerFeatureChange={
+ featureId:string;expectedRevision:number;action:"set"|"remove";playerApproved:true;
+ feature?:Pick<LabPlayerFeature,"description"|"significance"|"visibility">;
+};
 export type LabNpcDecisionChange={
  npcId:string;subjectId:string;stance:LabNpcDecisionStance;reason:string;
  evidenceRefs:string[];privacy:"public"|"private";nextReviewMinute?:number;
@@ -73,6 +78,7 @@ export type LabConfirmedEvent={
  worldEvidence?:LabWorldEvidenceInput[];
  workOrderChanges?:LabWorkOrderChange[];
  discovered?:string[];playerLocationId?:string;
+ playerFeatureChanges?:LabPlayerFeatureChange[];
  effects?:{resources?:Record<string,number>;inventory?:Record<string,number>};
  gmConfirmed:true;
 };
@@ -129,6 +135,36 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
  if(new Set(observations.map(x=>x.npcId)).size!==observations.length)
   throw Error("LAB_EVENT_DUPLICATE_NPC_OBSERVATION");
  const next=structuredClone(session);
+ // Main-character appearance is persistent state, not a transient narrator
+ // reminder. Registering it changes no NPC's personal knowledge.
+ const changes=event.playerFeatureChanges??[];
+ if(!Array.isArray(changes)||changes.length>24||
+  new Set(changes.map(x=>x.featureId)).size!==changes.length)
+  throw Error("LAB_PLAYER_FEATURE_BATCH_INVALID");
+ if(changes.length&&!["character_setup","continuity_repair","player_turn"].includes(event.kind))
+  throw Error("LAB_PLAYER_FEATURE_EDIT_KIND_INVALID");
+ for(const change of changes){
+  if(!record(change)||!good(change.featureId)||change.playerApproved!==true||
+      !Number.isSafeInteger(change.expectedRevision)||change.expectedRevision<0||
+      !["set","remove"].includes(change.action))
+   throw Error("LAB_PLAYER_FEATURE_CHANGE_INVALID");
+  const current=next.player.visibleFeatures?.[change.featureId];
+  if((current?.revision??0)!==change.expectedRevision)
+   throw Error("LAB_PLAYER_FEATURE_REVISION_CONFLICT");
+  const updated={...(next.player.visibleFeatures??{})};
+  if(change.action==="remove"){
+   if(!current||change.feature!==undefined)throw Error("LAB_PLAYER_FEATURE_REMOVE_INVALID");
+   delete updated[change.featureId];
+  }else{
+   if(!record(change.feature)||!phrase(change.feature.description,280)||
+     !["routine","notable","transformative"].includes(change.feature.significance)||
+     !["obvious","conditional"].includes(change.feature.visibility))
+    throw Error("LAB_PLAYER_FEATURE_SET_INVALID");
+   updated[change.featureId]={...change.feature,
+    revision:change.expectedRevision+1,lastUpdatedRef:event.sourceRef};
+  }
+  next.player.visibleFeatures=updated;
+ }
  if(event.linos!==undefined){
   const action=event.linos;
   if(!record(action)||!["blessing","cast","time","learn","status_update","audit_reconcile"].includes(action.type))
