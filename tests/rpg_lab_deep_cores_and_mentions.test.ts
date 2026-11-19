@@ -135,7 +135,7 @@ test("same encounter can auto-select GM scene actors by dialogueText without gue
  assert.ok(scene.actors.every(a=>a.deepCanonCore?.refusalBoundary));
  assert.equal(scene.actors.find(a=>a.npcId==="npc.lili")?.eventObservation,"not_recorded");
  assert.deepEqual(scene.dialogueRelevantPersonalMemories
-  .find(x=>x.npcId==="npc.lili")?.memories.map(m=>m.sourceRef),
+  ?.find(x=>x.npcId==="npc.lili")?.memories.map(m=>m.sourceRef),
   ["evt.lili.money"]);
  assert.equal(scene.dialogueLookupDoesNotProveWitnessing,true);
  assert.equal(scene.readOnly,true);
