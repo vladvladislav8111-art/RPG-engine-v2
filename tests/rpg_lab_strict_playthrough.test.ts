@@ -151,7 +151,7 @@ test("full workshop cycle: source evidence, delayed obligations and no omniscien
  assert.equal(x.current().npcs["npc.loki"],undefined);
  const updated=event("evt.research","D1 10:00",{
   kind:"world_review",
-  worldCycleReview:{fromMinute:time(0,10),toMinute:time(1,10),
+  worldCycleReview:{fromMinute:600,toMinute:2040,
    actorReviews:[{npcId:"npc.smith",status:"acted",
     reason:"Carried out the scheduled fixture investigation",
     sourceRefs:["evt.submit"]}]},
