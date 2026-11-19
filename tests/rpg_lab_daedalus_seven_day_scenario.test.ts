@@ -28,6 +28,12 @@ const pack:LabPack={
    traits:["irreverent","teasing","protective","pragmatic"],goals:["support own familia"],knownFacts:[]},
   "npc.finn":{name:"Finn",canonRef:"danmachi.finn",
    traits:["strategic","pragmatic"],goals:["familia security"],knownFacts:[]},
+  "npc.aiz":{name:"Aiz",canonRef:"danmachi.aiz",
+   traits:["quiet","focused","observant"],goals:["become stronger"],knownFacts:[]},
+  "npc.tione":{name:"Tione",canonRef:"danmachi.tione",
+   traits:["proud","protective","impulsive"],goals:["support Finn"],knownFacts:[]},
+  "npc.instructor":{name:"Range instructor",canonRef:"danmachi.instructor",
+   traits:["disciplined","practical"],goals:["maintain safe training"],knownFacts:[]},
   "npc.tiona":{name:"Tiona",canonRef:"danmachi.tiona",
    traits:["curious","impulsive","friendly"],goals:["explore"],knownFacts:[]},
   "npc.bete":{name:"Bete",canonRef:"danmachi.bete",
@@ -140,14 +146,16 @@ function runScenario(){
    sourceMemoryRef:"evt.loki_join"}],
  }));
  commit(evt("evt.loki_first_dinner","D1 11:00",{
-  locationId:"manor",knownBy:["npc.tiona","npc.bete","npc.riveria","npc.lefiya"],
+  locationId:"manor",knownBy:["npc.tiona","npc.tione","npc.aiz","npc.bete","npc.riveria","npc.lefiya"],
   observations:[
    observation("npc.tiona","Met Daedalus with a halo and unusual eyes","D1 11:00"),
    observation("npc.bete","Saw strange-looking new Loki Familia recruit Daedalus","D1 11:00"),
+   observation("npc.tione","Noticed the new recruit and Tiona staring at the mechanical eyes","D1 11:00"),
+   observation("npc.aiz","Noticed unusual eyes and halo on new familia member","D1 11:00"),
    observation("npc.riveria","Met Daedalus; observed halo and mechanical-looking eyes","D1 11:00"),
    observation("npc.lefiya","Met unfamiliar recruit Daedalus with mechanical eyes","D1 11:00")
   ],
-  features:["npc.tiona","npc.bete","npc.riveria","npc.lefiya"].map(npcId=>({
+  features:["npc.tiona","npc.tione","npc.aiz","npc.bete","npc.riveria","npc.lefiya"].map(npcId=>({
    npcId,featureId:"daedalus.clock_eyes",channel:"seen" as const,
    significance:"transformative" as const,privacy:"small_group" as const
   })),
@@ -177,20 +185,41 @@ function runScenario(){
   worldProjectChanges:[{projectId:"heph.application",expectedRevision:1,
    record:reviewing}],
  }));
+ // The first musket demonstration had these actual witnesses; Finn was
+ // told later by Raul and must not be marked as a personal witness.
  commit(evt("evt.musket","D3 12:00",{
-  locationId:"range",knownBy:["npc.finn","npc.tiona","npc.bete"],
+  locationId:"range",
+  knownBy:["npc.loki","npc.aiz","npc.lefiya","npc.tiona",
+   "npc.tione","npc.raoul","npc.instructor"],
   observations:[
-   observation("npc.finn","Witnessed precise shots from a musket at 50 m",
-    "D3 12:00"),
-   observation("npc.tiona","Witnessed musket demonstration on practice targets",
-    "D3 12:00"),
-   observation("npc.bete","Witnessed weapon hit a target from distance",
-    "D3 12:00")
+   observation("npc.loki","Saw musket hit target at tested 50m","D3 12:00"),
+   observation("npc.aiz","Observed projectile strike target at range","D3 12:00"),
+   observation("npc.lefiya","Witnessed gunshot, sound and accurate target impact","D3 12:00"),
+   observation("npc.tiona","Witnessed musket demonstration on practice targets","D3 12:00"),
+   observation("npc.tione","Witnessed accurate musket fire at 50m","D3 12:00"),
+   observation("npc.raoul","Witnessed target hits from a musket at 50m","D3 12:00"),
+   observation("npc.instructor","Saw musket fire at 50m on private range","D3 12:00")
   ],
   worldEvidence:[{factId:"weapon.musket.50m",kind:"observed",
    level:"established",statement:"Musket achieved accurate hits at tested range",
    scope:"Observed target hits at 50m, not speed or maximum range",
-   significance:"transformative",observedBy:["npc.finn","npc.tiona","npc.bete"]}],
+   significance:"transformative",
+   observedBy:["npc.loki","npc.aiz","npc.lefiya","npc.tiona",
+    "npc.tione","npc.raoul","npc.instructor"]}],
+ }));
+ commit(evt("evt.finn_musket_report","D3 13:00",{
+  locationId:"manor",
+  npcInteractions:[{initiatorNpcId:"npc.raoul",recipientNpcId:"npc.finn",
+   action:"Raul reports musket tests to Finn",
+   outcome:"Finn hears eyewitness account but did not see the shots",
+   salience:"important",privacy:"small_group"}],
+  observations:[{npcId:"npc.finn",channel:"report",
+   sourceActor:"npc.raoul",relayedSourceRef:"evt.musket",
+   perceivedFact:"Raul reports an accurate musket test at 50m",
+   learnedAt:"D3 13:00",confidence:"likely",salience:"important",
+   privacy:"small_group"}],
+  rumorRelays:[{speakerNpcId:"npc.raoul",listenerNpcId:"npc.finn",
+   sourceMemoryRef:"evt.musket"}],
  }));
  const blocked=project("blocked",3,at(4,12),at(7,11));
  blocked.latestEvidenceRef="evt.heph_eligibility";
