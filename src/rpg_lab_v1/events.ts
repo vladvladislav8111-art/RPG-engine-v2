@@ -5,6 +5,7 @@
 import {validateLabSession,type LabSession,type LabMemory,type LabNpcState,
  type LabWorkOrder,type LabPlayerFeature} from "./session.ts";
 import type {LabPack} from "./engine.ts";
+import {applyLabAmbientRumorChanges,type LabAmbientRumorChange} from "./ambient_rumors.ts";
 import {noteNpcFeature,type NpcFeatureObservation} from "./npc_perception.ts";
 import {validateLabWorldEvidence,type LabWorldEvidenceInput} from "./world_evidence.ts";
 import {applyLabFogChanges,type LabFogFactChange,type LabFogAreaChange} from "./fog_of_war.ts";
@@ -83,6 +84,7 @@ export type LabConfirmedEvent={
  npcPositions?:LabNpcPositionChange[];
  socialDynamics?:LabSocialSignal[];
  rumorRelays?:LabRumorRelay[];
+ ambientRumorChanges?:LabAmbientRumorChange[];
  npcSocial?:LabNpcSocialChange[];
  moodChanges?:LabNpcMoodChange[];
  npcDecisionChanges?:LabNpcDecisionChange[];
@@ -706,6 +708,8 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
     ...(act.locationId?{locationId:act.locationId}:{})});
   }
  }
+ const localRumors=applyLabAmbientRumorChanges(session,pack,event);
+ if(localRumors!==undefined)next.ambientRumors=localRumors;
  next.events.push({sourceRef:event.sourceRef,kind:event.kind,summary:event.summary,
   time:event.time,knownBy:[...event.knownBy],
   ...(event.locationId?{locationId:event.locationId}:{})});

@@ -2,6 +2,7 @@
  * No inferred NPC feelings; manual edits are user-provided state, not canonical proof.
  */
 import type {LabPack,LabJob} from "./engine.ts";
+import {validateLabAmbientRumor,type LabAmbientRumor} from "./ambient_rumors.ts";
 import {validateLinosState,type LinosState} from "./linos.ts";
 import {validateFeatureMemory,type NpcFeatureMemory} from "./npc_perception.ts";
 import {validateLabSocialVector,type LabSocialVector} from "./social_dynamics_v2.ts";
@@ -42,6 +43,7 @@ export type LabSession={
  player:{resources:Record<string,number>;stats:Record<string,number>;inventory:Record<string,number>;locationId?:string;linos?:LinosState;workOrders?:Record<string,LabWorkOrder>;visibleFeatures?:Record<string,LabPlayerFeature>};
  discovered:string[];npcs:Record<string,LabNpcState>;worldProjects?:Record<string,LabWorldProject>;worldEvidence?:Record<string,LabWorldEvidence>;
  playerFog?:LabPlayerFog;storyState?:LabStoryState;
+ ambientRumors?:Record<string,LabAmbientRumor>;
  events:{sourceRef:string;summary:string;time:string;knownBy:string[];locationId?:string;kind?:string}[];
  worldEvents?:{sourceRef:string;time:string;npcId:string;targetNpcId?:string;action:string;outcome:string;locationId?:string;privacy:"public"|"hidden"}[];
  archivedEventCount?:number;
@@ -118,6 +120,15 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
     throw Error("LAB_WORLD_EVIDENCE_LOCATION_UNKNOWN");
    if(fact.observedBy.some(npcId=>!pack.npcProfiles[npcId]))
     throw Error("LAB_WORLD_EVIDENCE_OBSERVER_UNKNOWN");
+  }
+ }
+ if(s.ambientRumors!==undefined){
+  if(!map(s.ambientRumors,128))throw Error("LAB_AMBIENT_RUMOR_MAP_INVALID");
+  for(const [rumorId,rumor] of Object.entries(s.ambientRumors)){
+   if(rumorId!==rumor.rumorId)throw Error("LAB_AMBIENT_RUMOR_ID_MISMATCH");
+   validateLabAmbientRumor(rumor,pack);
+   if(rumor.parentRumorId!==undefined&&!s.ambientRumors[rumor.parentRumorId])
+    throw Error("LAB_AMBIENT_RUMOR_PARENT_UNKNOWN");
   }
  }
  if(s.worldProjects!==undefined){
