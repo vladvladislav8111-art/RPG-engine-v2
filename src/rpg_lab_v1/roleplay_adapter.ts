@@ -6,6 +6,7 @@ import {buildLabSceneBrief,dueLabWorldProjects} from "./living_world.ts";
 import {narrativeMinute} from "./events.ts";
 import {reviewLabNarration,type LabNarrativeReviewRequest} from "./narrative_guard.ts";
 import type {LabPack} from "./engine.ts";
+import {RPG_LAB_SCENE_REMINDER,RPG_BRIDGE_GM_GUIDE_VERSION} from "./gm_guide.ts";
 import type {LabSession} from "./session.ts";
 
 type Loaded={
@@ -44,6 +45,8 @@ export async function readLabRoleplayScene(load:LabRoleplayLoader,
  const answer={...brief,schema:"RPG_LAB_ROLEPLAY_CONTEXT_V1",
   packRevision:s.packRevision,sessionRevision:s.sessionRevision,
   sourceAttestedBySave:true,
+  gmReminderVersion:RPG_BRIDGE_GM_GUIDE_VERSION,
+  gmReminder:RPG_LAB_SCENE_REMINDER,
   roleplayGuard:s.session.roleplayGuard??"legacy",
   currentInworldMinute:from,
   ...(to!==undefined?{reviewThroughMinute:to}:{}),
