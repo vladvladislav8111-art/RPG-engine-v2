@@ -107,9 +107,15 @@ export function buildLabSceneBrief(pack:LabPack,session:LabSession,req:LabSceneB
   throw Error("LAB_SCENE_ACTOR_IDS_INVALID");
  if(req.eventRef!==undefined&&!goodId(req.eventRef))
   throw Error("LAB_SCENE_EVENT_REF_INVALID");
- const features=req.featureIds??[];
- if(!Array.isArray(features)||features.length>24||
-  features.some(x=>!goodId(x)))throw Error("LAB_SCENE_FEATURE_IDS_INVALID");
+ const requested=req.featureIds??[];
+ if(!Array.isArray(requested)||requested.length>24||
+  requested.some(x=>!goodId(x)))throw Error("LAB_SCENE_FEATURE_IDS_INVALID");
+ const priority=(s:string)=>s==="transformative"?3:s==="notable"?2:1;
+ const persistent=Object.entries(session.player.visibleFeatures??{})
+   .filter(([,feature])=>feature.visibility==="obvious")
+   .sort((a,b)=>priority(b[1].significance)-priority(a[1].significance))
+   .map(([featureId])=>featureId);
+ const features=[...new Set([...requested,...persistent])].slice(0,24);
  const max=req.maxMemories??12;
  if(!Number.isInteger(max)||max<1||max>24)throw Error("LAB_SCENE_MEMORY_LIMIT_INVALID");
  const event=req.eventRef?session.events.find(x=>x.sourceRef===req.eventRef):undefined;
@@ -131,9 +137,16 @@ export function buildLabSceneBrief(pack:LabPack,session:LabSession,req:LabSceneB
     learnedAt:m.learnedAt,sourceActor:m.sourceActor??null,privacy:m.privacy??"unknown"}));
   const featureAwareness=features.map(featureId=>{
    const old=state?.perceptions?.[featureId];
+   const visible=session.player.visibleFeatures?.[featureId];
    return {featureId,personallySeen:(old?.notices??0)>0,
     heardAbout:(old?.heardCount??0)>0,familiarity:old?.familiarity??"unfamiliar",
     interpretation:old?.lastInterpretation??null,sourceRef:old?.lastSeenRef??old?.lastHeardRef??null,
+    playerFeature:visible?{description:visible.description,
+      significance:visible.significance,visibility:visible.visibility,
+      lastUpdatedRef:visible.lastUpdatedRef}:null,
+    possibleFirstSighting:Boolean(visible&&visible.visibility==="obvious"&&
+      (old?.notices??0)===0),
+    needsRealObservationForMemory:true,
     mustNotInheritOtherNpcFamiliarity:true};
   });
   const ownsSources=new Set((state?.memories??[]).flatMap(m=>[m.sourceRef,...(m.relayedSourceRef?[m.relayedSourceRef]:[])]));
@@ -169,6 +182,8 @@ export function buildLabSceneBrief(pack:LabPack,session:LabSession,req:LabSceneB
   observedSourceRef:req.eventRef??null,
   eventCommitted:Boolean(event),actors,
   uncommittedEventIsNotWitnessedProof:!event,
+  appearanceSource:session.player.visibleFeatures?
+    "committed_player_profile":"not_recorded",
   narratorConstraints:[
    "Resolve each NPC's decision and actual experience before writing the scene",
    "No omniscient knowledge transfer, and no borrowed feature familiarity",
