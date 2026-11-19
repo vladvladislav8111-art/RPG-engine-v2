@@ -5,6 +5,8 @@ import {validateLabSession,withSessionDefaults,type LabSession} from "../src/rpg
 import {applyConfirmedLabEvent,type LabConfirmedEvent} from "../src/rpg_lab_v1/events.ts";
 import {buildLabSceneBrief,dueLabWorldProjects,type LabWorldProject} from "../src/rpg_lab_v1/living_world.ts";
 import {reviewLabSessionMemory} from "../src/rpg_lab_v1/memory_view.ts";
+import {hydrateLabBridgeRequest} from "../src/rpg_lab_v1/bridge.ts";
+import {dispatchWorldV3Batch,type WorldV3BatchRequest} from "../src/world_sim_v3/runtime_facade.ts";
 
 const pack:LabPack={
  schema:"RPG_LAB_PACK_V1",projectId:"orario_living_world",worldId:"danmachi.orario",
@@ -154,4 +156,63 @@ test("GM-only scene brief never interprets absent eyewitness as a technical fact
   "Projectile passed through both walls of an iron breastplate");
  assert.equal(view.actors[1].memories.length,0);
  assert.equal(view.notPlayerVisible,true);
+});
+
+test("existing Bridge returns source-bound private roleplay briefs, never creates NPC decisions",async()=>{
+ const session=applyConfirmedLabEvent(fresh(),pack,evt("evt.seen","D0 09:00",{
+  knownBy:["npc.loki"],observations:[{npcId:"npc.loki",channel:"seen",
+   perceivedFact:"The inventor's eye has a mechanical dial",
+   learnedAt:"D0 09:00",confidence:"certain",salience:"important",privacy:"private"}],
+ }));
+ const load=async()=>({pack,packRevision:2,session,sessionRevision:4});
+ const input:WorldV3BatchRequest={expectedSaveId:"TEST-SAVE",jobs:[{
+  id:"roleplay",operation:"world_review",payload:{rpgLabSceneV1:{
+   projectId:pack.projectId,sessionId:session.sessionId,
+   npcIds:["npc.loki","npc.finn"],eventRef:"evt.seen",
+  }}
+ }]};
+ const hydrated=await hydrateLabBridgeRequest(input,
+  async()=>{throw Error("should not call pack loader")},undefined,load);
+ const result=dispatchWorldV3Batch(hydrated,"TEST-SAVE").results[0].result;
+ assert.equal(result.ok,true);
+ if(!result.ok)throw Error("scene refused");
+ const view=result.value as any;
+ assert.equal(view.gmOnly,true);
+ assert.equal(view.committed,false);
+ assert.equal(view.actors[0].eventObservation,"direct");
+ assert.equal(view.actors[1].eventObservation,"not_recorded");
+ assert.equal(session.npcs["npc.finn"],undefined);
+});
+test("Bridge world tick uses saved project queue, checks clock, and proposes without mutation",async()=>{
+ let session=fresh();
+ session=applyConfirmedLabEvent(session,pack,evt("evt.materials","D0 09:00",{
+  knownBy:["npc.smith"],observations:[{npcId:"npc.smith",channel:"seen",
+   perceivedFact:"2mm thread present",learnedAt:"D0 09:00",
+   confidence:"certain",salience:"important",privacy:"private"}],
+  worldProjectChanges:[{projectId:"proj.heph.thread",expectedRevision:0,
+   record:research("accepted",1,m(0,9),m(1,9))}],
+ }));
+ const load=async()=>({pack,packRevision:2,session,sessionRevision:4});
+ const input:WorldV3BatchRequest={expectedSaveId:"TEST-SAVE",jobs:[{
+  id:"tick",operation:"world_review",payload:{rpgLabTickV1:{
+   projectId:pack.projectId,sessionId:session.sessionId,toMinute:m(1,12),
+   npcIds:["npc.smith"],
+  }}
+ }]};
+ const hydrated=await hydrateLabBridgeRequest(input,
+  async()=>{throw Error("should not load pack separately")},undefined,load);
+ const result=dispatchWorldV3Batch(hydrated,"TEST-SAVE").results[0].result;
+ assert.equal(result.ok,true);
+ if(!result.ok)throw Error("tick refused");
+ const value=result.value as any;
+ assert.equal(value.committed,false);
+ assert.equal(value.results[0].value.resolutionRequired,true);
+ assert.deepEqual(value.results[0].value.unresolvedProjectReviews,["proj.heph.thread"]);
+ assert.equal(session.worldProjects!["proj.heph.thread"].revision,1);
+ await assert.rejects(()=>hydrateLabBridgeRequest({
+  ...input,jobs:[{id:"bad",operation:"world_review",payload:{rpgLabTickV1:{
+   projectId:pack.projectId,sessionId:session.sessionId,fromMinute:m(0,8),
+   toMinute:m(1,12),
+  }}}],
+ },async()=>{throw Error("should not load")},undefined,load),/LAB_TICK_BRIDGE_CLOCK_INVALID/);
 });
