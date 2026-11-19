@@ -5,6 +5,8 @@
 import {buildLabSceneBrief,dueLabWorldProjects} from "./living_world.ts";
 import {narrativeMinute} from "./events.ts";
 import {previewLabLivingWorldCycle} from "./living_world_cycle_v2.ts";
+import {previewLabStoryPaths} from "./story_consequences.ts";
+import {readLabPublicFog} from "./fog_of_war.ts";
 import {reviewLabNarration,type LabNarrativeReviewRequest} from "./narrative_guard.ts";
 import type {LabPack} from "./engine.ts";
 import {RPG_LAB_SCENE_REMINDER,RPG_BRIDGE_GM_GUIDE_VERSION} from "./gm_guide.ts";
@@ -58,11 +60,28 @@ export async function readLabRoleplayScene(load:LabRoleplayLoader,
   ...(to!==undefined?{reviewThroughMinute:to}:{}),
   dueWorldProjects:due,
   livingWorldCycle:worldCycle,
+  storyRoutes:previewLabStoryPaths(s.pack,s.session),
+  playerKnownSummary:{knownFacts:Object.keys(s.session.playerFog?.entries??{}).length,
+   exploredAreas:Object.keys(s.session.playerFog?.areas??{}).length},
   resolutionRequired:due.length>0,
   mustUseSourceBoundCommit:s.session.roleplayGuard==="strict",
   note:"GM ONLY; do not disclose private memories or proposal decisions to player."};
  if(JSON.stringify(answer).length>60000)throw Error("LAB_ROLEPLAY_CONTEXT_TOO_LARGE");
  return answer;
+}
+/** GM-only conditional story options, separate from confirmed outcomes. */
+export async function readLabStoryOptions(load:LabRoleplayLoader,
+ projectId:string,sessionId:string){
+ const s=await loadExact(load,projectId,sessionId);
+ return {...previewLabStoryPaths(s.pack,s.session),
+  packRevision:s.packRevision,sessionRevision:s.sessionRevision,
+  sourceAttestedBySave:true};
+}
+/** Player safe: only what the player actually observed/heard/learned. */
+export async function readLabPlayerFog(load:LabRoleplayLoader,
+ projectId:string,sessionId:string){
+ const s=await loadExact(load,projectId,sessionId);
+ return {...readLabPublicFog(s.session),sessionRevision:s.sessionRevision};
 }
 export type LabRoleplayWorldCycleRequest={
  projectId:string;sessionId:string;npcIds:string[];
