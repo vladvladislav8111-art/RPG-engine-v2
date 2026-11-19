@@ -7,6 +7,7 @@ import {validateLabSession,type LabSession,type LabMemory,type LabNpcState,
 import type {LabPack} from "./engine.ts";
 import {noteNpcFeature,type NpcFeatureObservation} from "./npc_perception.ts";
 import {validateLabWorldEvidence,type LabWorldEvidenceInput} from "./world_evidence.ts";
+import {applyLabFogChanges,type LabFogFactChange,type LabFogAreaChange} from "./fog_of_war.ts";
 import {applyLabSocialSignal,type LabSocialSignal} from "./social_dynamics_v2.ts";
 import {dueLabWorldProjects,allowedLabProjectTransition,validateLabNpcMood,validateLabWorldProject,
  validateLabNpcDecision,type LabNpcMood,type LabNpcDecision,type LabNpcDecisionStance,
@@ -87,7 +88,8 @@ export type LabConfirmedEvent={
  worldProjectChanges?:LabWorldProjectChange[];
  worldEvidence?:LabWorldEvidenceInput[];
  workOrderChanges?:LabWorkOrderChange[];
- discovered?:string[];playerLocationId?:string;
+ discovered?:string[];playerLocationId?:string;playerWitnessed?:boolean;
+ playerFogChanges?:LabFogFactChange[];playerAreaChanges?:LabFogAreaChange[];
  playerFeatureChanges?:LabPlayerFeatureChange[];
  effects?:{resources?:Record<string,number>;inventory?:Record<string,number>};
  gmConfirmed:true;
@@ -145,6 +147,8 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
  if(new Set(observations.map(x=>x.npcId)).size!==observations.length)
   throw Error("LAB_EVENT_DUPLICATE_NPC_OBSERVATION");
  const next=structuredClone(session);
+ const visibleFog=applyLabFogChanges(session,pack,event);
+ if(visibleFog!==undefined)next.playerFog=visibleFog;
  // Main-character appearance is persistent state, not a transient narrator
  // reminder. Registering it changes no NPC's personal knowledge.
  const changes=event.playerFeatureChanges??[];
