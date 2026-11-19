@@ -4,6 +4,7 @@
  */
 import {buildLabSceneBrief,dueLabWorldProjects} from "./living_world.ts";
 import {readLabAmbientRumors} from "./ambient_rumors.ts";
+import {findLabNpcMentions,recallLabNpcPersonalMemories,readLabMentionedNpcCores} from "./npc_mentions.ts";
 import {narrativeMinute} from "./events.ts";
 import {previewLabLivingWorldCycle} from "./living_world_cycle_v2.ts";
 import {previewLabStoryPaths} from "./story_consequences.ts";
@@ -29,17 +30,27 @@ const loadExact=async(load:LabRoleplayLoader,projectId:string,sessionId:string)=
  return snapshot;
 };
 export type LabRoleplaySceneRequest={
- projectId:string;sessionId:string;npcIds:string[];
+ projectId:string;sessionId:string;npcIds?:string[];
  eventRef?:string;featureIds?:string[];maxMemories?:number;
- toMinute?:number;
+ toMinute?:number;dialogueText?:string;
 };
 export async function readLabRoleplayScene(load:LabRoleplayLoader,
  request:LabRoleplaySceneRequest){
  const s=await loadExact(load,request.projectId,request.sessionId);
+ const mentionLookup=request.dialogueText===undefined?null:
+  findLabNpcMentions(s.pack,request.dialogueText,8);
+ const npcIds=[...new Set([...(request.npcIds??[]),
+   ...(mentionLookup?.npcIds??[])])];
+ if(npcIds.length===0||npcIds.length>8)
+  throw Error("LAB_ROLEPLAY_SCENE_NPC_SELECTION_INVALID");
  const brief=buildLabSceneBrief(s.pack,s.session,{
-  npcIds:request.npcIds,eventRef:request.eventRef,
+  npcIds,eventRef:request.eventRef,
   featureIds:request.featureIds,maxMemories:request.maxMemories??8,
  });
+ const dialogueMemories=request.dialogueText===undefined?[]:
+  npcIds.map(npcId=>({npcId,
+   memories:recallLabNpcPersonalMemories(
+    s.session,npcId,request.dialogueText!,request.maxMemories??8)}));
  const from=narrativeMinute(s.session.gameClock);
  const to=request.toMinute;
  if(to!==undefined&&(from===null||!Number.isSafeInteger(to)||
@@ -48,7 +59,7 @@ export async function readLabRoleplayScene(load:LabRoleplayLoader,
  const due=to!==undefined?dueLabWorldProjects(s.session.worldProjects,to):[];
  const worldCycle=from!==null?
    previewLabLivingWorldCycle(s.pack,s.session,{
-     npcIds:request.npcIds,fromMinute:from,toMinute:to??from,
+     npcIds,fromMinute:from,toMinute:to??from,
      focusEventRef:request.eventRef,maxPerActor:2,
    }):null;
  const answer={...brief,schema:"RPG_LAB_ROLEPLAY_CONTEXT_V1",
@@ -63,6 +74,9 @@ export async function readLabRoleplayScene(load:LabRoleplayLoader,
   localAmbientRumors:s.session.player.locationId?
    readLabAmbientRumors(s.session,s.session.player.locationId,6):[],
   ambientRumorsAreUnverified:true,
+  ...(mentionLookup?{resolvedByDialogue:mentionLookup,
+    dialogueRelevantPersonalMemories:dialogueMemories,
+    dialogueLookupDoesNotProveWitnessing:true}:{}),
   livingWorldCycle:worldCycle,
   storyRoutes:previewLabStoryPaths(s.pack,s.session),
   playerKnownSummary:{knownFacts:Object.keys(s.session.playerFog?.entries??{}).length,
@@ -115,4 +129,20 @@ export async function reviewLabRoleplayScene(load:LabRoleplayLoader,
   requiredMemoryRefs:request.requiredMemoryRefs,
  },s.sessionRevision);
  return {...reviewed,packRevision:s.packRevision};
+}
+
+/** Private read-only tool: choose profiles from a dialogue without pretending
+ * that the named characters witnessed, attended or learned the dialogue.
+ */
+export type LabRoleplayMentionRequest={
+ projectId:string;sessionId:string;dialogueText:string;
+ maxActors?:number;maxMemories?:number;
+};
+export async function readLabMentionedNpcDialogue(load:LabRoleplayLoader,
+ request:LabRoleplayMentionRequest){
+ const s=await loadExact(load,request.projectId,request.sessionId);
+ const selection=readLabMentionedNpcCores(s.pack,s.session,
+  request.dialogueText,request.maxActors??8,request.maxMemories??8);
+ return {...selection,packRevision:s.packRevision,
+  sessionRevision:s.sessionRevision,sourceAttestedBySave:true};
 }

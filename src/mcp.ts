@@ -18,9 +18,10 @@ import { intBetween } from "./rng.ts";
 import { WORLD_V3_OPERATIONS, type WorldV3BatchRequest } from "./world_sim_v3/runtime_facade.ts";
 import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
 import {createLabCampaign,commitLabCampaignEvent,readLabConfirmedEvent,loadLabSessionFromKv,
- listLabCampaignInventory,archiveLabCampaigns,installFreshDanmachiWorld} from "./rpg_lab_v1/http.ts";
+ listLabCampaignInventory,archiveLabCampaigns,installFreshDanmachiWorld,promoteLabOriginalNpc} from "./rpg_lab_v1/http.ts";
+import type {LabNpc} from "./rpg_lab_v1/engine.ts";
 import {readLabRoleplayScene,reviewLabRoleplayScene,readLabRoleplayWorldCycle,
- readLabPlayerFog,readLabStoryOptions} from "./rpg_lab_v1/roleplay_adapter.ts";
+ readLabPlayerFog,readLabStoryOptions,readLabMentionedNpcDialogue} from "./rpg_lab_v1/roleplay_adapter.ts";
 import {getRpgBridgeGmGuide} from "./rpg_lab_v1/gm_guide.ts";
 import type {LabConfirmedEvent} from "./rpg_lab_v1/events.ts";
 import { RULESET_VERSION } from "./rules.ts";
@@ -873,7 +874,8 @@ function buildServer() {
       inputSchema:z.object({
         projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
         sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
-        npcIds:z.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/)).min(1).max(8),
+        npcIds:z.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/)).max(8).default([]),
+        dialogueText:z.string().min(1).max(6000).optional(),
         eventRef:z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/).optional(),
         featureIds:z.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/)).max(24).optional(),
         maxMemories:z.number().int().min(1).max(24).optional(),
@@ -884,6 +886,52 @@ function buildServer() {
     async input=>{
       try{return toolJson(await readLabRoleplayScene(loadLabSessionFromKv,input));}
       catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_ROLEPLAY_SCENE_FAILED"});}
+    },
+  );
+  server.registerTool(
+    "rpg_lab_mention_context",
+    {
+      title:"RPG Lab: retrieve mentioned DanMachi NPC cores and their own memories",
+      description:"READ ONLY, GM PRIVATE. Detect actually named NPCs in dialogue, load canon-informed deep personality cores, voice, personal memories and individual relations from this exact isolated campaign. Naming is NOT witnessing or physical presence. Ambiguous names are reported instead of guessing. Never reveal private thoughts to the player or share one NPC's memories with another.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        dialogueText:z.string().min(1).max(6000),
+        maxActors:z.number().int().min(1).max(8).optional(),
+        maxMemories:z.number().int().min(1).max(24).optional(),
+      }),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await readLabMentionedNpcDialogue(loadLabSessionFromKv,input));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_MENTION_CONTEXT_FAILED"});}
+    },
+  );
+  server.registerTool(
+    "rpg_lab_promote_original_npc",
+    {
+      title:"RPG Lab: atomically register a fully evidenced original NPC",
+      description:"WRITE ACTION, GM ONLY. Promote a background original NPC to a full private character core only after a confirmed encounter AND a separately witnessed independent decision. Requires explicit confirmation and both current pack/session revisions. Atomically writes pack and this session; refuses archived and Drive-controlled campaigns. Does not advance time, grant friendship, modify existing NPCs or touch Shura. Never call for a hypothetical NPC.",
+      inputSchema:z.object({
+        confirm:z.literal("PROMOTE_CONFIRMED_ORIGINAL_NPC"),
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        expectedPackRevision:z.number().int().min(1),
+        expectedSessionRevision:z.number().int().min(1),
+        seed:z.object({
+          npcId:z.string().min(1).max(80),publicName:z.string().min(1).max(150),
+          workplaceId:z.string().min(1).max(80),observedAppearance:z.string().min(1).max(500),
+          firstEncounterRef:z.string().min(1).max(80),
+          independentChoiceRef:z.string().min(1).max(80),
+          witnessNpcId:z.string().min(1).max(80)
+        }),
+        profile:z.record(z.string(),z.unknown()),
+      }),
+      annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await promoteLabOriginalNpc({...input,profile:input.profile as LabNpc}));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_ORIGINAL_PROMOTION_FAILED"});}
     },
   );
   server.registerTool(
