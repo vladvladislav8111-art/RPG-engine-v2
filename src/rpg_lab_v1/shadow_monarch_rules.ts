@@ -32,7 +32,7 @@ export const JINWOO_CANON_VS_ADAPTATION={
  "At each System level-up every one of five attributes gains 1, plus 5 assignable points.",
  "Daily training quests can award 3 attribute points; missed quests can lead to a penalty area.",
  "The System's private store accepts gold; only its Player sees the interface.",
- "Shadow Extraction and Preservation unlock through the job-change quest; early extraction has three tries per victim.",
+ "Shadow Extraction and Preservation unlock through the job-change quest; in original Solo Leveling extraction can be tried up to three times per victim.",
  "The fully awakened Shadow Monarch loses the original System menus, shop and quests.",
  "Removing or breaking a DanMachi monster's magic stone causes its body to vanish.",
  "DanMachi Falna is a deity-granted blessing with distinct five-stat and level advancement rules.",
@@ -40,6 +40,7 @@ export const JINWOO_CANON_VS_ADAPTATION={
  adaptation:[
  "All store prices and thresholds below are game-design values, NOT official Solo Leveling prices.",
  "The XP curve, additive Falna-to-System bonuses and shadow success chances are crossover balance conventions.",
+ "Player rule: one permanent extraction attempt per target; true Monarch ignores probability but still requires a viable source. This differs from the three attempts in Solo Leveling.",
  "If the Player interface survives full succession, that is an explicit alternate-universe rule.",
  "An intact monster magic stone can be used as a shadow-body blueprint; this is a DanMachi crossover rule, NOT canon. Consuming the stone forfeits Guild valis.",
  "Story thresholds for Monarch's Domain, Shadow Exchange and Black Heart are evidence-gated, not automatically earned.",
@@ -142,7 +143,7 @@ export const JINWOO_SPECIAL_REWARDS={
  cursedRandomBox:"Выбор подходящей для текущей угрозы награды, не гарантия победы.",
  titleConqueror:"Выдаётся только после соответствующего испытания.",
  blackHeart:"Особая сюжетная ступень, не бесплатное бесконечное воскрешение.",
- shadowKnightIgris:"Имена известных теней не означают их автоматический перенос в чистую кампанию.",
+ shadowKnightIgris:"Первый рыцарь из инстанса смены класса может вступить по подтверждённой награде без случайной проверки. Его оригинальная биография не переносится.",
 } as const;
 export const JINWOO_SKILL_GRAPH=[
  {id:"stealth",phase:"player_system",gate:"Подтверждённый навык / руна / задание"},
@@ -379,7 +380,7 @@ export type ExtractionRequest={
  targetPower:"weaker"|"peer"|"stronger"|"overwhelming";
  corpsePresent:boolean;magicStoneIntact:boolean;
  residualImprint:boolean;corruptedMana:boolean;
- minutesSinceDeath:number;roll:number;
+ minutesSinceDeath:number;roll?:number;
 };
 /** Early storage starts at 30, expands through confirmed phase/skill events.
  * The game's exact numeric capacity progression is an explicit adaptation. */
@@ -394,33 +395,59 @@ export function attemptJinwooShadowExtraction(s:JinwooState,
   throw Error("JINWOO_SHADOW_CLASS_NOT_UNLOCKED");
  requireReward(s,e.sourceRef);
  if(!e.confirmedDeath||!validRef(e.targetRef)||!e.name.trim()||
-  !Number.isSafeInteger(e.roll)||e.roll<1||e.roll>100||
+  (s.phase!=="true_monarch"&&(!Number.isSafeInteger(e.roll)||e.roll!<1||e.roll!>100))||
+  (s.phase==="true_monarch"&&e.roll!==undefined&&
+   (!Number.isSafeInteger(e.roll)||e.roll<1||e.roll>100))||
   !Number.isSafeInteger(e.minutesSinceDeath)||e.minutesSinceDeath<0||
   !["weaker","peer","stronger","overwhelming"].includes(e.targetPower))
   throw Error("JINWOO_SHADOW_EXTRACTION_SOURCE_INVALID");
  const attempt=s.extractionAttempts[e.targetRef]??0;
  if(s.shadowRoster.some(x=>x.id===e.targetRef))
   throw Error("JINWOO_SHADOW_ALREADY_OWNED");
- if(attempt>=3)return {next:s,success:false,reason:"attempts_exhausted",chance:0};
+ if(attempt>=1)return {next:s,success:false,reason:"attempts_exhausted",chance:0};
  const n=clone(s);n.appliedRewardRefs.push(e.sourceRef);
  n.extractionAttempts[e.targetRef]=attempt+1;
  const anchored=(e.corpsePresent&&
   (e.originalKind!=="monster"||e.magicStoneIntact))||
   (s.phase==="true_monarch"&&s.shadowTraceRule==="monarch_imprint"&&e.residualImprint);
+ const sovereign=s.phase==="true_monarch";
  const fail:ExtractionFailure|undefined=
   !anchored?"no_remains":e.corruptedMana?"corrupt_mana":
-  e.targetPower==="overwhelming"?"too_strong":
-  e.minutesSinceDeath>60?"too_old":
+  (!sovereign&&e.targetPower==="overwhelming")?"too_strong":
+  (!sovereign&&e.minutesSinceDeath>60)?"too_old":
   n.shadowRoster.length>=shadowCapacity(n)?"capacity_full":undefined;
  const base=e.targetPower==="weaker"?90:
   e.targetPower==="peer"?65:e.targetPower==="stronger"?25:0;
- const chance=fail?0:Math.max(5,base-Math.floor(e.minutesSinceDeath/5)*3);
- if(fail||e.roll>chance)return {next:n,success:false,
+ const chance=fail?0:sovereign?100:
+  Math.max(5,base-Math.floor(e.minutesSinceDeath/5)*3);
+ if(fail||(!sovereign&&e.roll!>chance))return {next:n,success:false,
   reason:fail??"roll_failed",chance};
  n.shadowRoster.push({id:e.targetRef,name:e.name,
   originRef:e.sourceRef,originalKind:e.originalKind,
   powerTier:e.powerTier,defeatedCount:0,stored:true});
  return {next:n,success:true,chance};
+}
+/** Special early knight: earned inside the System class quest.
+ * No random roll and no imported original-world soldier history.
+ * This is the sole prepared named Shadow from Solo Leveling.
+ */
+export function recruitFirstKnightFromClassTrial(s:JinwooState,e:{
+ sourceRef:string;confirmedClassTrialClear:boolean;playerAccepted:boolean;
+}):JinwooState{
+ requireReward(s,e.sourceRef);
+ if(s.phase==="player_system"||!e.confirmedClassTrialClear||!e.playerAccepted||
+  !s.unlockedSkills.includes("shadow_extraction")||
+  s.dungeonKeys["job.change"]?.state!=="cleared"||
+  s.shadowRoster.some(x=>x.id==="system.knight.igris")||
+  s.shadowRoster.length>=shadowCapacity(s))
+  throw Error("JINWOO_FIRST_KNIGHT_NOT_EARNED");
+ const n=clone(s);
+ n.shadowRoster.push({
+  id:"system.knight.igris",name:"Игрис",
+  originRef:e.sourceRef,originalKind:"other",powerTier:"knight",
+  defeatedCount:0,stored:true});
+ n.appliedRewardRefs.push(e.sourceRef);
+ return n;
 }
 export function resurrectJinwooShadow(s:JinwooState,e:{
  sourceRef:string;shadowId:string;confirmedDefeat:boolean;manaCost:number;
