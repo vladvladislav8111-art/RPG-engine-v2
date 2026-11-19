@@ -6,6 +6,8 @@ import {previewDungeonExplore,validateEncounterProfile,validateMonster,type LabE
 import {newLinosState,linosProfile,previewLinosCast,regenerateLinosMp,
  type LinosState,type LinosAbilityRequest} from "./linos.ts";
 import {proposeIndependentWorldAgenda} from "./autonomy.ts";
+import {buildLabSceneBrief,dueLabWorldProjects,type LabWorldProject} from "./living_world.ts";
+import type {LabSession} from "./session.ts";
 export type LabResource={min:number;max:number};
 export type LabLootEntry={itemId:string;weight:number;chance:number;min:number;max:number};
 export type LabLootTable={rolls:number;entries:LabLootEntry[]};
@@ -323,6 +325,14 @@ export function evaluateLabJob(pack:LabPack,job:LabJob):unknown{
     projectedMerchantStock:plain(stock+(buying?-quote.quantity:quote.quantity)),
     stockTransferred:false,fundsTransferred:false};
   }
+  case "scene_brief":{
+   const session=a.session as LabSession|undefined;
+   if(!session||session.projectId!==pack.projectId)throw Error("LAB_SCENE_SESSION_REQUIRED");
+   return buildLabSceneBrief(pack,session,{
+    npcIds:a.npcIds as string[],eventRef:a.eventRef as string|undefined,
+    featureIds:a.featureIds as string[]|undefined,maxMemories:a.maxMemories as number|undefined,
+   });
+  }
   case "world_tick":{
    const from=numeric(a.fromMinute,0,1e9),to=numeric(a.toMinute,from,1e9);
    if(to-from>10080)throw Error("LAB_WORLD_TICK_WINDOW_LIMIT");
@@ -330,9 +340,12 @@ export function evaluateLabJob(pack:LabPack,job:LabJob):unknown{
    const due=Object.entries(pack.worldProcesses??{}).filter(([,v])=>v.dueMinute>from&&v.dueMinute<=to)
     .map(([id,v])=>({id,kind:v.kind,dueMinute:v.dueMinute,sourceRef:v.sourceRef,
      visibleToPlayer:v.visibility==="public"&&(!v.locationId||discovered.has(v.locationId))}));
+   const pending=dueLabWorldProjects(a.worldProjects as Record<string,LabWorldProject>|undefined,to);
    const agenda=proposeIndependentWorldAgenda(pack,from,to,a.npcIds??[],
     (a.sessionId as string|undefined)??"preview");
    return {fromMinute:from,toMinute:to,dueProcesses:due,
+    dueWorldProjects:pending,unresolvedProjectReviews:pending.map(p=>p.projectId),
+    resolutionRequired:pending.length>0||due.length>0||agenda.intents.length>0,
     npcAgenda:agenda.intents,
     eventsResolved:false,npcDecisionsMade:false,worldTimeAdvanced:false,
     proposalsRequireConfirmedWorldEvent:true};
