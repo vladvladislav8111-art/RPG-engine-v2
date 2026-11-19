@@ -126,8 +126,12 @@ test("alternative Bell rescue unlocks possibilities without silverback Falna gai
  const next=previewLabStoryPaths(pack,session);
  assert.ok(next.candidateBeats.some(x=>x.beatId==="bell_training"));
  assert.equal(next.noAutoXP,true);
+ const premature=next.blockedBeats.find(x=>x.beatId==="trained_branch");
+ assert.equal(premature?.missingTechnique?.minGrade,"basic");
  for(let i=0;i<4;i++){
-  const id="evt.lesson."+i,time="D0 "+String(11+i).padStart(2,"0")+":00";
+  const id="evt.lesson."+i;
+  const clockMinutes=11*60+30+i*90;
+  const time="D0 "+String(Math.floor(clockMinutes/60)).padStart(2,"0")+":"+String(clockMinutes%60).padStart(2,"0");
   session=applyConfirmedLabEvent(session,pack,evt(id,time,{
    kind:"training",
    npcInteractions:[{
@@ -139,16 +143,31 @@ test("alternative Bell rescue unlocks possibilities without silverback Falna gai
    npcTechniqueTraining:[{
     trainingId:"bell.ganesha.footwork",traineeNpcId:"npc.bell",
     mentorNpcId:"npc.shakti",discipline:"Уклонения, стойка и работа ног",
-    expectedRevision:i,sessionMinutes:100,passedDrill:true
+    expectedRevision:i,sessionMinutes:90,passedDrill:true
    }]
   }));
  }
  assert.equal(session.storyState?.techniques["bell.ganesha.footwork"].technique,"trained");
- assert.equal(session.storyState?.techniques["bell.ganesha.footwork"].totalMinutes,400);
+ assert.equal(session.storyState?.techniques["bell.ganesha.footwork"].totalMinutes,360);
  assert.equal(session.player.stats.excelia,undefined);
  const end=previewLabStoryPaths(pack,session);
  assert.equal(end.techniques.find(x=>x.id==="bell.ganesha.footwork")?.notFalnaExp,true);
- assert.throws(()=>applyConfirmedLabEvent(session,pack,evt("evt.free_master","D0 15:00",{
+ session=applyConfirmedLabEvent(session,pack,evt("evt.approach","D0 16:05",{
+  storyFlagChanges:[{flagId:"bell.minotaur_approach",expectedRevision:0,value:true,
+   evidenceRefs:["evt.approach"]}]
+ }));
+ assert.ok(previewLabStoryPaths(pack,session).candidateBeats.some(x=>
+  x.arcId==="bell.minotaur"&&x.beatId==="trained_branch"));
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,evt("evt.fake_minutes","D0 16:10",{
+  kind:"training",npcInteractions:[{initiatorNpcId:"npc.shakti",recipientNpcId:"npc.bell",
+   action:"Short correction",outcome:"A five-minute rehearsal",
+   salience:"ordinary",privacy:"small_group"}],
+  npcTechniqueTraining:[{trainingId:"bell.ganesha.footwork",
+   traineeNpcId:"npc.bell",mentorNpcId:"npc.shakti",
+   discipline:"Уклонения, стойка и работа ног",
+   expectedRevision:4,sessionMinutes:120,passedDrill:true}]
+ })),/LAB_STORY_TRAINING_TIME_INSUFFICIENT/);
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,evt("evt.free_master","D0 17:00",{
   npcTechniqueTraining:[{trainingId:"bell.ganesha.footwork",
    traineeNpcId:"npc.bell",mentorNpcId:"npc.shakti",
    discipline:"Уклонения, стойка и работа ног",
