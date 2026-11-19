@@ -216,3 +216,46 @@ test("Bridge world tick uses saved project queue, checks clock, and proposes wit
   }}}],
  },async()=>{throw Error("should not load")},undefined,load),/LAB_TICK_BRIDGE_CLOCK_INVALID/);
 });
+
+test("NPCs quarrel independently: both remember, outsider does not, conflict persists",()=>{
+ let session=fresh();
+ session=applyConfirmedLabEvent(session,pack,evt("evt.argument","D0 09:00",{
+  kind:"world_scene",summary:"Loki and Bete argued without player present",
+  npcInteractions:[{initiatorNpcId:"npc.bete",recipientNpcId:"npc.loki",
+   action:"Bete sharply insults Loki's judgement",
+   outcome:"Loki fires back and neither apologizes",
+   salience:"important",privacy:"private"}],
+  moodChanges:[{npcId:"npc.bete",evidenceRefs:["evt.argument"],
+   mood:{label:"furious",intensity:4,settleAfterMinute:m(1,9)}}],
+  npcSocial:[{npcId:"npc.loki",evidenceRefs:["evt.argument"],
+   relationships:{"npc.bete":"irritated about insult, no reconciliation"}}],
+ }));
+ assert.equal(session.worldEvents?.length,1);
+ assert.equal(session.npcs["npc.bete"].mood?.label,"furious");
+ assert.equal(session.npcs["npc.loki"].relationships?.["npc.bete"],
+  "irritated about insult, no reconciliation");
+ assert.equal(session.npcs["npc.bete"].memories[0].sourceRef,"evt.argument");
+ assert.equal(session.npcs["npc.loki"].memories[0].sourceRef,"evt.argument");
+ assert.equal(session.npcs["npc.finn"],undefined);
+ const gm=reviewLabSessionMemory(pack,session,{
+  npcIds:["npc.loki"],includePrivate:true});
+ assert.equal(gm.independentWorldEvents.length,1);
+ assert.equal(gm.independentWorldEvents[0].targetNpcId,"npc.loki");
+ assert.equal(reviewLabSessionMemory(pack,session,{
+  npcIds:["npc.loki"],includePrivate:false}).independentWorldEvents.length,0);
+ const next=applyConfirmedLabEvent(session,pack,evt("evt.later","D0 10:00"));
+ assert.equal(next.npcs["npc.bete"].mood?.label,"furious");
+ assert.equal(next.npcs["npc.loki"].relationships?.["npc.bete"],
+  "irritated about insult, no reconciliation");
+});
+test("NPC interactions do not manufacture witnesses or leak private information",()=>{
+ const session=fresh();
+ const forged=evt("evt.fake_witness","D0 09:00",{
+  npcInteractions:[{initiatorNpcId:"npc.bete",recipientNpcId:"npc.loki",
+   action:"Private insult",outcome:"Both heard it",salience:"ordinary",
+   privacy:"private",witnessNpcIds:["npc.finn"]}],
+ });
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,forged),
+ /LAB_NPC_INTERACTION_INVALID/);
+ assert.equal(session.events.length,0);
+});
