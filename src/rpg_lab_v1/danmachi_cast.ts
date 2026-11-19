@@ -4,6 +4,7 @@
  * automatically available to the protagonist or other NPCs.
  */
 import type {LabNpc} from "./engine.ts";
+import {selectDanmachiCanonKnowledge} from "./danmachi_canon_knowledge.ts";
 type CharacterRow=[
  id:string,name:string,faction:string,traits:string,goals:string,
  tics:string,sample:string,reasoning:string,trigger:string,limits:string,
@@ -98,7 +99,8 @@ export function buildDanmachiCanonCast():Record<string,LabNpc>{
   const parts=(s:string)=>s.split(";").map(x=>x.trim()).filter(Boolean);
   cast[npcId]={
    name,canonRef:"danmachi."+id,faction,entryArc:arc??"start",
-   traits:parts(traits),goals:parts(goals),knownFacts:[],
+   traits:parts(traits),goals:parts(goals),
+   knownFacts:selectDanmachiCanonKnowledge(id,faction),
    speechStyle:reasoning,voice:{
     register:parts(traits)[0]??"neutral",
     tempo:/молчал|немногослов|сдержан/.test(traits)?"коротко, с паузами":
