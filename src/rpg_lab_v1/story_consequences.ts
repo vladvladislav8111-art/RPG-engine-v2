@@ -205,11 +205,11 @@ export function applyLabStoryChanges(session:LabSession,pack:LabPack,
    !Number.isSafeInteger(t.sessionMinutes)||t.sessionMinutes<30||
    t.sessionMinutes>480||typeof t.passedDrill!=="boolean")
    throw Error("LAB_STORY_TRAINING_CHANGE_INVALID");
+  if(!["training","world_training","practice"].includes(event.kind))
+   throw Error("LAB_STORY_TRAINING_EVENT_KIND");
   const from=timeInMinutes(session.gameClock),until=timeInMinutes(event.time);
   if(from===null||until===null||until-from<t.sessionMinutes)
    throw Error("LAB_STORY_TRAINING_TIME_INSUFFICIENT");
-  if(!["training","world_training","practice"].includes(event.kind))
-   throw Error("LAB_STORY_TRAINING_EVENT_KIND");
   const interaction=event.npcInteractions?.some(i=>
     (i.initiatorNpcId===t.mentorNpcId&&i.recipientNpcId===t.traineeNpcId)||
     (i.initiatorNpcId===t.traineeNpcId&&i.recipientNpcId===t.mentorNpcId));
