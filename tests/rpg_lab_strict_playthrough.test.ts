@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type {LabPack} from "../src/rpg_lab_v1/engine.ts";
-import type {LabSession} from "../src/rpg_lab_v1/session.ts";
+import {assertLabDirectSessionPutAllowed,type LabSession} from "../src/rpg_lab_v1/session.ts";
 import type {LabTurnWithPlan} from "../src/rpg_lab_v1/turn_guard.ts";
 import {applyGuardedLabEvent} from "../src/rpg_lab_v1/turn_guard.ts";
 import {hydrateLabBridgeRequest} from "../src/rpg_lab_v1/bridge.ts";
@@ -175,4 +175,16 @@ test("full workshop cycle: source evidence, delayed obligations and no omniscien
  assert.equal(done.guardVerified,true);
  assert.equal(x.current().worldProjects?.["proj.heph.tests"].status,"blocked");
  assert.equal(x.current().worldEvidence?.["fiber.10mm.claim"].level,"unverified");
+});
+
+test("strict session cannot bypass roleplay via direct snapshot PUT",()=>{
+ const session=fresh();
+ const older={...session,roleplayGuard:undefined};
+ assert.throws(()=>assertLabDirectSessionPutAllowed(session,{...session}),
+ /LAB_STRICT_SESSION_PUT_FORBIDDEN/);
+ assert.throws(()=>assertLabDirectSessionPutAllowed(null,session),
+ /LAB_STRICT_SESSION_CREATE_OR_UPGRADE_FORBIDDEN/);
+ assert.throws(()=>assertLabDirectSessionPutAllowed(older,session),
+ /LAB_STRICT_SESSION_CREATE_OR_UPGRADE_FORBIDDEN/);
+ assert.equal(assertLabDirectSessionPutAllowed(older,{...older}),true);
 });
