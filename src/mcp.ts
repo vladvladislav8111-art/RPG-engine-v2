@@ -20,7 +20,7 @@ import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
 import {createLabCampaign,commitLabCampaignEvent,readLabConfirmedEvent,loadLabSessionFromKv,
  listLabCampaignInventory,archiveLabCampaigns,installFreshDanmachiWorld} from "./rpg_lab_v1/http.ts";
 import {readLabRoleplayScene,reviewLabRoleplayScene,readLabRoleplayWorldCycle,
- readLabPlayerFog,readLabStoryOptions} from "./rpg_lab_v1/roleplay_adapter.ts";
+ readLabPlayerFog,readLabStoryOptions,readLabMentionedNpcDialogue} from "./rpg_lab_v1/roleplay_adapter.ts";
 import {getRpgBridgeGmGuide} from "./rpg_lab_v1/gm_guide.ts";
 import type {LabConfirmedEvent} from "./rpg_lab_v1/events.ts";
 import { RULESET_VERSION } from "./rules.ts";
@@ -873,7 +873,8 @@ function buildServer() {
       inputSchema:z.object({
         projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
         sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
-        npcIds:z.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/)).min(1).max(8),
+        npcIds:z.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/)).max(8).default([]),
+        dialogueText:z.string().min(1).max(6000).optional(),
         eventRef:z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/).optional(),
         featureIds:z.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/)).max(24).optional(),
         maxMemories:z.number().int().min(1).max(24).optional(),
@@ -884,6 +885,25 @@ function buildServer() {
     async input=>{
       try{return toolJson(await readLabRoleplayScene(loadLabSessionFromKv,input));}
       catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_ROLEPLAY_SCENE_FAILED"});}
+    },
+  );
+  server.registerTool(
+    "rpg_lab_mention_context",
+    {
+      title:"RPG Lab: retrieve mentioned DanMachi NPC cores and their own memories",
+      description:"READ ONLY, GM PRIVATE. Detect actually named NPCs in dialogue, load canon-informed deep personality cores, voice, personal memories and individual relations from this exact isolated campaign. Naming is NOT witnessing or physical presence. Ambiguous names are reported instead of guessing. Never reveal private thoughts to the player or share one NPC's memories with another.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        dialogueText:z.string().min(1).max(6000),
+        maxActors:z.number().int().min(1).max(8).optional(),
+        maxMemories:z.number().int().min(1).max(24).optional(),
+      }),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await readLabMentionedNpcDialogue(loadLabSessionFromKv,input));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_MENTION_CONTEXT_FAILED"});}
     },
   );
   server.registerTool(
