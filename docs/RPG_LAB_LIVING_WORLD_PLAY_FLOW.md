@@ -2,6 +2,22 @@
 
 **Not deployed.** This guide describes the new intended gameplay usage after the unified release is merged and deployed. No current live scene should assume these branch-only capabilities exist.
 
+## Strict game loop (source of truth for NEW campaigns)
+
+**Important:** Newly created RPG Lab campaigns have \`roleplayGuard:"strict"\` and old sessions without this field stay compatible. \`rpg_lab_commit_event\` is the authoritative server-side write path. A meaningful NPC event in strict mode **cannot commit** without \`event.narrationPlan\` containing the actual actors, their beats and source references. This gate runs on the candidate after-state **before** the session CAS write. Mere refusal to call the write tool still remains an LLM host limitation, not proof of a saved scene.
+
+For a normal RPG Lab NPC turn:
+1. **Read:** use the NEW direct read-only \`rpg_lab_scene_context\` with \`projectId,sessionId,npcIds\`, optional feature IDs, past event source and future in-world minute. This is independent of all legacy Shura \`expectedSaveId\` values.
+2. **Resolve before prose:** think through private canon anchors, motives, what each actor knows personally, emotional inertia, decisions and open projects. The GM chooses actual attitudes and reactions; NPCs need not agree with the player or one another.
+3. **Prepare a source-backed confirmed event** with observations and real consequences. For NPC turns attach \`narrationPlan:{npcIds,beats}\`. A beat has \`actorId,kind,summary,factRefs\` plus \`featureRefs,worldClaims,decision,projectId\` when relevant.
+4. **Commit once through \`rpg_lab_commit_event\`** with the exact expected revision. The strict gate rejects omitted actors, first-sighting or major-evidence omission, inconsistent committed decisions, false firsthand knowledge, skipped due work and unsupported research completion. A failure is NOT a successful game turn and must not be narrated as such.
+5. **Optional extra verification:** \`rpg_lab_review_narration\` accepts a separate planned text-beat structure and checks against the newly committed save/revision, if any revision or scene details need independent review.
+6. **Render only committed outcomes** in readable prose. Private NPC knowledge remains GM-only until naturally revealed.
+
+Do **not** use raw session \`PUT\` to replace strict-gameplay state. The server refuses both strict-session overwrites and creating/upgrading strict sessions through this legacy snapshot path. Use source-linked semantic event commits.
+
+This is a structural guard, not a full natural-language judge: it cannot prove a line is truly in Loki's voice, nor force ChatGPT to call tools on every reply. The narrator must still apply canonical character reasoning.
+
 ## One substantive NPC scene
 
 1. Get the RPG Lab project ID, campaign session ID, and current revision from the actual isolated campaign. Never substitute a legacy Shura \`saveId\` for campaign state.
