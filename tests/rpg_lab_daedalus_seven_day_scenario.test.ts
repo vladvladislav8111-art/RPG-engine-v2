@@ -334,11 +334,33 @@ test("Daedalus first week: dossier, patron, musket, communication and rifle stay
  assert.equal(s.npcs["npc.hephaestus"].memories.some(m=>
   m.relayedSourceRef==="evt.guild_register"),false);
  assert.equal(s.npcs["npc.hephaestus"].memories.some(m=>
+  m.relayedSourceRef==="evt.heph_eligibility"),true);
+ assert.equal(s.npcs["npc.hephaestus"].memories.some(m=>
   m.sourceRef==="evt.musket"||m.sourceRef==="evt.awp"),false);
- assert.equal(s.npcs["npc.finn"].memories.some(m=>m.sourceRef==="evt.awp"),true);
+ assert.equal(s.npcs["npc.finn"].memories.some(m=>m.sourceRef==="evt.awp"),false);
+ assert.equal(s.npcs["npc.finn"].memories.some(m=>
+  m.relayedSourceRef==="evt.awp"),true);
+ assert.equal(s.npcs["npc.finn"].memories.some(m=>
+  m.sourceRef==="evt.finn_plate_inspect"),true);
+ assert.equal(s.npcs["npc.finn"].memories.some(m=>
+  m.sourceRef==="evt.musket"),false);
+ assert.equal(s.npcs["npc.finn"].memories.some(m=>
+  m.relayedSourceRef==="evt.musket"),true);
  assert.equal(s.npcs["npc.riveria"].memories.some(m=>m.sourceRef==="evt.awp"),false);
  assert.equal(s.npcs["npc.riveria"].memories.some(m=>
-  m.sourceRef==="evt.communication"),true);
+  m.sourceRef==="evt.communication"),false);
+ assert.equal(s.npcs["npc.loki"].memories.some(m=>
+  m.sourceRef==="evt.musket"),true);
+ assert.equal(s.npcs["npc.loki"].memories.some(m=>
+  m.sourceRef==="evt.awp"),false);
+ assert.equal(s.npcs["npc.bete"].memories.some(m=>
+  m.sourceRef==="evt.musket"||m.sourceRef==="evt.awp"),false);
+ assert.equal(s.npcs["npc.tione"].memories.some(m=>
+  m.sourceRef==="evt.musket"),true);
+ assert.equal(s.npcs["npc.tione"].memories.some(m=>
+  m.sourceRef==="evt.awp"),true);
+ assert.equal(s.npcs["npc.tiona"].memories.some(m=>
+  m.sourceRef==="evt.awp_assembled"),false);
  const load=async()=>({pack,session:s,sessionRevision:rev,packRevision:3});
  const heph=await readLabRoleplayScene(load,{
   projectId:pack.projectId,sessionId:s.sessionId,
@@ -346,7 +368,11 @@ test("Daedalus first week: dossier, patron, musket, communication and rifle stay
  assert.equal(heph.actors.find(x=>x.npcId==="npc.hephaestus")!
   .knownWorldEvidence.some(x=>x.factId==="weapon.awp.armor"),false);
  assert.equal(heph.actors.find(x=>x.npcId==="npc.finn")!
-  .knownWorldEvidence.some(x=>x.factId==="weapon.awp.armor"),true);
+  .knownWorldEvidence.some(x=>x.factId==="weapon.awp.armor"&&
+   !x.observedPersonally),true);
+ assert.equal(heph.actors.find(x=>x.npcId==="npc.finn")!
+  .knownWorldEvidence.some(x=>x.factId==="weapon.awp.damaged_plate"&&
+   x.observedPersonally),true);
  assert.equal(heph.actors.find(x=>x.npcId==="npc.tsubaki")!
   .activeResponsibilities.some(x=>x.projectId==="heph.application"),true);
  assert.equal(heph.livingWorldCycle?.work.length,0);
