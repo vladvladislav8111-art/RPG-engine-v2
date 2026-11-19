@@ -4,12 +4,13 @@
 import type {LabPack,LabJob} from "./engine.ts";
 import {validateLinosState,type LinosState} from "./linos.ts";
 import {validateFeatureMemory,type NpcFeatureMemory} from "./npc_perception.ts";
-import {validateLabNpcMood,validateLabWorldProject,type LabNpcMood,type LabWorldProject} from "./living_world.ts";
+import {validateLabNpcMood,validateLabWorldProject,validateLabNpcDecision,
+ type LabNpcMood,type LabWorldProject,type LabNpcDecision} from "./living_world.ts";
 export type LabMemory={sourceRef:string;summary:string;learnedAt:string;knownBy:string[];
   eventTime?:string;locationId?:string;channel?:string;sourceActor?:string;relayedSourceRef?:string;
   confidence?:string;salience?:string;privacy?:string;perceivedFact?:string;
  };
-export type LabNpcState={knownFacts:string[];memories:LabMemory[];currentGoal?:string;relationships?:Record<string,string>;perceptions?:Record<string,NpcFeatureMemory>;mood?:LabNpcMood};
+export type LabNpcState={knownFacts:string[];memories:LabMemory[];currentGoal?:string;relationships?:Record<string,string>;perceptions?:Record<string,NpcFeatureMemory>;mood?:LabNpcMood;decisions?:Record<string,LabNpcDecision>};
 /** Explicit commercial commitments. Amounts are ledger facts, NOT cash effects. */
 export type LabWorkOrder={
  title:string;clientNpcId:string;signedAt:string;dueFrom:string;dueTo:string;
@@ -93,6 +94,13 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
    }
   }
   if(state.mood!==undefined)validateLabNpcMood(state.mood);
+  if(state.decisions!==undefined){
+   if(!map(state.decisions,32))throw Error("LAB_NPC_DECISIONS_INVALID");
+   for(const [subjectId,decision] of Object.entries(state.decisions)){
+    if(subjectId!==decision.subjectId)throw Error("LAB_NPC_DECISION_KEY_MISMATCH");
+    validateLabNpcDecision(decision);
+   }
+  }
   if(state.currentGoal!==undefined&&!txt(state.currentGoal,300))throw Error("LAB_SESSION_NPC_GOAL_INVALID");
   if(state.relationships!==undefined&&(!map(state.relationships,80)||Object.values(state.relationships).some(v=>!txt(v,250))))
    throw Error("LAB_SESSION_NPC_RELATION_INVALID");
