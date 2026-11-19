@@ -11,7 +11,7 @@ const b=(beatId:string,description:string,requiresFlags:string[],
  ...(alternativeTo?{alternativeTo}:{})
 });
 const arcs:Record<string,LabStoryArcDef>={
- orario.arrival:{
+ "orario.arrival":{
   title:"Первые дни в Орарио",era:"early",entryArc:"start",
   summary:"Встречи с гильдией, семьёй и первыми слухами; знакомство не равно знанию",
   canonAnchor:"Белл ищет героя и Фальну; город живёт вне присутствия игрока",
@@ -56,7 +56,7 @@ const arcs:Record<string,LabStoryArcDef>={
     ["Опыт определяется подтверждёнными боями","Техника и показатели могут расти разными темпами"])
   ]
  },
- bell.minotaur:{
+ "bell.minotaur":{
   title:"Белл и испытание Минотавром",era:"early",entryArc:"start",
   summary:"Выбор тактики зависит от техники, опыта, чувств и действительных встреч",
   canonAnchor:"Белл стремится приблизиться к Айз и преодолеть страх перед Минотавром",
@@ -72,7 +72,7 @@ const arcs:Record<string,LabStoryArcDef>={
     [],"encounter")
   ]
  },
- lili.and.soma:{
+ "lili.and.soma":{
   title:"Лили и семейство Сомы",era:"season1",entryArc:"season1",
   summary:"Доверие, бедность, обман и независимость Лили",
   canonAnchor:"Белл знакомится с поддержкой Лили; Сома и Занис сохраняют интересы",
@@ -85,7 +85,7 @@ const arcs:Record<string,LabStoryArcDef>={
     ["Семья Сомы реагирует на утрату влияния","Связи Белла меняются"])
   ]
  },
- hephaestus.craft:{
+ "hephaestus.craft":{
   title:"Мастерские Гефест и новые материалы",era:"early",entryArc:"start",
   summary:"Исключительный материал или технология вызывает исследования, отказ или политический интерес",
   canonAnchor:"Гефест и Цубаки профессионально заинтересованы в мастерстве, но имеют и другие заказы",
@@ -101,7 +101,7 @@ const arcs:Record<string,LabStoryArcDef>={
     ["Вакансия закрыта профессионально","Предложение самостоятельной работы","Конфликт интересов, если имеются основания"])
   ]
  },
- apollo.war_game:{
+ "apollo.war_game":{
   title:"Семья Аполлона и военная игра",era:"season2",entryArc:"apollo",
   summary:"Политика и спор между семьями могут изменить масштаб конфликта",
   canonAnchor:"Аполлон проявляет собственнический интерес к Беллу и возможному приобретению детей",
@@ -140,7 +140,7 @@ const arcs:Record<string,LabStoryArcDef>={
     ["Укрытие ксеносов","Политический кризис","Перемирие или бой"])
   ]
  },
- dungeon.deep:{
+ "dungeon.deep":{
   title:"Нижние этажи и тяжёлые потери",era:"season4",entryArc:"season4",
   summary:"Экспедиция испытывает ресурсы, связи и решения вне присутствия игрока",
   canonAnchor:"Белл и Рю сталкиваются с опасностями глубокого Подземелья",
@@ -153,7 +153,7 @@ const arcs:Record<string,LabStoryArcDef>={
     ["Переосмысление отношений","Травмы и рост","Новый план выхода"])
   ]
  },
- freya.goddess:{
+ "freya.goddess":{
   title:"Фрейя, Сир и цена одержимости",era:"season5",entryArc:"freya",
   summary:"Скрытые личности, верность и личный выбор не раскрываются преждевременно",
   canonAnchor:"Фрейя преследует собственные желания; ключевые тайны известны немногим",
@@ -166,7 +166,7 @@ const arcs:Record<string,LabStoryArcDef>={
     ["Политическое противостояние","Разделение внутри семьи","Последствия личного выбора"])
   ]
  },
- sword.oratoria:{
+ "sword.oratoria":{
   title:"Сумеречная семья и тайны подземных этажей",era:"sword_oratoria",entryArc:"sword_oratoria",
   summary:"Параллельная история Локи развивается даже когда игрок далёк от её дел",
   canonAnchor:"Финн, Риверия, Гарет, Айз и Лефия ведут собственные исследования Подземелья",
