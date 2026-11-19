@@ -17,7 +17,17 @@ export type LabWorldProcess={dueMinute:number;locationId?:string;kind:string;vis
 export type LabPrice={base:number;currency:string;buyMultiplier?:number;sellMultiplier?:number};
 export type LabLocation={name:string;kind:string;parentId?:string;neighbors:Record<string,number>;tags?:string[];description?:string};
 export type LabResponsePattern={emotion:string;motive:string;condition?:string};
-export type LabNpc={name:string;canonRef:string;traits:string[];goals:string[];knownFacts:string[];speechStyle?:string;responsePatterns?:Record<string,LabResponsePattern[]>};
+export type LabNpcVoice={
+ register:string;tempo:string;verbalTics:string[];sampleLines:string[];
+ mannerisms:string[];avoidCaricature:string[];
+};
+export type LabNpcLogic={
+ priorities:string[];defaultInference:string[];conflictTriggers:string[];
+ socialBiases:string[];limits:string[];
+};
+export type LabNpc={name:string;canonRef:string;traits:string[];goals:string[];knownFacts:string[];
+ speechStyle?:string;responsePatterns?:Record<string,LabResponsePattern[]>;
+ voice?:LabNpcVoice;habitualLogic?:LabNpcLogic;entryArc?:string;faction?:string};
 export type LabPack={
  schema:"RPG_LAB_PACK_V1";projectId:string;worldId:string;
  formulas:Record<string,string>;resources:Record<string,LabResource>;
@@ -103,6 +113,20 @@ export function validateLabPack(pack:LabPack):LabPack{
   ident(id);if(!safeObj(v))throw Error("LAB_NPC_DEF");
   text(v.name,150);ident(v.canonRef);stringList(v.traits,30);stringList(v.goals,20);stringList(v.knownFacts,128);
   if(v.speechStyle!==undefined)text(v.speechStyle,600);
+  if(v.faction!==undefined)text(v.faction,80);
+  if(v.entryArc!==undefined)ident(v.entryArc);
+  if(v.voice!==undefined){
+   if(!safeObj(v.voice))throw Error("LAB_NPC_VOICE_INVALID");
+   text(v.voice.register,150);text(v.voice.tempo,150);
+   for(const field of ["verbalTics","sampleLines","mannerisms","avoidCaricature"] as const){
+    stringList(v.voice[field],field==="sampleLines"?6:12);
+   }
+  }
+  if(v.habitualLogic!==undefined){
+   if(!safeObj(v.habitualLogic))throw Error("LAB_NPC_LOGIC_INVALID");
+   for(const field of ["priorities","defaultInference","conflictTriggers",
+    "socialBiases","limits"] as const)stringList(v.habitualLogic[field],12);
+  }
   if(v.responsePatterns!==undefined){
    for(const [,responses] of entries(v.responsePatterns,40)){
     if(!Array.isArray(responses)||responses.length>16)throw Error("LAB_NPC_RESPONSE_DEF");
