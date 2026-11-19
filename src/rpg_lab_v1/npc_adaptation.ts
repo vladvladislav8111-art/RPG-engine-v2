@@ -77,6 +77,10 @@ export function evolveLabNpcAdaptation(profile:LabNpc,prior:LabNpcState,
  const prev=prior.adaptations?.[change.axisId];
  if(prev)validateLabNpcAdaptation(change.axisId,prev);
  if(prev&&minute-prev.lastMinute<120)throw Error("LAB_ADAPTATION_TOO_RAPID");
+ // A new impression must develop from the most recently accepted firsthand
+ // evidence for this axis. Old unrelated memories cannot be recycled forever.
+ if(prev&&!change.evidenceRefs.includes(prev.lastSourceRef))
+  throw Error("LAB_ADAPTATION_CAUSAL_CHAIN_BROKEN");
  const oldProof=change.evidenceRefs.some(ref=>ref!==sourceRef&&prior.memories.some(m=>
    m.sourceRef===ref&&["seen","heard","experienced"].includes(m.channel??"")&&
    m.salience!=="fleeting"));

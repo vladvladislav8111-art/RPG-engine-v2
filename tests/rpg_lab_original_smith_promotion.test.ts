@@ -155,7 +155,7 @@ test("registered NPC cannot be silently overwritten",()=>{
 });
 
 /** Evidence-bearing events exercise evolution, not unconditional GM prose. */
-const smithObserved=(ref:string,time:string,delta?:-1|1):LabConfirmedEvent=>({
+const smithObserved=(ref:string,time:string,delta?:-1|1,previousRef="evt.ivar.refusal"):LabConfirmedEvent=>({
  sourceRef:ref,time,kind:"npc_independent_choice",gmConfirmed:true,
  summary:"Ивар оценил результат испытания нестандартного изделия.",
  knownBy:[smithId],locationId:"orario.hephaestus",
@@ -167,7 +167,7 @@ const smithObserved=(ref:string,time:string,delta?:-1|1):LabConfirmedEvent=>({
   interpretation:delta===1?
    "Осторожно расширяет круг технологий для испытаний, сохраняя контроль прочности":
    "После выявленного дефекта осторожнее относится к очередному эксперименту",
-  evidenceRefs:["evt.ivar.refusal",ref]
+  evidenceRefs:[previousRef,ref]
  }]})
 });
 test("smith changes approach over days, never abandons safety or his identity",()=>{
@@ -175,14 +175,16 @@ test("smith changes approach over days, never abandons safety or his identity",(
  const pack=p.proposedPack,oldCore=JSON.stringify(pack.npcProfiles[smithId].originalCore);
  const oldTraits=JSON.stringify(pack.npcProfiles[smithId].traits);
  let state=p.proposedSession;
+ let previousRef="evt.ivar.refusal";
  for(const [ref,time,delta,expected] of [
   ["evt.smith.test1","D1 11:00",1,1],
   ["evt.smith.test2","D3 11:00",1,2],
   ["evt.smith.test3","D7 11:00",1,3],
   ["evt.smith.fail","D10 11:00",-1,2]
  ] as const){
-  state=applyConfirmedLabEvent(state,pack,smithObserved(ref,time,delta));
+  state=applyConfirmedLabEvent(state,pack,smithObserved(ref,time,delta,previousRef));
   assert.equal(state.npcs[smithId].adaptations?.["method.prototype_open"].score,expected);
+  previousRef=ref;
  }
  const ctx=buildLabSceneBrief(pack,state,{npcIds:[smithId]});
  assert.equal(ctx.actors[0].acquiredAdaptations["method.prototype_open"].score,2);
@@ -222,4 +224,146 @@ test("unknown core edits, instant flips and unsupported evidence are rejected",(
  unsupported.npcAdaptations![0].evidenceRefs=["evt.smith.firsttest"];
  assert.throws(()=>applyConfirmedLabEvent(p.proposedSession,p.proposedPack,unsupported),
   /LAB_ADAPTATION_CHANGE_INVALID/);
+});
+
+// A scripted 100-day scenario tests the deterministic rules, NOT AI personality quality.
+// The NPC acts while the player is elsewhere; no relationship auto-improves.
+type SmithArc={day:number;axis:string;delta:-1|1;detail:string};
+const hundredDayArc:SmithArc[]=[
+ {day:1,axis:"method.prototype_open",delta:1,
+  detail:"Ивар сам проверил необычный шарнир и согласился назначить ещё одно испытание"},
+ {day:3,axis:"interaction.clients",delta:1,
+  detail:"Постоянный заказчик спокойно признал свою ошибку; Ивар стал чуть терпеливее"},
+ {day:4,axis:"method.prototype_open",delta:1,
+  detail:"Второй образец выдержал нагрузку; Ивар пересмотрел часть сомнений"},
+ {day:7,axis:"habit.delegate",delta:1,
+  detail:"Подмастерье точно изготовил безопасные заклёпки под наблюдением Ивара"},
+ {day:10,axis:"method.prototype_open",delta:1,
+  detail:"После третьей проверки Ивар начал сам предлагать испытания нестандартных узлов"},
+ {day:19,axis:"habit.delegate",delta:1,
+  detail:"Ученик без ошибок выполнил повторную рутинную работу и сам показал результаты проверки"},
+ {day:25,axis:"interaction.clients",delta:1,
+  detail:"Заказчица выполнила договор, заранее сообщив о задержке; Ивар стал разговорчивее"},
+ {day:30,axis:"method.prototype_open",delta:-1,
+  detail:"Под нагрузкой новая конструкция показала скрытую трещину; Ивар ужесточил проверку"},
+ {day:40,axis:"interaction.clients",delta:-1,
+  detail:"Покупатель попытался скрыть повреждение и обвинить кузнеца; Ивар охладел"},
+ {day:47,axis:"habit.delegate",delta:-1,
+  detail:"Подмастерье забыл проверить заклёпку; Ивар вернул ему часть работы на перепроверку"},
+ {day:61,axis:"method.prototype_open",delta:-1,
+  detail:"Поставщик срезал пробный образец со скрытым дефектом; Ивар отказался применять материал"},
+ {day:72,axis:"habit.delegate",delta:1,
+  detail:"После длительной тренировки подмастерье показал повторяемую надёжность"},
+ {day:85,axis:"interaction.clients",delta:-1,
+  detail:"Клиент потребовал подделать клеймо контроля; Ивар отказал и оборвал сотрудничество"},
+ {day:100,axis:"method.prototype_open",delta:1,
+  detail:"Ивар самостоятельно придумал безопасную серию испытаний и оценил удачный прототип"}
+];
+test("100 days: three non-core aspects evolve unevenly while original character remains recognizable",()=>{
+ const preview=previewOriginalNpcPromotion(world,significantHistory(),seed,smith);
+ const pack=preview.proposedPack;
+ let state=preview.proposedSession;
+ const origin={
+  traits:JSON.stringify(pack.npcProfiles[smithId].traits),
+  core:JSON.stringify(pack.npcProfiles[smithId].originalCore),
+  logic:JSON.stringify(pack.npcProfiles[smithId].habitualLogic),
+  voice:JSON.stringify(pack.npcProfiles[smithId].voice)
+ };
+ // User leaves the workshop. Subsequent decisions are from Ivar alone.
+ state=applyConfirmedLabEvent(state,pack,{
+  sourceRef:"evt.player.left_smith",time:"D0 10:00",kind:"player_turn",
+  summary:"Игрок покинул мастерские и ушёл в Подземелье",knownBy:[],
+  discovered:["orario.dungeon.upper"],playerLocationId:"orario.dungeon.upper",
+  gmConfirmed:true
+ });
+ const score:Record<string,number>={};
+ const lastProof:Record<string,string>={};
+ const checkpoints:Record<number,Record<string,number>>={};
+ for(const step of hundredDayArc){
+  const ref="evt.ivar.day_"+step.day;
+  const clock="D"+step.day+" 15:00";
+  const e:LabConfirmedEvent={
+   sourceRef:ref,time:clock,kind:"npc_independent_choice",
+   locationId:"orario.hephaestus",knownBy:[smithId],
+   summary:step.detail,gmConfirmed:true,playerWitnessed:false,
+   observations:[{
+    npcId:smithId,channel:"experienced",perceivedFact:step.detail,
+    learnedAt:clock,confidence:"certain",salience:"important",privacy:"private"
+   }],
+   worldActions:[{
+    npcId:smithId,locationId:"orario.hephaestus",
+    action:"Ивар принял собственное профессиональное решение",
+    outcome:step.detail,privacy:"hidden"
+   }],
+   npcAdaptations:[{
+    npcId:smithId,axisId:step.axis,delta:step.delta,
+    interpretation:step.detail,
+    evidenceRefs:[lastProof[step.axis]??"evt.ivar.refusal",ref]
+   }]
+  };
+  state=applyConfirmedLabEvent(state,pack,e);
+  score[step.axis]=(score[step.axis]??0)+step.delta;
+  lastProof[step.axis]=ref;
+  assert.equal(state.npcs[smithId].adaptations?.[step.axis].score,score[step.axis]);
+  assert.equal(state.player.locationId,"orario.dungeon.upper");
+  assert.equal(state.npcs[smithId].relationships,undefined);
+  assert.equal(state.npcs[smithId].socialDynamics,undefined);
+  assert.equal(state.playerFog,undefined);
+  if([10,30,61,85,100].includes(step.day))
+   checkpoints[step.day]={...score};
+  // There is no pack rewrite or telepathic dissemination of private memories.
+  assert.equal(JSON.stringify(pack.npcProfiles[smithId].traits),origin.traits);
+  assert.equal(JSON.stringify(pack.npcProfiles[smithId].originalCore),origin.core);
+  assert.equal(JSON.stringify(pack.npcProfiles[smithId].habitualLogic),origin.logic);
+  assert.equal(JSON.stringify(pack.npcProfiles[smithId].voice),origin.voice);
+ }
+ assert.equal(state.gameClock,"D100 15:00");
+ assert.equal(hundredDayArc.length,14);
+ assert.equal(state.worldEvents?.length,14);
+ assert.deepEqual(checkpoints[10],{
+  "method.prototype_open":3,"interaction.clients":1,"habit.delegate":1
+ });
+ assert.deepEqual(checkpoints[30],{
+  "method.prototype_open":2,"interaction.clients":2,"habit.delegate":2
+ });
+ assert.deepEqual(checkpoints[61],{
+  "method.prototype_open":1,"interaction.clients":1,"habit.delegate":1
+ });
+ assert.deepEqual(checkpoints[85],{
+  "method.prototype_open":1,"interaction.clients":0,"habit.delegate":2
+ });
+ assert.deepEqual(checkpoints[100],{
+  "method.prototype_open":2,"interaction.clients":0,"habit.delegate":2
+ });
+ const actor=buildLabSceneBrief(pack,state,{npcIds:[smithId]}).actors[0];
+ assert.equal(actor.canonAnchors.join("|"),pack.npcProfiles[smithId].traits.join("|"));
+ assert.equal(actor.acquiredAdaptations["method.prototype_open"].score,2);
+ assert.equal(actor.acquiredAdaptations["interaction.clients"].score,0);
+ assert.equal(actor.acquiredAdaptations["habit.delegate"].score,2);
+ assert.equal(actor.originalCore?.personalGoal,smith.originalCore?.personalGoal);
+ assert.equal(state.npcs[smithId].memories.length,2+hundredDayArc.length);
+ assert.equal(state.events.length,3+hundredDayArc.length);
+});
+test("100 days of silence do not change non-core habits or forge memories",()=>{
+ const p=previewOriginalNpcPromotion(world,significantHistory(),seed,smith);
+ const state=applyConfirmedLabEvent(p.proposedSession,p.proposedPack,{
+  sourceRef:"evt.ivar.silent_hundred",time:"D100 16:00",
+  kind:"world_tick",summary:"Сто дней прошло без подтверждённого личного опыта Ивара",
+  knownBy:[],gmConfirmed:true
+ });
+ assert.equal(state.npcs[smithId].adaptations,undefined);
+ assert.equal(state.npcs[smithId].memories.length,2);
+ assert.equal(state.npcs[smithId].relationships,undefined);
+ assert.equal(state.npcs[smithId].socialDynamics,undefined);
+});
+test("adaptation must follow its last accepted causal proof, not reuse an unrelated first day",()=>{
+ const p=previewOriginalNpcPromotion(world,significantHistory(),seed,smith);
+ const first=applyConfirmedLabEvent(p.proposedSession,p.proposedPack,
+  smithObserved("evt.ivar.first_prototype","D1 12:00",1));
+ const second=smithObserved("evt.ivar.second_prototype","D3 12:00",1);
+ assert.throws(()=>applyConfirmedLabEvent(first,p.proposedPack,second),
+  /LAB_ADAPTATION_CAUSAL_CHAIN_BROKEN/);
+ const linked=smithObserved("evt.ivar.second_prototype","D3 12:00",1,"evt.ivar.first_prototype");
+ const valid=applyConfirmedLabEvent(first,p.proposedPack,linked);
+ assert.equal(valid.npcs[smithId].adaptations?.["method.prototype_open"].score,2);
 });
