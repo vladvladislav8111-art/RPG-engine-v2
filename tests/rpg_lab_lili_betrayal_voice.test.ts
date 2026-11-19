@@ -17,3 +17,21 @@ test("Lili's betrayal reveal is aggressively defensive, not a polite confession"
  assert.ok(bell.responsePatterns?.rescued_after_betrayal?.[0].emotion.includes("неуклюжую"));
  assert.ok(bell.responsePatterns?.rescued_after_betrayal?.[0].motive.includes("именно Лили"));
 });
+
+test("after the rescue Lili distinguishes Ais jealousy, ordinary glance and private thoughts",()=>{
+ const cast=buildDanmachiCanonCast();
+ const lili=cast["npc.lili"];
+ const patterns=lili.responsePatterns!;
+ const ais=patterns.bell_ais_blush[0];
+ const stranger=patterns.bell_beautiful_stranger[0];
+ const privateThought=patterns.bell_private_thought[0];
+ assert.match(ais.emotion,/ревнует/);
+ assert.match(ais.motive,/Айз/);
+ assert.match(ais.condition!,/видела его смущение/);
+ assert.match(stranger.emotion,/насмешливо/);
+ assert.match(stranger.condition!,/действительно заметила/);
+ assert.match(privateThought.emotion,/не знает о мыслях/);
+ assert.match(privateThought.condition!,/думает об Айз молча/);
+ assert.notEqual(ais.emotion,stranger.emotion);
+ assert.ok(lili.voice?.sampleLines.some(x=>x.includes("хватит таращиться")));
+});
