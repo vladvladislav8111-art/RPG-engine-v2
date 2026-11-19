@@ -7,7 +7,7 @@ test("Lili's betrayal reveal is aggressively defensive, not a polite confession"
  const lili=cast["npc.lili"],bell=cast["npc.bell"];
  const raw=JSON.stringify(lili);
  assert.ok(lili.traits.some(t=>/резк|язвител|злопамят/.test(t)));
- assert.ok(lili.responsePatterns?.betrayal_exposed?.[0].emotion.includes("оборонительная ярость"));
+ assert.ok(lili.responsePatterns?.betrayal_exposed?.[0].emotion.includes("злость и стыд"));
  assert.ok(lili.responsePatterns?.rescued_after_betrayal?.[0].emotion.includes("оскорбляет"));
  assert.ok(lili.responsePatterns?.reconciled?.[0].emotion.includes("язвительная"));
  assert.ok(lili.voice?.verbalTics.some(s=>/идиот/.test(s)));
