@@ -158,7 +158,7 @@ test("full workshop cycle: source evidence, delayed obligations and no omniscien
    record:{...material.worldProjectChanges![0].record,
     status:"blocked",stage:"Investigate non-destructive test",
     blockerReason:"No calibrated 25-tonne fixture",
-    nextReviewMinute:3420,lastReviewMinute:2040,revision:2,
+    nextReviewMinute:3420,lastReviewMinute:2039,revision:2,
     latestEvidenceRef:"evt.research"}}],
   narrationPlan:{npcIds:["npc.smith"],beats:[{
    actorId:"npc.smith",kind:"action",
