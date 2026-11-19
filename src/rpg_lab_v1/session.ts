@@ -4,6 +4,7 @@
 import type {LabPack,LabJob} from "./engine.ts";
 import {validateLinosState,type LinosState} from "./linos.ts";
 import {validateFeatureMemory,type NpcFeatureMemory} from "./npc_perception.ts";
+import {validateLabWorldEvidence,type LabWorldEvidence} from "./world_evidence.ts";
 import {validateLabNpcMood,validateLabWorldProject,validateLabNpcDecision,
  type LabNpcMood,type LabWorldProject,type LabNpcDecision} from "./living_world.ts";
 export type LabMemory={sourceRef:string;summary:string;learnedAt:string;knownBy:string[];
@@ -23,7 +24,7 @@ export type LabWorkOrder={
 export type LabSession={
  schema:"RPG_LAB_SESSION_V1";projectId:string;sessionId:string;gameClock:string;
  player:{resources:Record<string,number>;stats:Record<string,number>;inventory:Record<string,number>;locationId?:string;linos?:LinosState;workOrders?:Record<string,LabWorkOrder>};
- discovered:string[];npcs:Record<string,LabNpcState>;worldProjects?:Record<string,LabWorldProject>;
+ discovered:string[];npcs:Record<string,LabNpcState>;worldProjects?:Record<string,LabWorldProject>;worldEvidence?:Record<string,LabWorldEvidence>;
  events:{sourceRef:string;summary:string;time:string;knownBy:string[];locationId?:string;kind?:string}[];
  worldEvents?:{sourceRef:string;time:string;npcId:string;targetNpcId?:string;action:string;outcome:string;locationId?:string;privacy:"public"|"hidden"}[];
  archivedEventCount?:number;
@@ -76,6 +77,17 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
  for(const v of Object.values(s.player.stats))if(!n(v))throw Error("LAB_SESSION_STAT_INVALID");
  for(const v of Object.values(s.player.inventory))if(!n(v)||!Number.isInteger(v))throw Error("LAB_SESSION_ITEM_INVALID");
  if(!list(s.discovered,500)||s.discovered.some(k=>!pack.locations[k]))throw Error("LAB_SESSION_DISCOVERY_INVALID");
+ if(s.worldEvidence!==undefined){
+  if(!map(s.worldEvidence,256))throw Error("LAB_WORLD_EVIDENCE_MAP_INVALID");
+  for(const [factId,fact] of Object.entries(s.worldEvidence)){
+   if(factId!==fact.factId)throw Error("LAB_WORLD_EVIDENCE_KEY_MISMATCH");
+   validateLabWorldEvidence(fact);
+   if(fact.locationId!==undefined&&!pack.locations[fact.locationId])
+    throw Error("LAB_WORLD_EVIDENCE_LOCATION_UNKNOWN");
+   if(fact.observedBy.some(npcId=>!pack.npcProfiles[npcId]))
+    throw Error("LAB_WORLD_EVIDENCE_OBSERVER_UNKNOWN");
+  }
+ }
  if(s.worldProjects!==undefined){
   if(!map(s.worldProjects,128))throw Error("LAB_WORLD_PROJECTS_INVALID");
   for(const [projectId,project] of Object.entries(s.worldProjects))
