@@ -116,7 +116,8 @@ export function previewLabLivingWorldCycle(pack:LabPack,
     namingOrIdentityCue:/name|alias|called|introduc|имя|зовут|прозвищ|представ|дедал|daedal/i
       .test(m.perceivedFact??m.summary),
     canonKnowledgeMatches:profile.knownFacts.filter(ref=>
-     [...words(ref)].some(t=>words(m.perceivedFact??m.summary).has(t))),
+     [...words(pack.canonFacts?.[ref]?.summary??ref)].some(t=>
+      words(m.perceivedFact??m.summary).has(t))),
     observedNotNecessarilyUnderstood:true,
    }));
   const known=evidence.filter(x=>sourceKnown(state,x.sourceRef))
