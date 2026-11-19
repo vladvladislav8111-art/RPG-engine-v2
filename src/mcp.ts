@@ -659,7 +659,7 @@ function buildServer() {
     "rpg_lab_create_campaign",
     {
       title:"RPG Lab: create a clean, isolated campaign",
-      description:"WRITE ACTION. Creates a NEW versioned RPG Lab campaign in its own KV keyspace, including an optional natural, unblessed Linos profile when characterProfile=linos and the world is DanMachi. Does not select location unless supplied. Never modifies Shura or an existing campaign. Only invoke on an explicit user decision to begin a campaign.",
+      description:"WRITE ACTION. Creates a NEW versioned RPG Lab campaign in its own KV keyspace, including an optional natural, unblessed Linos profile when characterProfile=linos and the world is DanMachi. Does not select location unless supplied. NEW campaigns use strict NPC roleplay commit validation by default; existing campaigns remain compatible. Never modifies Shura or an existing campaign. Only invoke on an explicit user decision to begin a campaign.",
       inputSchema:z.object({
         projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
         sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
@@ -734,6 +734,7 @@ function buildServer() {
             hasCurrentGoal:!!npc.currentGoal,
           })),
           worldEventCount:session.worldEvents?.length??0,
+          roleplayGuard:session.roleplayGuard??"legacy",
           readOnly:true,
           legacySaveTouched:false,
         });
@@ -747,7 +748,7 @@ function buildServer() {
     "rpg_lab_commit_event",
     {
       title:"RPG Lab: commit ONE confirmed campaign event",
-      description:"WRITE ACTION. Advances only the named isolated RPG Lab session using optimistic expectedRevision, confirmed scene sourceRef, witnesses, NPC observations, Linos mana/skills and optional world acts. Duplicate sourceRef rejected. Must NEVER be used for hypothetical scenes, preview calculations, or without a player-confirmed outcome. The legacy Shura save remains unchanged. Use after each actual user turn of this specific campaign.",
+      description:"WRITE ACTION. Advance only the named isolated RPG Lab session by a source-backed confirmed event (CAS revision). Strict/new campaigns REQUIRE event.narrationPlan:{npcIds,beats} whenever an NPC actively reacts, decides, interacts or owns work; each beat identifies actorId, kind, summary, factRefs and relevant featureRefs/worldClaims/decision/projectId. First load a private scene brief via simulate_world_v3 world_review rpgLabSceneV1; strict commits reject skipped reactions, unverified extraordinary claims and omitted due work. No simulated loot/rewards from previews. Do not modify unrelated campaigns or Shura. Never use for hypothetical scenes or unsupported player actions.",
       inputSchema:z.object({
         projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
         sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
@@ -775,7 +776,7 @@ function buildServer() {
     "simulate_world_v3",
     {
       title: "RPG V3: batch world simulations",
-      description: "READ ONLY. Calculate up to 12 causal proposals in one call on the current save: time, NPC schedules, craft, combat, travel, knowledge, world processes, inventory, source-backed quest offers, progression, titles and SUP. Inputs are GM snapshots, not independently source-attested. NEVER treat this calculation as a game commit.",
+      description: "READ ONLY. Calculate bounded world proposals. For RPG Lab scenes use world_review payload.rpgLabSceneV1 with projectId,sessionId,npcIds to obtain private personal memory, canon, mood and commitments. For time advance use rpgLabTickV1; to check planned narration use rpgLabNarrationV1 with saved revision, actor beats and event context. These are optional read-only probes but strict/new RPG Lab sessions REQUIRE a source-linked narrationPlan when committing meaningful NPC events. Never treat this calculation as a game commit.",
       inputSchema: z.object({
         expectedSaveId: z.string().min(1),
         jobs: z.array(z.object({
