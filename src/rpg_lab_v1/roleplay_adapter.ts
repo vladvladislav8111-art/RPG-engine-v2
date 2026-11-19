@@ -43,6 +43,7 @@ export async function readLabRoleplayScene(load:LabRoleplayLoader,
  const due=to!==undefined?dueLabWorldProjects(s.session.worldProjects,to):[];
  const answer={...brief,schema:"RPG_LAB_ROLEPLAY_CONTEXT_V1",
   packRevision:s.packRevision,sessionRevision:s.sessionRevision,
+  sourceAttestedBySave:true,
   roleplayGuard:s.session.roleplayGuard??"legacy",
   currentInworldMinute:from,
   ...(to!==undefined?{reviewThroughMinute:to}:{}),
