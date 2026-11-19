@@ -6,6 +6,7 @@ import {validateLinosState,type LinosState} from "./linos.ts";
 import {validateFeatureMemory,type NpcFeatureMemory} from "./npc_perception.ts";
 import {validateLabSocialVector,type LabSocialVector} from "./social_dynamics_v2.ts";
 import {validateLabWorldEvidence,type LabWorldEvidence} from "./world_evidence.ts";
+import {validateLabPlayerFog,type LabPlayerFog} from "./fog_of_war.ts";
 import {validateLabNpcMood,validateLabWorldProject,validateLabNpcDecision,
  type LabNpcMood,type LabWorldProject,type LabNpcDecision} from "./living_world.ts";
 export type LabMemory={sourceRef:string;summary:string;learnedAt:string;knownBy:string[];
@@ -39,6 +40,7 @@ export type LabSession={
  roleplayGuard?:"strict";
  player:{resources:Record<string,number>;stats:Record<string,number>;inventory:Record<string,number>;locationId?:string;linos?:LinosState;workOrders?:Record<string,LabWorkOrder>;visibleFeatures?:Record<string,LabPlayerFeature>};
  discovered:string[];npcs:Record<string,LabNpcState>;worldProjects?:Record<string,LabWorldProject>;worldEvidence?:Record<string,LabWorldEvidence>;
+ playerFog?:LabPlayerFog;
  events:{sourceRef:string;summary:string;time:string;knownBy:string[];locationId?:string;kind?:string}[];
  worldEvents?:{sourceRef:string;time:string;npcId:string;targetNpcId?:string;action:string;outcome:string;locationId?:string;privacy:"public"|"hidden"}[];
  archivedEventCount?:number;
@@ -104,6 +106,7 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
  for(const v of Object.values(s.player.stats))if(!n(v))throw Error("LAB_SESSION_STAT_INVALID");
  for(const v of Object.values(s.player.inventory))if(!n(v)||!Number.isInteger(v))throw Error("LAB_SESSION_ITEM_INVALID");
  if(!list(s.discovered,500)||s.discovered.some(k=>!pack.locations[k]))throw Error("LAB_SESSION_DISCOVERY_INVALID");
+ if(s.playerFog!==undefined)validateLabPlayerFog(s.playerFog,pack);
  if(s.worldEvidence!==undefined){
   if(!map(s.worldEvidence,256))throw Error("LAB_WORLD_EVIDENCE_MAP_INVALID");
   for(const [factId,fact] of Object.entries(s.worldEvidence)){
