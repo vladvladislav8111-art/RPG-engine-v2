@@ -176,6 +176,10 @@ export interface JinwooFalnaScores{
 export const ZERO_FALNA_SCORES:Readonly<JinwooFalnaScores>={
  strength:0,endurance:0,dexterity:0,agility:0,magic:0
 };
+export interface SystemDungeonKeyState{
+ id:string;issuedRef:string;state:"held"|"entered"|"cleared";
+ entryLocationRef?:string;completionRef?:string;
+}
 export interface JinwooState{
  schema:"DANMACHI_JINWOO_PREP_V1";
  phase:JinwooPhase;postAscensionInterface:PostAscensionInterface;
@@ -186,6 +190,7 @@ export interface JinwooState{
  hp:number;mp:number;fatigue:number;
  gold:number;valis:number;inventory:Record<string,number>;
  magicStones:Record<string,JinwooMagicStone>;
+ dungeonKeys:Record<string,SystemDungeonKeyState>;
  shadowRoster:JinwooShadow[];extractionAttempts:Record<string,number>;
  unlockedShopItems:string[];unlockedSkills:string[];
  appliedRewardRefs:string[];defeatedTargetRefs:string[];completedDailyDays:string[];
@@ -213,7 +218,8 @@ export function newJinwooPreparation(config?:{
   shadowTraceRule:config?.shadowTraceRule??"intact_magic_stone",
   systemLevel:1,xp:0,freeStatPoints:0,stats,
   hp:playerMaxHp(stats),mp:playerMaxMp(stats),fatigue:0,
-  gold:0,valis:0,inventory:{},magicStones:{},shadowRoster:[],extractionAttempts:{},
+  gold:0,valis:0,inventory:{},magicStones:{},dungeonKeys:{},
+  shadowRoster:[],extractionAttempts:{},
   unlockedShopItems:[],unlockedSkills:[],appliedRewardRefs:[],defeatedTargetRefs:[],
   completedDailyDays:[],storyFlags:[],
   falna:{blessed:false,godId:null,divineLevel:0,lastUpdatedRef:null,
