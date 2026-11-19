@@ -4,6 +4,7 @@
  * automatically available to the protagonist or other NPCs.
  */
 import type {LabNpc} from "./engine.ts";
+import {applyDanmachiSocialStressCores} from "./danmachi_social_stress.ts";
 import {selectDanmachiCanonKnowledge} from "./danmachi_canon_knowledge.ts";
 type CharacterRow=[
  id:string,name:string,faction:string,traits:string,goals:string,
@@ -182,5 +183,6 @@ export function buildDanmachiCanonCast():Record<string,LabNpc>{
    };
   }
  }
+ applyDanmachiSocialStressCores(cast);
  return cast;
 }

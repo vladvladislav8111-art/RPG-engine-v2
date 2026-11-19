@@ -19,6 +19,8 @@ export const RPG_LAB_SCENE_REMINDER=[
  "Strict RPG Lab commits require narrationPlan for consequential NPC events and matching session CAS revision.",
  "A read-only preview is NEVER a committed outcome. No invented XP, money, loot, Falna, research progress or offscreen knowledge.",
  "Do not force praise, reconciliation, etiquette or NPC cooperation. Do not force vulgarity in every scene either.",
+ "Character test: curiosity is not trust. Kindness may cause caution, stolen goods may stay stolen; NPCs may leave forever.",
+ "Use witness-bound social stress cores and the actor-specific barriers before granting friendship, secrets, romance, membership or forgiveness.",
  "Narration text remains a creative GM task; deterministic checks verify tagged source consistency, NOT flawless canonical voice.",
 ] as const;
 export function getRpgBridgeGmGuide(){
