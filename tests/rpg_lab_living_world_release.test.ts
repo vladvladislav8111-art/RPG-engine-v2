@@ -525,3 +525,39 @@ test("same-minute player dialogue is not blocked by a due offscreen review",()=>
  assert.throws(()=>applyConfirmedLabEvent(sameTime,pack,
   evt("evt.next","D1 12:01")) ,/LAB_WORLD_PROJECT_REVIEW_REQUIRED/);
 });
+
+test("relayed test results can be discussed as reports, never firsthand proofs",()=>{
+ let session=fresh();
+ session=applyConfirmedLabEvent(session,pack,evt("evt.test_source","D0 09:00",{
+  knownBy:["npc.smith"],
+  observations:[{npcId:"npc.smith",channel:"experienced",
+   perceivedFact:"Witnessed a calibrated 2mm loading test",learnedAt:"D0 09:00",
+   confidence:"certain",salience:"important",privacy:"private"}],
+  worldEvidence:[{factId:"thread.2mm.proof",
+   statement:"Specific thread sample withstood 1500 kgf",
+   scope:"One 2mm sample; no inference about 10mm or future growth",
+   kind:"measured",level:"established",significance:"transformative",
+   method:"Calibrated workshop rig",observedBy:["npc.smith"]}],
+ }));
+ session=applyConfirmedLabEvent(session,pack,evt("evt.test_gossip","D0 10:00",{
+  observations:[{npcId:"npc.loki",channel:"report",sourceActor:"npc.smith",
+   relayedSourceRef:"evt.test_source",
+   perceivedFact:"The smith told me of a calibrated strength test",
+   learnedAt:"D0 10:00",confidence:"likely",salience:"important",privacy:"private"}],
+ }));
+ const brief=buildLabSceneBrief(pack,session,{npcIds:["npc.loki"]});
+ assert.equal(brief.actors[0].knownWorldEvidence[0].factId,"thread.2mm.proof");
+ assert.equal(brief.actors[0].knownWorldEvidence[0].observedPersonally,false);
+ const base={npcIds:["npc.loki"],expectedSessionRevision:12};
+ const heard=reviewLabNarration(pack,session,{...base,beats:[{
+  actorId:"npc.loki",kind:"speech",summary:"The smith told me about a strong thread",
+  factRefs:["evt.test_gossip"],
+  worldClaims:[{factId:"thread.2mm.proof",assertion:"reported"}]}]},12);
+ assert.equal(heard.readyToRender,true);
+ const pretends=reviewLabNarration(pack,session,{...base,beats:[{
+  actorId:"npc.loki",kind:"speech",summary:"I personally verified a calibrated 2mm test",
+  factRefs:["evt.test_gossip"],
+  worldClaims:[{factId:"thread.2mm.proof",assertion:"established"}]}]},12);
+ assert.equal(pretends.readyToRender,false);
+ assert.ok(pretends.failures.some(x=>x.code==="NPC_DIRECT_CONFIRMATION_MISSING"));
+});
