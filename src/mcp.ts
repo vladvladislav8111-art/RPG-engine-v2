@@ -19,6 +19,7 @@ import { WORLD_V3_OPERATIONS, type WorldV3BatchRequest } from "./world_sim_v3/ru
 import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
 import {createLabCampaign,commitLabCampaignEvent,readLabConfirmedEvent,loadLabSessionFromKv} from "./rpg_lab_v1/http.ts";
 import {readLabRoleplayScene,reviewLabRoleplayScene} from "./rpg_lab_v1/roleplay_adapter.ts";
+import {getRpgBridgeGmGuide} from "./rpg_lab_v1/gm_guide.ts";
 import type {LabConfirmedEvent} from "./rpg_lab_v1/events.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import { resolveRoutineAction } from "./routine.ts";
@@ -742,6 +743,20 @@ function buildServer() {
       }catch(error){
         return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_SESSION_AUDIT_FAILED"});
       }
+    },
+  );
+
+  server.registerTool(
+    "rpg_runtime_guide",
+    {
+      title:"RPG Runtime Bridge: GM instruction and tool usage guide",
+      description:"READ ONLY. Return a durable GM-only operating manual listing every supported Legacy/Shura and RPG Lab workflow, exact tool names, boundaries between read/previews/writes, and how to use canon, NPC private memory, strict scene validation and offscreen project continuity. Use at the beginning of a new roleplay conversation, after a context reset, or when unsure which tool to call. This is not proof of any game event.",
+      inputSchema:z.object({}),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async ()=>{
+      try{return toolJson(getRpgBridgeGmGuide());}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_GM_GUIDE_FAILED"});}
     },
   );
 
