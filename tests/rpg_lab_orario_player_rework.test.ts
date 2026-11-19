@@ -74,19 +74,33 @@ test("selling intact stone yields valis once and prevents creating a shadow",()=
   sourceRef:"sale.goblin.again",stoneId:"stone.mob.ore.goblin.2",
   confirmedGuildExchange:true}),/NOT_VERIFIED/);
 });
-test("three extraction failures never provide duplicate attempts or free shadows",()=>{
+test("one failed stone attempt permanently bars extraction; stone can still be sold",()=>{
  let s=monster(classed(),"mob.tough.1",65);
- for(let n=1;n<=3;n++){
-  const r=extractShadowFromMagicStone(s,{sourceRef:"try.tough."+n,
-   stoneId:"stone.mob.tough.1",confirmedShadowCommand:true,roll:100});
-  assert.equal(r.success,false);s=r.next;
- }
+ const failed=extractShadowFromMagicStone(s,{sourceRef:"try.tough.1",
+  stoneId:"stone.mob.tough.1",confirmedShadowCommand:true,roll:100});
+ assert.equal(failed.success,false);s=failed.next;
+ assert.equal(s.extractionAttempts["mob.tough.1"],1);
  assert.equal(s.shadowRoster.length,0);
- const last=extractShadowFromMagicStone(s,{sourceRef:"try.tough.4",
+ const retry=extractShadowFromMagicStone(s,{sourceRef:"try.tough.2",
   stoneId:"stone.mob.tough.1",confirmedShadowCommand:true,roll:1});
- assert.equal(last.reason,"three_attempts_expended");
- assert.equal(last.next,s);
- assert.equal(last.stoneConsumed,false);
+ assert.equal(retry.reason,"attempt_already_spent");
+ assert.equal(retry.next,s);assert.equal(retry.stoneConsumed,false);
+ assert.equal(playerStoneLedger(s)[0].canAttempt,false);
+ const sold=sellConfirmedMagicStone(s,{sourceRef:"sale.failed.tough",
+  stoneId:"stone.mob.tough.1",confirmedGuildExchange:true});
+ assert.equal(sold.valis,120);assert.equal(sold.shadowRoster.length,0);
+});
+test("full Shadow Monarch automatically extracts intact valid stones with no roll",()=>{
+ let s=classed();s.storyFlags.push("quest.ashborn.complete");
+ s=changeJinwooPhase(s,{sourceRef:"evt.succession.1",
+  confirmed:true,to:"true_monarch",qualifyingStoryRef:"quest.ashborn.complete"});
+ s=monster(s,"mob.giant.1",999);
+ const r=extractShadowFromMagicStone(s,{
+  sourceRef:"evt.monarch.stone.1",
+  stoneId:"stone.mob.giant.1",confirmedShadowCommand:true});
+ assert.equal(r.success,true);assert.equal(r.chance,100);
+ assert.equal(r.next.shadowRoster[0].id,"mob.giant.1");
+ assert.equal(r.next.magicStones["stone.mob.giant.1"].state,"consumed_by_shadow");
 });
 test("no shadows before class, and invalid/shattered stones cannot be laundered",()=>{
  const s=monster(newJinwooPreparation(),"mob.early.1",1);
