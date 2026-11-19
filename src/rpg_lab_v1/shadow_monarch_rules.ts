@@ -179,6 +179,8 @@ export const ZERO_FALNA_SCORES:Readonly<JinwooFalnaScores>={
 export interface JinwooState{
  schema:"DANMACHI_JINWOO_PREP_V1";
  phase:JinwooPhase;postAscensionInterface:PostAscensionInterface;
+ /** The selected new campaign begins here, before the first System panel. */
+ awaitingActivation?:boolean;
  shadowTraceRule:ShadowTraceRule;
  systemLevel:number;xp:number;freeStatPoints:number;stats:JinwooStats;
  hp:number;mp:number;fatigue:number;
@@ -206,7 +208,8 @@ export function newJinwooPreparation(config?:{
   throw Error("JINWOO_PHASE_INVALID");
  const stats={...JINWOO_INITIAL_STATS};
  return {schema:"DANMACHI_JINWOO_PREP_V1",
-  phase,postAscensionInterface:config?.postAscensionInterface??"canon_disappears",
+  phase,awaitingActivation:false,
+  postAscensionInterface:config?.postAscensionInterface??"canon_disappears",
   shadowTraceRule:config?.shadowTraceRule??"intact_magic_stone",
   systemLevel:1,xp:0,freeStatPoints:0,stats,
   hp:playerMaxHp(stats),mp:playerMaxMp(stats),fatigue:0,
@@ -216,7 +219,22 @@ export function newJinwooPreparation(config?:{
   falna:{blessed:false,godId:null,divineLevel:0,lastUpdatedRef:null,
    status:{...ZERO_FALNA_SCORES},skills:[]}};
 }
+/** Use this for NEW campaign initialization. No XP/shop before opening System. */
+export function newOrarioPlayerAwakening():JinwooState{
+ const n=newJinwooPreparation();
+ n.awaitingActivation=true;return n;
+}
 const validRef=(x:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(x);
+export function activateOrarioPlayerSystem(s:JinwooState,e:{
+ sourceRef:string;confirmedAwakening:boolean;
+}):JinwooState{
+ requireReward(s,e.sourceRef);
+ if(!s.awaitingActivation||!e.confirmedAwakening)
+  throw Error("JINWOO_AWAKENING_NOT_CONFIRMED");
+ const n=clone(s);
+ n.awaitingActivation=false;
+ n.appliedRewardRefs.push(e.sourceRef);return n;
+}
 function requireReward(s:JinwooState,ref:string){
  if(!validRef(ref)||s.appliedRewardRefs.includes(ref))
   throw Error("JINWOO_REWARD_SOURCE_DUPLICATE_OR_INVALID");
@@ -230,6 +248,7 @@ export function xpToNextLevel(level:number):number{
  return Math.ceil(100*Math.pow(level,1.5));
 }
 function assertPlayerSystem(s:JinwooState){
+ if(s.awaitingActivation)throw Error("JINWOO_SYSTEM_NOT_ACTIVATED");
  if(s.phase==="true_monarch"&&s.postAscensionInterface!=="crossover_persists")
   throw Error("JINWOO_CANON_SYSTEM_REMOVED");
 }
@@ -290,6 +309,7 @@ export function completeJinwooDaily(s:JinwooState,e:{
  n.appliedRewardRefs.push(e.sourceRef);n.freeStatPoints+=3;return n;
 }
 export function shopAvailable(s:JinwooState){
+ if(s.awaitingActivation)return false;
  return s.phase!=="true_monarch"||
   s.postAscensionInterface==="crossover_persists";
 }
