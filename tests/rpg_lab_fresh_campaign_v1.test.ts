@@ -93,7 +93,7 @@ test("reliable hearsay remains a reported belief, not a verified player-known se
   }]
  }));
  session=applyConfirmedLabEvent(session,pack,evt("evt.eina_tells","D0 09:00",{
-  kind:"dialogue",playerFogChanges:[{key:"ruins.mention",expectedRevision:0,
+  kind:"dialogue",playerWitnessed:true,knownBy:["npc.eina"],playerFogChanges:[{key:"ruins.mention",expectedRevision:0,
    label:"Слух о руинах",summary:"Эйна сообщила, что слышала о старых руинах",
    kind:"place",certainty:"rumor",channel:"report",
    sourceNpcId:"npc.eina",sourceMemoryRef:"evt.eina_fact"}]
@@ -288,4 +288,25 @@ test("double-labelled lessons cannot produce two hours of practice in one hour",
     discipline:"Шаги",expectedRevision:0,sessionMinutes:50,passedDrill:true}
   ]
  })),/LAB_STORY_TRAINING_OVERLAPPING_CREDIT/);
+});
+
+test("private NPC memory does not reach player through an unwitnessed fake report",()=>{
+ let session=fresh();
+ session=applyConfirmedLabEvent(session,pack,evt("evt.eina_private","D0 08:10",{
+  knownBy:["npc.eina"],observations:[{
+   npcId:"npc.eina",channel:"seen",perceivedFact:"Eina found a hidden letter",
+   learnedAt:"D0 08:10",confidence:"certain",salience:"important",privacy:"private"
+  }]
+ }));
+ const payload={kind:"dialogue",
+  playerFogChanges:[{key:"eina.hidden_note",expectedRevision:0,
+   label:"Неизвестная записка",summary:"Игрок будто услышал содержание",
+   kind:"fact" as const,certainty:"rumor" as const,channel:"report" as const,
+   sourceNpcId:"npc.eina",sourceMemoryRef:"evt.eina_private"}]};
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,
+  evt("evt.not_really_heard","D0 09:00",payload)),/LAB_FOG_UNVERIFIED_RELAY/);
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,
+  evt("evt.eina_absent","D0 09:00",{...payload,playerWitnessed:true})),
+  /LAB_FOG_UNVERIFIED_RELAY/);
+ assert.equal(readLabPublicFog(session).known.length,0);
 });
