@@ -156,7 +156,8 @@ export function xpToNextLevel(level:number):number{
  return Math.ceil(100*Math.pow(level,1.5));
 }
 function assertPlayerSystem(s:JinwooState){
- if(s.phase==="true_monarch")throw Error("JINWOO_CANON_SYSTEM_REMOVED");
+ if(s.phase==="true_monarch"&&s.postAscensionInterface!=="crossover_persists")
+  throw Error("JINWOO_CANON_SYSTEM_REMOVED");
 }
 export function awardJinwooEncounter(s:JinwooState,e:{
  sourceRef:string;targetRef:string;confirmed:boolean;
