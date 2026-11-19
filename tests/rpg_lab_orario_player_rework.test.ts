@@ -94,7 +94,13 @@ test("full Shadow Monarch automatically extracts intact valid stones with no rol
  let s=classed();s.storyFlags.push("quest.ashborn.complete");
  s=changeJinwooPhase(s,{sourceRef:"evt.succession.1",
   confirmed:true,to:"true_monarch",qualifyingStoryRef:"quest.ashborn.complete"});
- s=monster(s,"mob.giant.1",999);
+ s=addConfirmedMagicStone(s,{
+  sourceRef:"evt.monarch.stone.gift",stoneId:"stone.mob.giant.1",
+  monsterRef:"mob.giant.1",monsterName:"Великан",
+  confirmedLoot:true,intact:true,powerRating:999,powerTier:"marshal",
+  guildValueValis:1000,corruptedMana:false,
+  acquisition:"confirmed_gift",verifiedProvenance:true
+ });
  const r=extractShadowFromMagicStone(s,{
   sourceRef:"evt.monarch.stone.1",
   stoneId:"stone.mob.giant.1",confirmedShadowCommand:true});
