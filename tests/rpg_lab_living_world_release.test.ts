@@ -259,3 +259,18 @@ test("NPC interactions do not manufacture witnesses or leak private information"
  /LAB_NPC_INTERACTION_INVALID/);
  assert.equal(session.events.length,0);
 });
+
+test("an NPC can open their own hidden research project without the player's presence",()=>{
+ const session=applyConfirmedLabEvent(fresh(),pack,evt("evt.materials","D0 09:00",{
+  kind:"world_scene",knownBy:[],
+  worldActions:[{npcId:"npc.smith",action:"chooses to research the samples",
+   outcome:"sets aside a morning testing slot",privacy:"hidden"}],
+  worldProjectChanges:[{projectId:"proj.self.started",expectedRevision:0,
+   record:research("accepted",1,m(0,9),m(1,9))}],
+ }));
+ assert.equal(session.worldProjects!["proj.self.started"].status,"accepted");
+ assert.equal(reviewLabSessionMemory(pack,session,{
+  npcIds:["npc.smith"]}).independentWorldEvents.length,0);
+ assert.equal(reviewLabSessionMemory(pack,session,{
+  npcIds:["npc.smith"],includePrivate:true}).independentWorldEvents.length,1);
+});
