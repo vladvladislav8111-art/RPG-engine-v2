@@ -130,8 +130,10 @@ export function validateLabPack(pack:LabPack):LabPack{
   if(v.faction!==undefined)text(v.faction,80);
   if(v.entryArc!==undefined)ident(v.entryArc);
   if(v.originalCore!==undefined){
-   const c=v.originalCore;
-   if(!safeObj(c)||!v.canonRef.startsWith("original.")||
+   const c=v.originalCore as LabOriginalNpcCore;
+   if(!safeObj(c)||typeof v.canonRef!=="string"||
+      !v.canonRef.startsWith("original.")||
+      typeof c.homeLocationId!=="string"||
       !pack.locations[c.homeLocationId])throw Error("LAB_ORIGINAL_CORE_INVALID");
    for(const f of ["role","publicAppearance","normalSchedule","personalGoal",
     "privateHistory","internalConflict","fear"] as const)text(c[f],500);
