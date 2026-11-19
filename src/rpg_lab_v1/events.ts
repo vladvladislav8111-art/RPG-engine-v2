@@ -532,7 +532,7 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
   next.worldProjects={...(next.worldProjects??{}),
     [change.projectId]:structuredClone(candidate)};
  }
- if(nextMinute!==null){
+ if(nextMinute!==null&&previousMinute!==null&&nextMinute>previousMinute){
   const due=dueLabWorldProjects(session.worldProjects,nextMinute);
   const reviewed=new Set(projectChanges.map(p=>p.projectId));
   if(due.some(p=>!reviewed.has(p.projectId)))
