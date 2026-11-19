@@ -115,14 +115,14 @@ export function validateLabPack(pack:LabPack):LabPack{
  if(pack.canonFacts!==undefined){
   for(const [,fact] of entries(pack.canonFacts,300)){
    if(!safeObj(fact)||!text(fact.summary,450)||
-      !["public","private"].includes(fact.visibility))throw Error("LAB_CANON_FACT_INVALID");
+      typeof fact.visibility!=="string"||!["public","private"].includes(fact.visibility))throw Error("LAB_CANON_FACT_INVALID");
    ident(fact.entryArc);
   }
  }
  for(const [id,v] of entries(pack.npcProfiles,128)){
   ident(id);if(!safeObj(v))throw Error("LAB_NPC_DEF");
   text(v.name,150);ident(v.canonRef);stringList(v.traits,30);stringList(v.goals,20);stringList(v.knownFacts,128);
-  if(pack.canonFacts&&v.knownFacts.some(ref=>!pack.canonFacts?.[ref]))
+  if(pack.canonFacts&&(v.knownFacts as string[]).some(ref=>!pack.canonFacts?.[ref]))
    throw Error("LAB_CANON_NPC_FACT_UNKNOWN:"+id);
   if(v.speechStyle!==undefined)text(v.speechStyle,600);
   if(v.faction!==undefined)text(v.faction,80);
