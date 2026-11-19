@@ -42,7 +42,7 @@ const withMemories=()=>{
 test("70 character identities survive; major DanMachi actors have distinct detailed cores",()=>{
  assert.equal(Object.keys(pack.npcProfiles).length,DANMACHI_STARTING_NPC_COUNT);
  assert.equal(DANMACHI_STARTING_NPC_COUNT,70);
- assert.ok(DANMACHI_DEEP_CORE_COUNT>=45);
+ assert.equal(DANMACHI_DEEP_CORE_COUNT,53);
  const deep=Object.values(pack.npcProfiles).filter(n=>n.deepCore);
  assert.equal(deep.length,DANMACHI_DEEP_CORE_COUNT);
  for(const [id,npc] of Object.entries(pack.npcProfiles)){
@@ -152,4 +152,38 @@ test("topic ranking does not invent a memory and an unknown name remains unresol
  assert.deepEqual(new Set(result.actors.map(x=>x.npcId)),
   new Set(["npc.hermes","npc.asfi"]));
  assert.equal(JSON.stringify(session),old);
+});
+
+test("topic recall ranks direct relevant experience above unrelated recent memories",()=>{
+ let session=withMemories();
+ session=applyConfirmedLabEvent(session,pack,observed(
+  "evt.loki.banquet","D0 09:10","npc.loki",
+  "Локи получила расписание торжественного ужина, свечей и штор"));
+ const all=recallLabNpcPersonalMemories(session,"npc.loki",
+  "Локи, куда ты убрала сломанный меч?",8);
+ assert.deepEqual(all.map(m=>m.sourceRef),
+  ["evt.loki.armor","evt.loki.banquet"]);
+ const top=recallLabNpcPersonalMemories(session,"npc.loki",
+  "Что ты слышала о мече?",1);
+ assert.equal(top[0].sourceRef,"evt.loki.armor");
+ assert.equal(recallLabNpcPersonalMemories(session,"npc.bell",
+  "Ты слышал о мече?",4).length,0);
+});
+test("Syr and Freya remain distinct even when a GM knows their hidden canon connection",()=>{
+ const session=withMemories();
+ const ctx=readLabMentionedNpcCores(pack,session,
+  "Сир рассказала о работе в таверне.");
+ assert.deepEqual(ctx.actors.map(x=>x.npcId),["npc.syr"]);
+ assert.equal(ctx.actors.some(x=>x.npcId==="npc.freya"),false);
+ assert.equal(ctx.actors[0].personalMemories.length,0);
+ assert.equal(ctx.actors[0].privateNotPlayerKnown,true);
+});
+test("memory lookup fails closed on mismatched project or session",async()=>{
+ const session=withMemories();
+ const badLoader=async()=>({pack,session:{...session,sessionId:"different_session"},
+  packRevision:1,sessionRevision:1});
+ await assert.rejects(()=>readLabMentionedNpcDialogue(badLoader,{
+  projectId:pack.projectId,sessionId:session.sessionId,
+  dialogueText:"Локи, расскажи о мече."
+ }),/LAB_ROLEPLAY_SOURCE_MISMATCH/);
 });
