@@ -163,6 +163,8 @@ export interface JinwooShadow{
  id:string;name:string;originRef:string;originalKind:"monster"|"human"|"other";
  powerTier:"common"|"elite"|"knight"|"commander"|"marshal";
  defeatedCount:number;stored:boolean;
+ /** Separate verified shadow experience: does not double award Player XP. */
+ victories?:number;victoryRefs?:string[];
 }
 export interface JinwooMagicStone{
  id:string;monsterRef:string;monsterName:string;kind:"monster";
