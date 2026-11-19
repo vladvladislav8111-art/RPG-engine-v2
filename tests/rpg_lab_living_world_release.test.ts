@@ -685,7 +685,7 @@ test("strict campaign rejects omitted NPCs, missed objections and unmentioned re
    confidence:"certain",salience:"important",privacy:"private"}],
   worldProjectChanges:[{projectId:"proj.heph.thread",expectedRevision:0,
    record:{...research("accepted",1,m(0,10),m(1,10)),
-    originRef:"evt.heph.work",latestEvidenceRef:"evt.heph.work"}}]
+    startedMinute:m(0,10),originRef:"evt.heph.work",latestEvidenceRef:"evt.heph.work"}}]
  });
  const next=accepted.next;
  assert.throws(()=>applyGuardedLabEvent(next,pack,{
