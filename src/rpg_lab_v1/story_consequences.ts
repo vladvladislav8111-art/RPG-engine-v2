@@ -157,7 +157,29 @@ export function applyLabStoryChanges(session:LabSession,pack:LabPack,
    session.events.some(e=>e.sourceRef===ref)||
    Object.values(session.npcs).some(n=>n.memories.some(m=>
     m.sourceRef===ref||m.relayedSourceRef===ref)));
+ // Major canon divergences need actual participants, not a narrator-only tag.
+ const ganeshaNpc=(npcId:string)=>pack.npcProfiles[npcId]?.faction==="ganesha";
+ const witnessedGanesha=(event.observations??[]).some(o=>
+  ganeshaNpc(o.npcId)&&["seen","heard","experienced"].includes(o.channel));
+ const ganeshaBellContact=(event.npcInteractions??[]).some(a=>
+  (ganeshaNpc(a.initiatorNpcId)&&a.recipientNpcId==="npc.bell")||
+  (ganeshaNpc(a.recipientNpcId)&&a.initiatorNpcId==="npc.bell"));
+ const bellAction=(event.worldActions??[]).some(a=>a.npcId==="npc.bell");
  for(const f of flags){
+  if(f?.value===true){
+   if(f.flagId==="silverback.saved_by_player"&&event.playerWitnessed!==true)
+    throw Error("LAB_STORY_PLAYER_RESCUE_NOT_WITNESSED");
+   if(f.flagId==="bell.won_silverback"&&
+     !bellAction&&!(event.observations??[]).some(o=>o.npcId==="npc.bell"))
+    throw Error("LAB_STORY_BELL_VICTORY_NOT_EVIDENCED");
+   if(f.flagId==="ganesha.noticed_bell"&&
+     !witnessedGanesha&&!(event.worldActions??[]).some(a=>ganeshaNpc(a.npcId)))
+    throw Error("LAB_STORY_GANESHA_ATTENTION_NOT_EVIDENCED");
+   if(f.flagId==="ganesha.training_offered"&&!ganeshaBellContact)
+    throw Error("LAB_STORY_GANESHA_OFFER_NOT_DELIVERED");
+   if(f.flagId==="bell.training_accepted"&&!ganeshaBellContact)
+    throw Error("LAB_STORY_BELL_TRAINING_CONSENT_NOT_EVIDENCED");
+  }
   if(!f||!okId(f.flagId)||!revisions(f.expectedRevision)||
    typeof f.value!=="boolean"||!refs(f.evidenceRefs)||!sourceBelongs(f.evidenceRefs))
     throw Error("LAB_STORY_FLAG_EVIDENCE_INVALID");
@@ -197,6 +219,20 @@ export function applyLabStoryChanges(session:LabSession,pack:LabPack,
    revision:change.expectedRevision+1,lastSourceRef:event.sourceRef,
    ...(change.routeId?{routeId:change.routeId}:old?.routeId?{routeId:old.routeId}:{})
   };
+ }
+ // A trainee cannot accumulate two separate ninety-minute technique lessons
+ // during the same ninety-minute elapsed window, even under two labels.
+ const elapsedFrom=timeInMinutes(session.gameClock),elapsedTo=timeInMinutes(event.time);
+ const minutesByTrainee=new Map<string,number>();
+ for(const t of training){
+  const total=(minutesByTrainee.get(t.traineeNpcId)??0)+t.sessionMinutes;
+  minutesByTrainee.set(t.traineeNpcId,total);
+ }
+ if(training.length&&(elapsedFrom===null||elapsedTo===null))
+  throw Error("LAB_STORY_TRAINING_TIME_INSUFFICIENT");
+ for(const total of minutesByTrainee.values()){
+  if(total>elapsedTo!-elapsedFrom!)
+   throw Error("LAB_STORY_TRAINING_OVERLAPPING_CREDIT");
  }
  for(const t of training){
   if(!t||!okId(t.trainingId)||!pack.npcProfiles[t.traineeNpcId]||
