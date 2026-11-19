@@ -15,6 +15,7 @@ export type LabStoryBeatDef={
 export type LabStoryArcDef={
  title:string;era:string;summary:string;canonAnchor:string;
  entryArc?:string;beats:LabStoryBeatDef[];
+ mutuallyExclusiveFlags?:string[][];
 };
 export type LabStoryFlag={value:boolean;sourceRef:string;at:string;revision:number};
 export type LabStoryArcProgress={
@@ -62,6 +63,12 @@ export function validateLabStoryDefs(defs:Record<string,LabStoryArcDef>){
     (def.entryArc!==undefined&&!okId(def.entryArc))||
     !Array.isArray(def.beats)||def.beats.length<1||def.beats.length>20)
     throw Error("LAB_STORY_DEF_INVALID:"+arcId);
+  if(def.mutuallyExclusiveFlags!==undefined&&
+    (!Array.isArray(def.mutuallyExclusiveFlags)||
+      def.mutuallyExclusiveFlags.length>12||
+      def.mutuallyExclusiveFlags.some(group=>!Array.isArray(group)||
+       group.length<2||group.length>8||!group.every(okId))))
+   throw Error("LAB_STORY_EXCLUSIVE_FLAGS_INVALID:"+arcId);
   const beatIds=new Set<string>();
   for(const beat of def.beats){
    if(!beat||!okId(beat.beatId)||beatIds.has(beat.beatId)||
@@ -140,6 +147,12 @@ export function applyLabStoryChanges(session:LabSession,pack:LabPack,
    throw Error("LAB_STORY_FLAG_REVISION_CONFLICT");
   next.flags[f.flagId]={value:f.value,sourceRef:event.sourceRef,
    at:event.time,revision:f.expectedRevision+1};
+ }
+ for(const [arcId,def] of Object.entries(pack.storyArcs??{})){
+  for(const exclusive of def.mutuallyExclusiveFlags??[]){
+   if(exclusive.filter(flagId=>next.flags[flagId]?.value===true).length>1)
+    throw Error("LAB_STORY_MUTUALLY_EXCLUSIVE_CAUSE:"+arcId);
+  }
  }
  for(const change of arcs){
   if(!change||!okId(change.arcId)||!okId(change.beatId)||
