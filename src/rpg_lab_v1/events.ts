@@ -42,6 +42,11 @@ export type LabWorkOrderChange={
  /** Initial registration must cite at least two existing confirmed events. */
  evidenceRefs?:string[];
 };
+export type LabNpcInteraction={
+ initiatorNpcId:string;recipientNpcId:string;action:string;outcome:string;
+ salience:"fleeting"|"ordinary"|"important"|"life_defining";
+ privacy:"private"|"small_group"|"public";witnessNpcIds?:string[];
+};
 export type LabIndependentAction={npcId:string;action:string;outcome:string;
  locationId?:string;privacy:"public"|"hidden"};
 export type LabNpcMoodChange={
@@ -54,6 +59,7 @@ export type LabConfirmedEvent={
  knownBy:string[];observations?:LabNpcObservation[];
  features?:NpcFeatureObservation[];linos?:LabLinosTurn;
  worldActions?:LabIndependentAction[];
+ npcInteractions?:LabNpcInteraction[];
  npcSocial?:LabNpcSocialChange[];
  moodChanges?:LabNpcMoodChange[];
  worldProjectChanges?:LabWorldProjectChange[];
@@ -441,6 +447,56 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
     action:act.action,outcome:act.outcome,privacy:act.privacy,
     ...(act.locationId?{locationId:act.locationId}:{})});
   }
+ }
+ // Confirmed NPC-to-NPC contact is an independent world event, not flavor
+ // revolving around the player. Each participant remembers the interaction,
+ // but no claim made during it is silently converted into objective truth.
+ const interactions=event.npcInteractions??[];
+ if(!Array.isArray(interactions)||interactions.length>12)
+  throw Error("LAB_NPC_INTERACTIONS_INVALID");
+ for(const interaction of interactions){
+  if(!record(interaction)||!good(interaction.initiatorNpcId)||
+      !good(interaction.recipientNpcId)||
+      interaction.initiatorNpcId===interaction.recipientNpcId||
+      !pack.npcProfiles[interaction.initiatorNpcId]||
+      !pack.npcProfiles[interaction.recipientNpcId]||
+      !phrase(interaction.action,160)||!phrase(interaction.outcome,300)||
+      !["private","small_group","public"].includes(interaction.privacy)||
+      !["fleeting","ordinary","important","life_defining"].includes(interaction.salience)||
+      (interaction.witnessNpcIds!==undefined&&
+       (!bounded(interaction.witnessNpcIds,12)||
+        interaction.witnessNpcIds.some(x=>!pack.npcProfiles[x]||
+          !event.knownBy.includes(x)))))
+   throw Error("LAB_NPC_INTERACTION_INVALID");
+  const listeners=new Set([interaction.initiatorNpcId,interaction.recipientNpcId,
+    ...(interaction.witnessNpcIds??[])]);
+  for(const npcId of listeners){
+   const state:LabNpcState=next.npcs[npcId]??{knownFacts:[],memories:[]};
+   if(state.memories.length>=128||state.knownFacts.length>=128)
+    throw Error("LAB_NPC_INTERACTION_MEMORY_FULL");
+   const participant=npcId===interaction.initiatorNpcId||
+    npcId===interaction.recipientNpcId;
+   const text=interaction.action+"; "+interaction.outcome;
+   const memory:LabMemory={
+    sourceRef:event.sourceRef,summary:text,perceivedFact:text,
+    learnedAt:event.time,eventTime:event.time,knownBy:[npcId],
+    channel:participant?"experienced":"heard",confidence:"certain",
+    salience:interaction.salience,privacy:interaction.privacy,
+    sourceActor:interaction.initiatorNpcId,
+    ...(event.locationId?{locationId:event.locationId}:{})
+   };
+   state.memories.push(memory);
+   if(!state.knownFacts.includes(event.sourceRef))
+    state.knownFacts.push(event.sourceRef);
+   next.npcs[npcId]=state;
+  }
+  next.worldEvents??=[];
+  if(next.worldEvents.length>=256)throw Error("LAB_WORLD_JOURNAL_FULL");
+  next.worldEvents.push({sourceRef:event.sourceRef,time:event.time,
+   npcId:interaction.initiatorNpcId,targetNpcId:interaction.recipientNpcId,
+   action:interaction.action,outcome:interaction.outcome,
+   privacy:interaction.privacy==="public"?"public":"hidden",
+   ...(event.locationId?{locationId:event.locationId}:{})});
  }
  next.events.push({sourceRef:event.sourceRef,kind:event.kind,summary:event.summary,
   time:event.time,knownBy:[...event.knownBy],
