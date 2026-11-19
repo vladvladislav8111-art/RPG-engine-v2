@@ -42,6 +42,8 @@ const isDirect=(state:LabNpcState|undefined,ref:string)=>
   ["seen","heard","experienced"].includes(m.channel??""));
 const tone= (profile:LabNpc,state:LabNpcState|undefined,focusKind?:string)=>{
  const cues:string[]=[];
+ for(const tic of profile.voice?.verbalTics??[])cues.push("idiolect:"+tic);
+ for(const m of profile.voice?.mannerisms??[])cues.push("mannerism:"+m);
  const base=[...profile.traits,profile.speechStyle??""].join(" ").toLowerCase();
  if(/teas|jok|irreveren|sarcas|playful|поддраз|язв|шут|пошл/i.test(base))
   cues.push("teasing_or_irreverent_if_motivated");
@@ -197,6 +199,9 @@ export function previewLabLivingWorldCycle(pack:LabPack,
    ownGoal:state?.currentGoal??profile.goals[0]??null,
    emotionalState:state?.mood??null,
    toneCandidates:tone(profile,state,focus?.kind),
+   styleExamples:profile.voice?.sampleLines??[],
+   styleGuardrails:profile.voice?.avoidCaricature??[],
+   habitualDecisionLogic:profile.habitualLogic??null,
    personallyKnownFocusedEvent:focusKnown,significantProofRefs:
     important.map(x=>x.factId),
    relevantMemoryRefs:recent.map(x=>x.sourceRef),
