@@ -27,6 +27,7 @@ export function getRpgBridgeGmGuide(){
    rpgLab:"Separate projectId+sessionId+session revision. Use rpg_lab_read_session/rpg_lab_scene_context/rpg_lab_commit_event. Never use legacy saveId as lab revision.",
   },
   tools:[
+   {name:"rpg_runtime_guide",kind:"READ",use:"This read-only handbook; use after a context reset"},
    {name:"runtime_health",kind:"READ",use:"Check active runtime/save and live availability"},
    {name:"get_turn_context",kind:"READ",use:"Read actual legacy campaign clock, source data, actor gate and blockers"},
    {name:"prepare_turn",kind:"PREVIEW",use:"Prepare legacy turn. Successful prepare does not commit"},
