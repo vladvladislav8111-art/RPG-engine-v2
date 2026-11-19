@@ -2,6 +2,8 @@
  * GM-private: not a spoiler list for the player. Each key is a proposal
  * until explicitly committed with source evidence in the campaign session.
  * Story moves in parallel even when the player is elsewhere.
+ * No invented absolute day offsets: prerequisites and confirmed world events
+ * determine the right phase, not a fabricated fast-forward schedule.
  */
 import type {JinwooState} from "./shadow_monarch_rules.ts";
 export type PlotKeyTrigger="player_proximity"|"world_event"|"personal_contact"|"quest_outcome";
@@ -24,21 +26,21 @@ export const DANMACHI_PLOT_KEYS:readonly PlotKey[]=[
   ["orario.arrival"],["bell","ais","first_minotaur"],["npc.bell","npc.ais"],false),
  key("guild.registration","Возможность регистрации и договорённостей с Гильдией",0,"personal_contact",
   ["orario.arrival"],["guild","eina"],["npc.eina"],false),
- key("monstrophilia","Монстрофилия Ганеши",1,"world_event",
+ key("monstrophilia","Монстрофилия Ганеши",0,"world_event",
   ["orario.arrival"],["ganesha","monstrophilia"],["npc.ganesha","npc.loki","npc.freya"]),
- key("silverback.escape","Побег сильвербека на празднике",1,"world_event",
+ key("silverback.escape","Побег сильвербека на празднике",0,"world_event",
   ["monstrophilia"],["silverback","ganesha","freya"],["npc.ganesha","npc.freya"]),
- key("bell.second_minotaur","Вторая встреча Белла с минотавром",1,"world_event",
+ key("bell.second_minotaur","Вторая встреча Белла с минотавром",0,"world_event",
   ["bell.first_minotaur"],["bell","minotaur_revenge"],["npc.bell","npc.ais"]),
- key("loki.expedition","Очередная экспедиция Семьи Локи",1,"world_event",
+ key("loki.expedition","Очередная экспедиция Семьи Локи",0,"world_event",
   ["orario.arrival"],["loki","expedition"],["npc.finn","npc.riveria","npc.gareth"]),
- key("apollo.wargame","События конфликта с Аполлоном",2,"world_event",
+ key("apollo.wargame","События конфликта с Аполлоном",0,"world_event",
   ["bell.second_minotaur"],["apollo","wargame"],["npc.apollo","npc.hestia"]),
- key("ishtar.haruhime","История квартала удовольствий",3,"world_event",
+ key("ishtar.haruhime","История квартала удовольствий",0,"world_event",
   ["apollo.wargame"],["ishtar","haruhime"],["npc.ishtar"]),
- key("xenos.open","Открытие истории разумных монстров",4,"world_event",
+ key("xenos.open","Открытие истории разумных монстров",0,"world_event",
   ["ishtar.haruhime"],["xenos","wiene"],["npc.ouranos","npc.fels"]),
- key("freyja.late","Поздний конфликт вокруг Фрейи",5,"world_event",
+ key("freyja.late","Поздний конфликт вокруг Фрейи",0,"world_event",
   ["xenos.open"],["freya","syr","late_arc"],["npc.freya","npc.horn"]),
  key("shadow.job_change","Классовое испытание Теневого Монарха",0,"quest_outcome",
   ["player.awakening"],["shadow","job_change","quest"],[]),
