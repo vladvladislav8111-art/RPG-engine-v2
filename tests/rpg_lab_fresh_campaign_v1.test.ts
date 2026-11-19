@@ -236,7 +236,7 @@ test("canon facts are personally scoped and an absurd universal secret is absent
  assert.equal(tsubaki.personallyKnownCanon.some(x=>x.factId==="canon.freya.syr"),false);
  assert.equal(brief.actors.find(x=>x.npcId==="npc.bell")!
   .personallyKnownCanon.some(x=>x.factId==="canon.freya.syr"),false);
- assert.equal(brief.actors.find(x=>x.npcId==="npc.loki")!.voiceIdentity?.verbalTics.length>0,true);
+ assert.equal((brief.actors.find(x=>x.npcId==="npc.loki")!.voiceIdentity?.verbalTics.length??0)>0,true);
 });
 test("contradictory silverback outcomes cannot both be canon even in a single event",()=>{
  const session=fresh();
