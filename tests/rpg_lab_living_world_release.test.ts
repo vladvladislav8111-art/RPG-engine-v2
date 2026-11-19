@@ -501,3 +501,27 @@ test("unparseable or multiweek time cannot bypass an accepted workshop review",(
   evt("evt.weeks","D20 12:00")),/LAB_WORLD_PROJECT_CATCHUP_WINDOW_EXCEEDED/);
  assert.equal(session.gameClock,"D0 09:00");
 });
+
+test("same-minute player dialogue is not blocked by a due offscreen review",()=>{
+ let session=fresh();
+ session=applyConfirmedLabEvent(session,pack,evt("evt.materials","D0 09:00",{
+  knownBy:["npc.smith"],observations:[{npcId:"npc.smith",channel:"seen",
+   perceivedFact:"The smith received samples",learnedAt:"D0 09:00",
+   confidence:"certain",salience:"ordinary",privacy:"private"}],
+  worldProjectChanges:[{projectId:"proj.heph.thread",expectedRevision:0,
+   record:research("accepted",1,m(0,9),m(1,9))}]
+ }));
+ session=applyConfirmedLabEvent(session,pack,evt("evt.up_to_due","D1 09:00",{
+  kind:"world_review",
+  worldActions:[{npcId:"npc.smith",action:"reviewed schedule",
+   outcome:"testing rescheduled",privacy:"hidden"}],
+  worldProjectChanges:[{projectId:"proj.heph.thread",expectedRevision:1,
+   record:research("active",2,m(1,9),m(1,12))}]
+ }));
+ const sameTime=applyConfirmedLabEvent(session,pack,
+  evt("evt.dialogue","D1 09:00",{summary:"A short continuation at the same minute"}));
+ assert.equal(sameTime.gameClock,"D1 09:00");
+ assert.equal(sameTime.worldProjects!["proj.heph.thread"].revision,2);
+ assert.throws(()=>applyConfirmedLabEvent(sameTime,pack,
+  evt("evt.next","D1 12:01")) ,/LAB_WORLD_PROJECT_REVIEW_REQUIRED/);
+});
