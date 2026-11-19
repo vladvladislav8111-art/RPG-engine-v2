@@ -18,7 +18,7 @@ import { intBetween } from "./rng.ts";
 import { WORLD_V3_OPERATIONS, type WorldV3BatchRequest } from "./world_sim_v3/runtime_facade.ts";
 import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
 import {createLabCampaign,commitLabCampaignEvent,readLabConfirmedEvent,loadLabSessionFromKv} from "./rpg_lab_v1/http.ts";
-import {readLabRoleplayScene,reviewLabRoleplayScene} from "./rpg_lab_v1/roleplay_adapter.ts";
+import {readLabRoleplayScene,reviewLabRoleplayScene,readLabRoleplayWorldCycle} from "./rpg_lab_v1/roleplay_adapter.ts";
 import {getRpgBridgeGmGuide} from "./rpg_lab_v1/gm_guide.ts";
 import type {LabConfirmedEvent} from "./rpg_lab_v1/events.ts";
 import { RULESET_VERSION } from "./rules.ts";
@@ -760,6 +760,26 @@ function buildServer() {
     },
   );
 
+  server.registerTool(
+    "rpg_lab_world_cycle",
+    {
+      title:"RPG Lab: source-backed independent NPC world cycle",
+      description:"READ ONLY, GM PRIVATE. Unified NPC situation assessment, autonomous intent, canonical temperament cues, social encounters, owned offscreen research and traceable rumor candidates for the specified actual RPG Lab campaign and game-time window. Returns only proposals and no guaranteed research, NPC speech or rewards. Use before advancing in-world time and during major discoveries. Decisions and outcomes must be adjudicated and committed in rpg_lab_commit_event with source refs and strict narrationPlan.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        npcIds:z.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/)).min(1).max(16),
+        toMinute:z.number().int().min(0).max(1e9),
+        maxPerActor:z.number().int().min(1).max(8).optional(),
+        focusEventRef:z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/).optional(),
+      }),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await readLabRoleplayWorldCycle(loadLabSessionFromKv,input));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_WORLD_CYCLE_FAILED"});}
+    },
+  );
   server.registerTool(
     "rpg_lab_scene_context",
     {
