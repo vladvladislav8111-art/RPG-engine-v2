@@ -19,11 +19,9 @@ test("GM guide distinguishes legacy and RPG Lab tools, read-only vs write",()=>{
   "rpg_lab_read_session","rpg_lab_scene_context","rpg_lab_review_narration",
   "rpg_lab_commit_event","rpg_lab_read_event",
   "render_current_hud","render_system_event"]) {
-  if(expected==="rpg_runtime_guide")continue;
-  // The new tool lists itself as a separate tested public entrypoint.
   assert.equal(names.includes(expected),true,expected);
  }
- assert.equal(names.filter(x=>x==="rpg_runtime_guide").length,0);
+ assert.equal(names.filter(x=>x==="rpg_runtime_guide").length,1);
  assert.equal(x.rpgLabQuickLoop.some(s=>s.includes("narrationPlan")),true);
  assert.equal(x.guardrails.some(s=>s.includes("deployed")),true);
  assert.equal(x.legacySaveTouched,undefined);
