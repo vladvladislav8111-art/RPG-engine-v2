@@ -18,6 +18,7 @@ import { intBetween } from "./rng.ts";
 import { WORLD_V3_OPERATIONS, type WorldV3BatchRequest } from "./world_sim_v3/runtime_facade.ts";
 import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
 import {createLabCampaign,commitLabCampaignEvent,readLabConfirmedEvent,loadLabSessionFromKv} from "./rpg_lab_v1/http.ts";
+import {readLabRoleplayScene,reviewLabRoleplayScene} from "./rpg_lab_v1/roleplay_adapter.ts";
 import type {LabConfirmedEvent} from "./rpg_lab_v1/events.ts";
 import { RULESET_VERSION } from "./rules.ts";
 import { resolveRoutineAction } from "./routine.ts";
@@ -741,6 +742,71 @@ function buildServer() {
       }catch(error){
         return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_SESSION_AUDIT_FAILED"});
       }
+    },
+  );
+
+  server.registerTool(
+    "rpg_lab_scene_context",
+    {
+      title:"RPG Lab: load an NPC scene with private character memories",
+      description:"READ ONLY, GM PRIVATE. Preferred first step BEFORE every meaningful RPG Lab NPC scene. Source-backed per-NPC canon anchors, current mood, remembered conversations, prior refusals, first-sighting cues, ongoing research and individual knowledge. Supports toMinute for offscreen project reviews. Unlike generic world_v3 this requires NO legacy Shura saveId. Never copy NPC private thoughts into player-visible narration.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        npcIds:z.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/)).min(1).max(8),
+        eventRef:z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/).optional(),
+        featureIds:z.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/)).max(24).optional(),
+        maxMemories:z.number().int().min(1).max(24).optional(),
+        toMinute:z.number().int().min(0).max(1e9).optional(),
+      }),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await readLabRoleplayScene(loadLabSessionFromKv,input));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_ROLEPLAY_SCENE_FAILED"});}
+    },
+  );
+  server.registerTool(
+    "rpg_lab_review_narration",
+    {
+      title:"RPG Lab: check a planned NPC scene against saved knowledge",
+      description:"READ ONLY, GM PRIVATE. Check actor beats, sourceRef memories, sighting familiarity, prior stance, claims of measured vs rumored facts, and important scene focus. Use to revise an NPC scene before showing it. Does not generate dialogue or guarantee canonical phrasing. Strict/new campaigns also validate the same structured plan when the confirmed event is committed.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        expectedSessionRevision:z.number().int().min(1),
+        npcIds:z.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/)).min(1).max(8),
+        contextEventRef:z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/).optional(),
+        requiredMemoryRefs:z.array(z.object({
+          npcId:z.string().min(1),sourceRef:z.string().min(1),
+        })).max(16).optional(),
+        beats:z.array(z.object({
+          actorId:z.string().min(1),
+          kind:z.enum(["speech","action","reaction"]),
+          summary:z.string().min(1).max(400),
+          factRefs:z.array(z.string().min(1)).max(16),
+          featureRefs:z.array(z.object({
+            featureId:z.string().min(1),
+            knowledge:z.enum(["seen","heard","either"]),
+          })).max(16).optional(),
+          worldClaims:z.array(z.object({
+            factId:z.string().min(1),
+            assertion:z.enum(["established","tentative","reported"]),
+          })).max(16).optional(),
+          decision:z.object({
+            subjectId:z.string().min(1),
+            stance:z.enum(["accept","refuse","counteroffer","defer",
+              "challenge","withdraw","ignore","approach","confront","cooperate","avoid"]),
+            revision:z.number().int().min(1).optional(),
+          }).optional(),
+          projectId:z.string().min(1).optional(),
+        })).min(1).max(32),
+      }),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await reviewLabRoleplayScene(loadLabSessionFromKv,input));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_NARRATION_REVIEW_FAILED"});}
     },
   );
 
