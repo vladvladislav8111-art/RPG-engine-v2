@@ -204,6 +204,8 @@ export function previewLabLivingWorldCycle(pack:LabPack,
    styleExamples:profile.voice?.sampleLines??[],
    styleGuardrails:profile.voice?.avoidCaricature??[],
    habitualDecisionLogic:profile.habitualLogic??null,
+   acquiredAdaptations:state?.adaptations??{},
+   personalityAnchorsRemainFixed:true,
    personallyKnownFocusedEvent:focusKnown,significantProofRefs:
     important.map(x=>x.factId),
    relevantMemoryRefs:recent.map(x=>x.sourceRef),

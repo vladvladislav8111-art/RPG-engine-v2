@@ -3,6 +3,7 @@
  */
 import type {LabPack,LabJob} from "./engine.ts";
 import {validateLabAmbientRumor,type LabAmbientRumor} from "./ambient_rumors.ts";
+import {validateLabNpcAdaptation,type LabNpcAdaptationState} from "./npc_adaptation.ts";
 import {validateLinosState,type LinosState} from "./linos.ts";
 import {validateFeatureMemory,type NpcFeatureMemory} from "./npc_perception.ts";
 import {validateLabSocialVector,type LabSocialVector} from "./social_dynamics_v2.ts";
@@ -26,6 +27,7 @@ export type LabNpcState={knownFacts:string[];memories:LabMemory[];currentGoal?:s
  relationships?:Record<string,string>;perceptions?:Record<string,NpcFeatureMemory>;
  mood?:LabNpcMood;decisions?:Record<string,LabNpcDecision>;
  socialDynamics?:Record<string,LabSocialVector>;
+ adaptations?:Record<string,LabNpcAdaptationState>;
  locationId?:string;locationSourceRef?:string;};
 /** Explicit commercial commitments. Amounts are ledger facts, NOT cash effects. */
 export type LabWorkOrder={
@@ -154,6 +156,17 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
    for(const [subjectId,decision] of Object.entries(state.decisions)){
     if(subjectId!==decision.subjectId)throw Error("LAB_NPC_DECISION_KEY_MISMATCH");
     validateLabNpcDecision(decision);
+   }
+  }
+  if(state.adaptations!==undefined){
+   if(!map(state.adaptations,8))throw Error("LAB_ADAPTATIONS_MAP_INVALID");
+   const allowed=pack.npcProfiles[npcId].adaptiveAxes??[];
+   for(const [axisId,adapt] of Object.entries(state.adaptations)){
+    if(!allowed.some(axis=>axis.axisId===axisId))
+     throw Error("LAB_ADAPTATION_AXIS_NOT_ALLOWED");
+    validateLabNpcAdaptation(axisId,adapt);
+    if(adapt.evidenceRefs.some(ref=>!state.memories.some(m=>m.sourceRef===ref)))
+     throw Error("LAB_ADAPTATION_MEMORY_MISSING");
    }
   }
   if(state.socialDynamics!==undefined){

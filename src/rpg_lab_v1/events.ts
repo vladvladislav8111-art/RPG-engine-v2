@@ -6,6 +6,7 @@ import {validateLabSession,type LabSession,type LabMemory,type LabNpcState,
  type LabWorkOrder,type LabPlayerFeature} from "./session.ts";
 import type {LabPack} from "./engine.ts";
 import {applyLabAmbientRumorChanges,type LabAmbientRumorChange} from "./ambient_rumors.ts";
+import {evolveLabNpcAdaptation,type LabNpcAdaptationChange} from "./npc_adaptation.ts";
 import {noteNpcFeature,type NpcFeatureObservation} from "./npc_perception.ts";
 import {validateLabWorldEvidence,type LabWorldEvidenceInput} from "./world_evidence.ts";
 import {applyLabFogChanges,type LabFogFactChange,type LabFogAreaChange} from "./fog_of_war.ts";
@@ -85,6 +86,7 @@ export type LabConfirmedEvent={
  socialDynamics?:LabSocialSignal[];
  rumorRelays?:LabRumorRelay[];
  ambientRumorChanges?:LabAmbientRumorChange[];
+ npcAdaptations?:LabNpcAdaptationChange[];
  npcSocial?:LabNpcSocialChange[];
  moodChanges?:LabNpcMoodChange[];
  npcDecisionChanges?:LabNpcDecisionChange[];
@@ -707,6 +709,21 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
     action:act.action,outcome:act.outcome,privacy:act.privacy,
     ...(act.locationId?{locationId:act.locationId}:{})});
   }
+ }
+ const adapt=event.npcAdaptations??[];
+ if(!Array.isArray(adapt)||adapt.length>12||
+  new Set(adapt.map(a=>a.npcId+"|"+a.axisId)).size!==adapt.length)
+  throw Error("LAB_ADAPTATION_BATCH_INVALID");
+ for(const change of adapt){
+  if(!record(change)||!good(change.npcId)||!pack.npcProfiles[change.npcId]||
+     nextMinute===null||!event.knownBy.includes(change.npcId))
+   throw Error("LAB_ADAPTATION_ACTOR_UNKNOWN");
+  const prior=session.npcs[change.npcId]??{knownFacts:[],memories:[]};
+  const observed=next.npcs[change.npcId]??{knownFacts:[],memories:[]};
+  const result=evolveLabNpcAdaptation(
+   pack.npcProfiles[change.npcId],prior,observed,change,event.sourceRef,nextMinute);
+  observed.adaptations={...(observed.adaptations??{}),[change.axisId]:result};
+  next.npcs[change.npcId]=observed;
  }
  const localRumors=applyLabAmbientRumorChanges(session,pack,event);
  if(localRumors!==undefined)next.ambientRumors=localRumors;
