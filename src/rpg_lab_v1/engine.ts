@@ -6,6 +6,7 @@ import {previewDungeonExplore,validateEncounterProfile,validateMonster,type LabE
 import {newLinosState,linosProfile,previewLinosCast,regenerateLinosMp,
  type LinosState,type LinosAbilityRequest} from "./linos.ts";
 import {proposeIndependentWorldAgenda} from "./autonomy.ts";
+import {previewLabLivingWorldCycle} from "./living_world_cycle_v2.ts";
 import {buildLabSceneBrief,dueLabWorldProjects,type LabWorldProject} from "./living_world.ts";
 import type {LabSession} from "./session.ts";
 export type LabResource={min:number;max:number};
@@ -343,10 +344,17 @@ export function evaluateLabJob(pack:LabPack,job:LabJob):unknown{
    const pending=dueLabWorldProjects(a.worldProjects as Record<string,LabWorldProject>|undefined,to);
    const agenda=proposeIndependentWorldAgenda(pack,from,to,a.npcIds??[],
     (a.sessionId as string|undefined)??"preview");
+   const live=a.session as LabSession|undefined;
+   const worldCycle=live&&live.projectId===pack.projectId?
+    previewLabLivingWorldCycle(pack,live,{
+     fromMinute:from,toMinute:to,
+     npcIds:a.npcIds as string[]??[],maxPerActor:1,
+    }):null;
    return {fromMinute:from,toMinute:to,dueProcesses:due,
     dueWorldProjects:pending,unresolvedProjectReviews:pending.map(p=>p.projectId),
     resolutionRequired:pending.length>0||due.length>0||agenda.intents.length>0,
     npcAgenda:agenda.intents,
+    livingWorldCycle:worldCycle,
     eventsResolved:false,npcDecisionsMade:false,worldTimeAdvanced:false,
     proposalsRequireConfirmedWorldEvent:true};
   }
