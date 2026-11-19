@@ -211,6 +211,7 @@ export function withSessionDefaults(jobs:LabJob[],session:LabSession):LabJob[]{
    args.state=session.player.linos;
   if(job.kind==="scene_brief")args.session=session;
   if(job.kind==="world_tick"){
+   args.session=session;
    args.worldProjects=session.worldProjects??{};
    args.discovered=session.discovered;
    args.sessionId=session.sessionId;
