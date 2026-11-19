@@ -93,6 +93,16 @@ test("independent agenda requires personal sources, does not grant success and i
   ...input,signals:[{actorId:"npc.finn",sourceRef:"evt.maxim_return",
    kind:"maxim_appearance"}]}),/SIGNAL_NOT_PERSONALLY_KNOWN/);
 });
+test("late-evening weekly skip still plans future NPC routines without inventing outcomes",()=>{
+ const s=empty();
+ const result=proposeDanmachiNpcIntentCycle(pack,s,{
+  npcIds:["npc.hedin","npc.ottar"],fromMinute:1380,toMinute:1380+10080});
+ assert.ok(result.intents.length>=2);
+ assert.ok(result.intents.every(i=>i.atMinute>1380&&
+   i.atMinute<=1380+10080&&i.kind==="routine"));
+ assert.equal(result.committed,false);
+ assert.equal(s.events.length,0);
+});
 test("Maxim regression: private witness can respond, others must not magically share his return",()=>{
  const s=heard(empty(),"npc.freya","evt.maxim_return");
  heard(s,"npc.ottar","evt.maxim_return");
