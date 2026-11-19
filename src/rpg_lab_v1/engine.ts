@@ -354,7 +354,7 @@ export function evaluateLabJob(pack:LabPack,job:LabJob):unknown{
     dueWorldProjects:pending,unresolvedProjectReviews:pending.map(p=>p.projectId),
     resolutionRequired:pending.length>0||due.length>0||agenda.intents.length>0,
     npcAgenda:agenda.intents,
-    livingWorldCycle:worldCycle,
+    ...(worldCycle?{livingWorldCycle:worldCycle}:{}),
     eventsResolved:false,npcDecisionsMade:false,worldTimeAdvanced:false,
     proposalsRequireConfirmedWorldEvent:true};
   }
