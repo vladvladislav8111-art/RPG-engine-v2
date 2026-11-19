@@ -80,8 +80,11 @@ export async function listLabCampaignInventory(includeArchived=false){
  * their events, compressed chunks, private memories, or linked Drive files.
  */
 export async function archiveLabCampaigns(targets:LabArchiveTarget[],reason:string){
- validateLabArchiveRequest(targets,reason);
  const kv=await storage();
+ return archiveLabCampaignsInKv(kv,targets,reason);
+}
+export async function archiveLabCampaignsInKv(kv:Deno.Kv,targets:LabArchiveTarget[],reason:string){
+ validateLabArchiveRequest(targets,reason);
  let tx=kv.atomic();
  for(const target of targets){
   const key=[ROOT,"sessions",target.projectId,target.sessionId];
