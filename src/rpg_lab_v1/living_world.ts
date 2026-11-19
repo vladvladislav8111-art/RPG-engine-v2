@@ -167,7 +167,10 @@ export function buildLabSceneBrief(pack:LabPack,session:LabSession,req:LabSceneB
     originRef:p.originRef,revision:p.revision}));
   return {npcId,name:identity.name,canonRef:identity.canonRef,
    canonAnchors:identity.traits,canonGoals:identity.goals,
-   speechStyle:identity.speechStyle??null,currentGoal:state?.currentGoal??null,
+   speechStyle:identity.speechStyle??null,
+   voiceIdentity:identity.voice??null,habitualLogic:identity.habitualLogic??null,
+   faction:identity.faction??null,entryArc:identity.entryArc??null,
+   currentGoal:state?.currentGoal??null,
    mood:state?.mood??null,relationships:state?.relationships??{},
    socialDynamics:state?.socialDynamics??{},
    lastConfirmedLocation:state?.locationId??null,
