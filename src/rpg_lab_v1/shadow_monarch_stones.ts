@@ -17,13 +17,24 @@ function gate(s:JinwooState,sourceRef:string){
 export type AcquiredStone={
  sourceRef:string;stoneId:string;monsterRef:string;monsterName:string;
  confirmedLoot:boolean;intact:boolean;powerRating:number;
+ acquisition?:"own_kill"|"confirmed_trade"|"confirmed_gift"|"confirmed_find";
+ verifiedProvenance?:boolean;paidValis?:number;
  powerTier:JinwooShadow["powerTier"];guildValueValis:number;
  corruptedMana:boolean;
 };
 export function addConfirmedMagicStone(s:JinwooState,e:AcquiredStone):JinwooState{
  gate(s,e.sourceRef);
+ const acquisition=e.acquisition??"own_kill";
+ const ownKill=acquisition==="own_kill"&&s.defeatedTargetRefs.includes(e.monsterRef);
+ const external=["confirmed_trade","confirmed_gift","confirmed_find"].includes(acquisition)&&
+  e.verifiedProvenance===true;
+ const paid=e.paidValis??0;
+ if(!ownKill&&!external)throw Error("PLAYER_MAGIC_STONE_PROVENANCE_UNKNOWN");
+ if((acquisition==="confirmed_trade"&&(!Number.isSafeInteger(paid)||paid<0||
+    paid>s.valis))||(acquisition!=="confirmed_trade"&&paid!==0))
+  throw Error("PLAYER_MAGIC_STONE_PAYMENT_INVALID");
  if(!e.confirmedLoot||!e.intact||!valid(e.stoneId)||!valid(e.monsterRef)||
-  !s.defeatedTargetRefs.includes(e.monsterRef)||!e.monsterName.trim()||
+  !e.monsterName.trim()||
   !Number.isSafeInteger(e.powerRating)||e.powerRating<1||e.powerRating>10000||
   !Number.isSafeInteger(e.guildValueValis)||e.guildValueValis<1||
   e.guildValueValis>10000000||!!s.magicStones[e.stoneId]||
@@ -39,6 +50,7 @@ export function addConfirmedMagicStone(s:JinwooState,e:AcquiredStone):JinwooStat
   corruptedMana:e.corruptedMana,intact:true,state:"held",
   collectedRef:e.sourceRef,
  } as JinwooMagicStone;
+ n.valis-=paid;
  n.appliedRewardRefs.push(e.sourceRef);return n;
 }
 export function sellConfirmedMagicStone(s:JinwooState,e:{
