@@ -47,6 +47,9 @@ export function auditDanmachiEraScene(pack:LabPack,session:LabSession,
    throw Error("DANMACHI_AUDIT_ACTOR_UNKNOWN");
   if(b.newTrustWithoutEvent)
    fail(i,b.actorId,"UNSUPPORTED_RELATIONSHIP_FLIP","Trust/forgiveness needs committed cause");
+  if(b.publicIdentityClaim==="horn_sees_souls"&&b.actorId==="npc.horn")
+   fail(i,b.actorId,"CANON_ABILITY_CONTRADICTION",
+    "Horn can impersonate Freya but cannot inherit divine sight of souls");
   if(b.publicIdentityClaim==="npc.freya"&&b.actorId==="npc.horn"){
    // Identity impersonation is plausible, but revelation must not be accidental.
    const knows=actorHasEraFact(session,"npc.horn","freya.horn.syr_secret");
