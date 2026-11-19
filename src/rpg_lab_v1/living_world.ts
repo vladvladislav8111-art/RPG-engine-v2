@@ -170,6 +170,7 @@ export function buildLabSceneBrief(pack:LabPack,session:LabSession,req:LabSceneB
    speechStyle:identity.speechStyle??null,
    voiceIdentity:identity.voice??null,habitualLogic:identity.habitualLogic??null,
    originalCore:identity.originalCore??null,
+   deepCanonCore:identity.deepCore??null,
    adaptiveAxes:identity.adaptiveAxes??[],
    acquiredAdaptations:state?.adaptations??{},
    personalityAnchorsRemainFixed:true,

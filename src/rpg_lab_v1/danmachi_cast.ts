@@ -5,6 +5,7 @@
  */
 import type {LabNpc} from "./engine.ts";
 import {applyDanmachiSocialStressCores} from "./danmachi_social_stress.ts";
+import {applyDanmachiDeepCores} from "./danmachi_deep_cores.ts";
 import {selectDanmachiCanonKnowledge} from "./danmachi_canon_knowledge.ts";
 type CharacterRow=[
  id:string,name:string,faction:string,traits:string,goals:string,
@@ -184,5 +185,6 @@ export function buildDanmachiCanonCast():Record<string,LabNpc>{
   }
  }
  applyDanmachiSocialStressCores(cast);
+ applyDanmachiDeepCores(cast);
  return cast;
 }

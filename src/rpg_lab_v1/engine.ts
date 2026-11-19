@@ -10,6 +10,7 @@ import {previewLabLivingWorldCycle} from "./living_world_cycle_v2.ts";
 import {validateLabStoryDefs,previewLabStoryPaths,type LabStoryArcDef} from "./story_consequences.ts";
 import type {LabCanonFact} from "./danmachi_canon_knowledge.ts";
 import type {LabOriginalNpcCore} from "./original_npc_promotion.ts";
+import type {LabNpcDeepCore} from "./danmachi_deep_cores.ts";
 import {validateLabNpcAdaptiveAxes,type LabNpcAdaptiveAxis} from "./npc_adaptation.ts";
 import {buildLabSceneBrief,dueLabWorldProjects,type LabWorldProject} from "./living_world.ts";
 import type {LabSession} from "./session.ts";
@@ -32,7 +33,8 @@ export type LabNpcLogic={
 export type LabNpc={name:string;canonRef:string;traits:string[];goals:string[];knownFacts:string[];
  speechStyle?:string;responsePatterns?:Record<string,LabResponsePattern[]>;
  voice?:LabNpcVoice;habitualLogic?:LabNpcLogic;entryArc?:string;faction?:string;
- originalCore?:LabOriginalNpcCore;adaptiveAxes?:LabNpcAdaptiveAxis[]};
+ originalCore?:LabOriginalNpcCore;adaptiveAxes?:LabNpcAdaptiveAxis[];
+ deepCore?:LabNpcDeepCore};
 export type LabPack={
  schema:"RPG_LAB_PACK_V1";projectId:string;worldId:string;
  formulas:Record<string,string>;resources:Record<string,LabResource>;
@@ -130,6 +132,14 @@ export function validateLabPack(pack:LabPack):LabPack{
   if(v.speechStyle!==undefined)text(v.speechStyle,600);
   if(v.faction!==undefined)text(v.faction,80);
   if(v.entryArc!==undefined)ident(v.entryArc);
+  if(v.deepCore!==undefined){
+   const d=v.deepCore as LabNpcDeepCore;
+   if(!safeObj(d)||d.sourceKind!=="canon_informed_gm_interpretation")
+    throw Error("LAB_NPC_DEEP_CORE_INVALID");
+   for(const field of ["publicFace","privateDrive","innerTension",
+    "refusalBoundary","failurePattern","offscreenAgenda","trustCondition",
+    "growthMargin","arcGuard"] as const)text(d[field],400);
+  }
   if(v.adaptiveAxes!==undefined)validateLabNpcAdaptiveAxes(v.adaptiveAxes as LabNpcAdaptiveAxis[]);
   if(v.originalCore!==undefined){
    const c=v.originalCore as LabOriginalNpcCore;
