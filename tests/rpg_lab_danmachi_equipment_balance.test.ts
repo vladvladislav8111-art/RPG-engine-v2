@@ -52,6 +52,23 @@ test("only one piece of body armor and one combat weapon can be equipped at once
  assert.throws(()=>previewVerifiedLoadout(s,{
   weaponId:"sword_iron",armorIds:["blade_steel"]}),/WRONG_SLOT|SLOT_COLLISION/);
 });
+test("bow requires arrows and a melee sword cannot amplify a verified magic skill",()=>{
+ let s=purse();
+ s=purchaseJinwooItem(s,{sourceRef:"buy.bow",itemId:"shortbow",quantity:1});
+ assert.throws(()=>previewOwnedEquipmentEncounter(s,{monsterId:"goblin",
+  floor:1,move:"strike",loadout:{weaponId:"shortbow"}}),/AMMUNITION_REQUIRED/);
+ s=purchaseJinwooItem(s,{sourceRef:"buy.arrows",itemId:"arrow_bundle",quantity:1});
+ assert.ok(previewOwnedEquipmentEncounter(s,{monsterId:"goblin",floor:1,
+  move:"strike",loadout:{weaponId:"shortbow"}}).exchange.damageIfHit>0);
+ s=purchaseJinwooItem(s,{sourceRef:"buy.iron",itemId:"sword_iron",quantity:1});
+ s.falna.blessed=true;s.falna.godId="npc.hestia";
+ s.falna.skills.push("firebolt");
+ const bare=previewOwnedEquipmentEncounter(s,{monsterId:"goblin",floor:1,
+  move:"magic",loadout:{},spellMpCost:15});
+ const sword=previewOwnedEquipmentEncounter(s,{monsterId:"goblin",floor:1,
+  move:"magic",loadout:{weaponId:"sword_iron"},spellMpCost:15});
+ assert.equal(bare.exchange.damageIfHit,sword.exchange.damageIfHit);
+});
 test("Knight Killer's effect only helps against armor, never universal armor negation",()=>{
  let s=purse();s.systemLevel=40;
  s=purchaseJinwooItem(s,{sourceRef:"buy.knight",itemId:"knight_killer",quantity:1});
