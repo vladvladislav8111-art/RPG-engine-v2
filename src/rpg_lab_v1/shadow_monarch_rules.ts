@@ -278,7 +278,7 @@ export function awardJinwooEncounter(s:JinwooState,e:{
   n.freeStatPoints+=5;
   // In the System-era, level-up heals HP/MP; scripted trials can disable
   // it at the GM scene layer and therefore must not use this generic grant.
-  n.hp=playerMaxHp(n.stats);n.mp=playerMaxMp(n.stats);
+  n.hp=effectiveJinwooMaxHp(n);n.mp=effectiveJinwooMaxMp(n);
  }
  return n;
 }
@@ -294,8 +294,8 @@ export function allocateJinwooPoints(s:JinwooState,alloc:Partial<JinwooStats>){
  const n=clone(s);
  for(const key of JINWOO_STATS)n.stats[key]+=(alloc[key]??0);
  n.freeStatPoints-=total;
- n.hp=Math.min(n.hp,playerMaxHp(n.stats));
- n.mp=Math.min(n.mp,playerMaxMp(n.stats));
+ n.hp=Math.min(n.hp,effectiveJinwooMaxHp(n));
+ n.mp=Math.min(n.mp,effectiveJinwooMaxMp(n));
  return n;
 }
 export function completeJinwooDaily(s:JinwooState,e:{
