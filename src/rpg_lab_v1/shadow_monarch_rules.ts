@@ -53,6 +53,60 @@ export type ShopEntry={
  source:"canon_concept_adapted_price"|"crossover_only";
  effect:string;
 };
+/** Expanded merchant catalog: every price and level gate is a crossover
+ * convention, not a quotation from the light novel. No pay-to-win omnipotence.
+ */
+const extra=(id:string,name:string,kind:ShopKind,goldPrice:number,
+ minSystemLevel:number,effect:string,unlock=false,unique=false):ShopEntry=>({
+ id,name,kind,goldPrice,minSystemLevel,unique,
+ availability:unlock?"story_unlocked":"routine",source:"crossover_only",effect
+});
+export const JINWOO_STORE_EXTENSIONS:readonly ShopEntry[]=[
+ extra("potion_hp_large","Большое зелье HP","consumable",1500,25,"Восстанавливает 70% HP, если лечебные предметы разрешены условиями боя"),
+ extra("potion_mp_large","Большое зелье MP","consumable",1900,25,"Восстанавливает 70% MP при соблюдении ограничений"),
+ extra("potion_hp_supreme","Высшее зелье HP","consumable",5800,50,"Восстанавливает 95% HP, не воскрешает погибших"),
+ extra("potion_mp_supreme","Высшее зелье MP","consumable",6500,50,"Восстанавливает 95% MP"),
+ extra("potion_fatigue","Тоник от усталости","consumable",420,6,"Уменьшает усталость, не отменяет потребность во сне"),
+ extra("potion_antidote_greater","Сильное противоядие","consumable",1200,20,"Лечит многие сильные обычные яды, не любые божественные эффекты"),
+ extra("ointment_burn","Ожоговая мазь","consumable",150,1,"Первая помощь, не регенерирует утраченные конечности"),
+ extra("wound_dressing","Перевязочный набор","consumable",90,1,"Останавливает неосложнённое кровотечение после применения"),
+ extra("potion_focus","Настой концентрации","consumable",600,12,"Кратковременная концентрация, не даёт новые навыки"),
+ extra("potion_cold_resistance","Эликсир против холода","consumable",1250,18,"Ограниченное сопротивление холоду, не абсолютная защита"),
+ extra("potion_fire_resistance","Эликсир против огня","consumable",1250,18,"Ограниченное сопротивление огню, не абсолютная защита"),
+ extra("blade_training","Учебный меч","weapon",250,1,"Тупой тренировочный клинок"),
+ extra("sword_iron","Железный меч","weapon",1100,1,"Простое оружие, без системных легендарных свойств"),
+ extra("spear_steel","Стальное копьё","weapon",1600,3,"Оружие средней дистанции, требует навыка"),
+ extra("shortbow","Короткий лук","weapon",850,1,"Обычное дистанционное оружие"),
+ extra("arrow_bundle","Колчан стрел","weapon",120,1,"20 простых стрел"),
+ extra("daggers_throwing","Набор метательных ножей","weapon",230,1,"5 ножей без самовосполнения"),
+ extra("dagger_hardened","Усиленный кинжал","weapon",2300,12,"Улучшенная сталь и баланс, не универсальное пробитие брони"),
+ extra("sword_obsidian","Обсидиановый клинок","weapon",7900,28,"Редкое оружие с износом и требованиями"),
+ extra("dagger_shadowbound","Теневой клинок","weapon",18500,42,"Эффект завязан на уже открытые теневые способности",true,true),
+ extra("leather_armor","Кожаный нагрудник","armor",680,1,"Небольшая защита с ограничением подвижности"),
+ extra("chainmail_armor","Кольчуга","armor",2800,12,"Хорошая защита от режущих, вес экипировки учитывается"),
+ extra("steel_shield","Стальной щит","armor",1900,6,"Нужна свободная рука и обучение"),
+ extra("boots_quiet","Мягкие бесшумные сапоги","armor",980,8,"Снижают обычный шум шагов, не гарантируют невидимость"),
+ extra("gloves_grip","Перчатки альпиниста","armor",340,2,"Улучшенное сцепление с поверхностями"),
+ extra("cloak_dark","Тёмный плащ","armor",1100,10,"Помогает скрытности при слабом освещении"),
+ extra("cloak_ember","Плащ защиты от жара","armor",3500,22,"Частичная защита от огня"),
+ extra("necklace_ward","Амулет защиты от магии","armor",12500,40,"Частичная защита от магии, не противодействует аркануму",true,true),
+ extra("rope_coil","Прочная верёвка 20 м","utility",130,1,"Обычная верёвка; изнашивается и рвётся"),
+ extra("torch_bundle","Факелы, 5 шт.","utility",45,1,"Горят ограниченное время"),
+ extra("lamp_crystal","Фонарь с кристаллом","utility",460,4,"Ограниченный ресурс свечения, не бесконечная энергия"),
+ extra("hook_grappling","Абордажный крюк","utility",410,3,"Требует опоры и свободных рук"),
+ extra("chalk_map","Мел и бумага для карты","utility",35,1,"Материалы для ориентирования"),
+ extra("sleeping_kit","Походный спальник","utility",280,1,"Уменьшает бытовые неудобства, не даёт безопасный сон в бою"),
+ extra("tent_light","Лёгкая палатка","utility",750,5,"Для безопасных стоянок, не непробиваемое убежище"),
+ extra("repair_kit","Набор ухода за оружием","utility",260,4,"Уменьшает износ, требует времени и инструментов"),
+ extra("sealing_bag","Защитный мешочек для камней","utility",420,8,"Безопаснее переносить камни, не заменяет хранилище теней"),
+ extra("marking_beacon","Световой маячок","utility",830,14,"Помечает место на ограниченное время, не мгновенный телепорт"),
+ extra("trap_wire","Ловушечная проволока","material",170,6,"Сборка механических ловушек требует труда"),
+ extra("iron_ingot","Слиток очищенного железа","material",190,1,"Материал для мастера, не создаёт оружие сам"),
+ extra("monster_residue","Пустой флакон для эссенции","material",65,1,"Тара для собранного материала, не экстракт монстра"),
+ extra("rune_stealth","Руна Скрытности","rune",7400,25,"После подтверждённого изучения может дать Скрытность",true,true),
+ extra("rune_quicksilver","Руна Ускорения","rune",9200,30,"После подтверждённого изучения может дать Ускорение",true,true),
+ extra("rune_perception","Руна Обострённого восприятия","rune",3900,18,"Временная тренировка восприятия, не автоматическое повышение уровня",true,true),
+];
 export const JINWOO_STORE:readonly ShopEntry[]=[
  {id:"potion_hp_small",name:"Малое зелье HP",kind:"consumable",goldPrice:100,
   minSystemLevel:1,unique:false,availability:"routine",source:"canon_concept_adapted_price",
@@ -81,6 +135,7 @@ export const JINWOO_STORE:readonly ShopEntry[]=[
  {id:"holy_water_recipe",name:"Рецепт Святой воды жизни",kind:"quest",goldPrice:0,
   minSystemLevel:60,unique:true,availability:"story_unlocked",source:"canon_concept_adapted_price",
   effect:"Открывается отдельной сюжетной цепочкой и материалами; не покупается как бесконечное лечение"},
+ ...JINWOO_STORE_EXTENSIONS,
 ];
 export const JINWOO_SPECIAL_REWARDS={
  blessedRandomBox:"Выбор награды из валидного списка по событию, не мгновенно любой предмет.",
