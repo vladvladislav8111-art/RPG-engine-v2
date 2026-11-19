@@ -146,24 +146,20 @@ test("a deceased human can be extracted without a monster core when remains exis
  assert.equal(extracted.success,true);
  assert.equal(extracted.next.shadowRoster[0].originalKind,"human");
 });
-test("Extraction respects three attempts, mana corruption and stronger-than-owner limits",()=>{
+test("ordinary extraction allows one final attempt, no reroll with a new event id",()=>{
  let s=classed();
- for(let i=0;i<3;i++){
-  const r=attemptJinwooShadowExtraction(s,{
-   sourceRef:"evt.try."+i,targetRef:"enemy.strong.1",
-   confirmedDeath:true,originalKind:"monster",name:"Великан",
-   powerTier:"elite",targetPower:"stronger",corpsePresent:true,
-   magicStoneIntact:true,residualImprint:false,corruptedMana:false,
-   minutesSinceDeath:0,roll:100});
-  assert.equal(r.success,false);s=r.next;
- }
- const fourth=attemptJinwooShadowExtraction(s,{
-   sourceRef:"evt.try.4",targetRef:"enemy.strong.1",
-   confirmedDeath:true,originalKind:"monster",name:"Великан",
-   powerTier:"elite",targetPower:"stronger",corpsePresent:true,
-   magicStoneIntact:true,residualImprint:false,corruptedMana:false,
-   minutesSinceDeath:0,roll:1});
- assert.equal(fourth.success,false);assert.equal(fourth.reason,"attempts_exhausted");
+ const request={sourceRef:"evt.try.1",targetRef:"enemy.strong.1",
+  confirmedDeath:true as const,originalKind:"monster" as const,name:"Великан",
+  powerTier:"elite" as const,targetPower:"stronger" as const,corpsePresent:true,
+  magicStoneIntact:true,residualImprint:false,corruptedMana:false,
+  minutesSinceDeath:0,roll:100};
+ const failed=attemptJinwooShadowExtraction(s,request);
+ assert.equal(failed.success,false);s=failed.next;
+ assert.equal(s.extractionAttempts["enemy.strong.1"],1);
+ const again=attemptJinwooShadowExtraction(s,{...request,sourceRef:"evt.try.2",roll:1});
+ assert.equal(again.success,false);
+ assert.equal(again.reason,"attempts_exhausted");
+ assert.equal(again.next,s);
  const demon=attemptJinwooShadowExtraction(classed(),{
    sourceRef:"evt.try.corrupt",targetRef:"enemy.corrupt.1",
    confirmedDeath:true,originalKind:"other",name:"Искажённый",
@@ -171,6 +167,19 @@ test("Extraction respects three attempts, mana corruption and stronger-than-owne
    magicStoneIntact:true,residualImprint:false,corruptedMana:true,
    minutesSinceDeath:0,roll:1});
  assert.equal(demon.reason,"corrupt_mana");
+});
+test("True Monarch extraction has no random failure, even against stronger enemies",()=>{
+ const s=classed();s.storyFlags.push("quest.ashborn.complete");
+ const pure=changeJinwooPhase(s,{sourceRef:"evt.true.no_roll",confirmed:true,
+  to:"true_monarch",qualifyingStoryRef:"quest.ashborn.complete"});
+ const r=attemptJinwooShadowExtraction(pure,{
+  sourceRef:"evt.monarch.extraction",targetRef:"enemy.slayer.1",
+  confirmedDeath:true,originalKind:"monster",name:"Высший зверь",
+  powerTier:"marshal",targetPower:"overwhelming",corpsePresent:true,
+  magicStoneIntact:true,residualImprint:false,corruptedMana:false,
+  minutesSinceDeath:100});
+ assert.equal(r.success,true);assert.equal(r.chance,100);
+ assert.equal(r.next.shadowRoster[0].id,"enemy.slayer.1");
 });
 test("True Monarch's spiritual imprint requires explicitly enabled crossover rule",()=>{
  const s=classed();s.storyFlags.push("quest.ashborn.complete");
