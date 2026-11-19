@@ -45,6 +45,23 @@ const smith:LabNpc={
   limits:["не обещает непроверенных характеристик","откажется от опасной сделки",
    "сохраняет профессиональную дистанцию"]
  },
+ adaptiveAxes:[
+  {axisId:"method.prototype_open",aspect:"method",
+   label:"Готовность испытывать непривычные конструкции",
+   lowerPole:"склонен работать лишь с хорошо известными решениями",
+   upperPole:"готов проводить проверенные испытания новых решений",
+   coreGuard:"Не скрывает дефекты и не выдаёт непроверенное изделие за безопасное"},
+  {axisId:"habit.delegate",aspect:"habit",
+   label:"Делегирование простых задач ученику",
+   lowerPole:"сначала всё делает сам",
+   upperPole:"разрешает ученику выполнять рутинные работы под контролем",
+   coreGuard:"Отвечает за безопасность ученика и результаты работы"},
+  {axisId:"interaction.clients",aspect:"interaction",
+   label:"Манера разговора с постоянными заказчиками",
+   lowerPole:"короткий сухой разговор",
+   upperPole:"говорит немного теплее и подробнее",
+   coreGuard:"Не льстит, не рассказывает секреты и не подчиняется клиенту"}
+ ],
  originalCore:{
   role:"кузнец-ремонтник с небольшой независимой мастерской",
   homeLocationId:"orario.hephaestus",
@@ -135,4 +152,74 @@ test("registered NPC cannot be silently overwritten",()=>{
  const p=previewOriginalNpcPromotion(world,significantHistory(),seed,smith);
  assert.throws(()=>previewOriginalNpcPromotion(p.proposedPack,p.proposedSession,seed,smith),
   /LAB_ORIGINAL_PROMOTION_ALREADY_REGISTERED/);
+});
+
+/** Evidence-bearing events exercise evolution, not unconditional GM prose. */
+const smithObserved=(ref:string,time:string,delta?:-1|1):LabConfirmedEvent=>({
+ sourceRef:ref,time,kind:"npc_independent_choice",gmConfirmed:true,
+ summary:"Ивар оценил результат испытания нестандартного изделия.",
+ knownBy:[smithId],locationId:"orario.hephaestus",
+ observations:[{npcId:smithId,channel:"experienced",
+  perceivedFact:"Ивар лично испытал образец и записал результат",learnedAt:time,
+  confidence:"certain",salience:"important",privacy:"private"}],
+ ...(delta===undefined?{}:{npcAdaptations:[{
+  npcId:smithId,axisId:"method.prototype_open",delta,
+  interpretation:delta===1?
+   "Осторожно расширяет круг технологий для испытаний, сохраняя контроль прочности":
+   "После выявленного дефекта осторожнее относится к очередному эксперименту",
+  evidenceRefs:["evt.ivar.refusal",ref]
+ }]})
+});
+test("smith changes approach over days, never abandons safety or his identity",()=>{
+ const p=previewOriginalNpcPromotion(world,significantHistory(),seed,smith);
+ const pack=p.proposedPack,oldCore=JSON.stringify(pack.npcProfiles[smithId].originalCore);
+ const oldTraits=JSON.stringify(pack.npcProfiles[smithId].traits);
+ let state=p.proposedSession;
+ for(const [ref,time,delta,expected] of [
+  ["evt.smith.test1","D1 11:00",1,1],
+  ["evt.smith.test2","D3 11:00",1,2],
+  ["evt.smith.test3","D7 11:00",1,3],
+  ["evt.smith.fail","D10 11:00",-1,2]
+ ] as const){
+  state=applyConfirmedLabEvent(state,pack,smithObserved(ref,time,delta));
+  assert.equal(state.npcs[smithId].adaptations?.["method.prototype_open"].score,expected);
+ }
+ const ctx=buildLabSceneBrief(pack,state,{npcIds:[smithId]});
+ assert.equal(ctx.actors[0].acquiredAdaptations["method.prototype_open"].score,2);
+ assert.equal(ctx.actors[0].personalityAnchorsRemainFixed,true);
+ assert.equal(JSON.stringify(pack.npcProfiles[smithId].traits),oldTraits);
+ assert.equal(JSON.stringify(pack.npcProfiles[smithId].originalCore),oldCore);
+ assert.equal(state.npcs[smithId].adaptations?.["method.prototype_open"].revision,4);
+ assert.equal(state.npcs[smithId].relationships,undefined);
+ assert.equal(state.npcs[smithId].socialDynamics,undefined);
+ assert.equal(state.playerFog,undefined);
+});
+test("passage of time and an unwitnessed compliment do not evolve a character",()=>{
+ const p=previewOriginalNpcPromotion(world,significantHistory(),seed,smith);
+ const timeOnly=applyConfirmedLabEvent(p.proposedSession,p.proposedPack,{
+  sourceRef:"evt.smith.wait",time:"D2 12:00",kind:"player_turn",
+  summary:"Прошло два дня",knownBy:[],gmConfirmed:true
+ });
+ assert.equal(timeOnly.npcs[smithId].adaptations,undefined);
+ const rumor={...smithObserved("evt.smith.false","D2 14:00",1),knownBy:[]};
+ assert.throws(()=>applyConfirmedLabEvent(p.proposedSession,p.proposedPack,rumor),
+  /LAB_EVENT_NO_DIRECT_WITNESS_EVIDENCE|LAB_ADAPTATION_ACTOR_UNKNOWN/);
+});
+test("unknown core edits, instant flips and unsupported evidence are rejected",()=>{
+ const p=previewOriginalNpcPromotion(world,significantHistory(),seed,smith);
+ const first=smithObserved("evt.smith.firsttest","D1 11:00",1);
+ const leap=structuredClone(first);leap.npcAdaptations![0].delta=3 as 1;
+ assert.throws(()=>applyConfirmedLabEvent(p.proposedSession,p.proposedPack,leap),
+  /LAB_ADAPTATION_CHANGE_INVALID/);
+ const core=structuredClone(first);core.npcAdaptations![0].axisId="values.sell_unsafe_armor";
+ assert.throws(()=>applyConfirmedLabEvent(p.proposedSession,p.proposedPack,core),
+  /LAB_ADAPTATION_AXIS_NOT_ALLOWED/);
+ const early=applyConfirmedLabEvent(p.proposedSession,p.proposedPack,first);
+ assert.throws(()=>applyConfirmedLabEvent(early,p.proposedPack,
+  smithObserved("evt.smith.soon","D1 11:30",1)),
+  /LAB_ADAPTATION_TOO_RAPID/);
+ const unsupported=structuredClone(first);
+ unsupported.npcAdaptations![0].evidenceRefs=["evt.smith.firsttest"];
+ assert.throws(()=>applyConfirmedLabEvent(p.proposedSession,p.proposedPack,unsupported),
+  /LAB_ADAPTATION_CHANGE_INVALID/);
 });
