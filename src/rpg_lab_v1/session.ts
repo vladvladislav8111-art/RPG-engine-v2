@@ -11,6 +11,13 @@ export type LabMemory={sourceRef:string;summary:string;learnedAt:string;knownBy:
   eventTime?:string;locationId?:string;channel?:string;sourceActor?:string;relayedSourceRef?:string;
   confidence?:string;salience?:string;privacy?:string;perceivedFact?:string;
  };
+/** Permanent player-identity cues, NOT automatic awareness in every NPC.
+ * Obvious means potentially perceptible in a scene, not automatically seen.
+ */
+export type LabPlayerFeature={
+ description:string;significance:"routine"|"notable"|"transformative";
+ visibility:"obvious"|"conditional";revision:number;lastUpdatedRef:string;
+};
 export type LabNpcState={knownFacts:string[];memories:LabMemory[];currentGoal?:string;relationships?:Record<string,string>;perceptions?:Record<string,NpcFeatureMemory>;mood?:LabNpcMood;decisions?:Record<string,LabNpcDecision>};
 /** Explicit commercial commitments. Amounts are ledger facts, NOT cash effects. */
 export type LabWorkOrder={
@@ -23,7 +30,7 @@ export type LabWorkOrder={
 };
 export type LabSession={
  schema:"RPG_LAB_SESSION_V1";projectId:string;sessionId:string;gameClock:string;
- player:{resources:Record<string,number>;stats:Record<string,number>;inventory:Record<string,number>;locationId?:string;linos?:LinosState;workOrders?:Record<string,LabWorkOrder>};
+ player:{resources:Record<string,number>;stats:Record<string,number>;inventory:Record<string,number>;locationId?:string;linos?:LinosState;workOrders?:Record<string,LabWorkOrder>;visibleFeatures?:Record<string,LabPlayerFeature>};
  discovered:string[];npcs:Record<string,LabNpcState>;worldProjects?:Record<string,LabWorldProject>;worldEvidence?:Record<string,LabWorldEvidence>;
  events:{sourceRef:string;summary:string;time:string;knownBy:string[];locationId?:string;kind?:string}[];
  worldEvents?:{sourceRef:string;time:string;npcId:string;targetNpcId?:string;action:string;outcome:string;locationId?:string;privacy:"public"|"hidden"}[];
@@ -45,6 +52,17 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
  if(JSON.stringify(s).length>LAB_SESSION_MAX_TEXT_UNITS)
   throw Error("LAB_SESSION_SIZE_LIMIT");
  if(!s.player||!map(s.player.resources,128)||!map(s.player.stats,128)||!map(s.player.inventory,500))throw Error("LAB_SESSION_PLAYER_INVALID");
+ if(s.player.visibleFeatures!==undefined){
+  if(!map(s.player.visibleFeatures,48))throw Error("LAB_PLAYER_FEATURES_INVALID");
+  for(const [featureId,feature] of Object.entries(s.player.visibleFeatures)){
+   if(!id(featureId)||!feature||!txt(feature.description,280)||
+     !["routine","notable","transformative"].includes(feature.significance)||
+     !["obvious","conditional"].includes(feature.visibility)||
+     !Number.isSafeInteger(feature.revision)||feature.revision<1||feature.revision>10000||
+     !id(feature.lastUpdatedRef))
+     throw Error("LAB_PLAYER_FEATURE_INVALID:"+featureId);
+  }
+ }
  if(s.player.workOrders!==undefined){
   if(!map(s.player.workOrders,60))throw Error("LAB_WORKORDER_MAP_INVALID");
   for(const [orderId,order] of Object.entries(s.player.workOrders)){
