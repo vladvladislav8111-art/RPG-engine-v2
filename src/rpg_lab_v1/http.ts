@@ -235,6 +235,22 @@ export async function readLabConfirmedEvent(projectId:string,sessionId:string,so
 export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
  try{
   const kv=await storage(),path=url.pathname;
+  if(path==="/rpg-lab/v1/campaigns"&&req.method==="GET")
+   return reply(await listLabCampaignInventory(url.searchParams.get("includeArchived")==="true"));
+  if(path==="/rpg-lab/v1/campaigns/archive"&&req.method==="POST"){
+   const body=await limited(req);
+   if(!obj(body)||body.confirm!=="ARCHIVE_RPG_LAB_ONLY"||
+     !Array.isArray(body.targets)||typeof body.reason!=="string")
+    throw Error("LAB_ARCHIVE_EXPLICIT_CONFIRMATION_REQUIRED");
+   return reply(await archiveLabCampaigns(body.targets as LabArchiveTarget[],body.reason));
+  }
+  if(path==="/rpg-lab/v1/danmachi/starter"&&req.method==="POST"){
+   const body=await limited(req);
+   if(!obj(body)||body.confirm!=="INSTALL_NEW_DANMACHI_WORLD"||
+      typeof body.projectId!=="string")
+    throw Error("LAB_WORLD_INSTALL_CONFIRMATION_REQUIRED");
+   return reply(await installFreshDanmachiWorld(body.projectId));
+  }
   if(path==="/rpg-lab/v1/google/service-account"&&req.method==="GET")
    return reply({email:config.google.email,role:"reader",sharingInstruction:"Share only the desired project folder with this service account"});
   if(path==="/rpg-lab/v1/projects"&&req.method==="GET"){
@@ -281,8 +297,11 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    const packEntry=await kv.get<LabStored>(keyOf(projectId));
    if(!packEntry.value)return reply({error:"LAB_PROJECT_NOT_FOUND"},404);
    for await(const e of kv.list<LabSessionStored>({prefix:[ROOT,"sessions",projectId]},{limit:100})){
+    const marker=await kv.get<LabArchiveMarker>(archivedLabKey(projectId,String(e.key[3])));
+    if(marker.value&&url.searchParams.get("includeArchived")!=="true")continue;
     sessions.push({sessionId:e.value.sessionId??e.value.session?.sessionId,revision:e.value.revision,
-     gameClock:e.value.gameClock??e.value.session?.gameClock,updatedAt:e.value.updatedAt});
+     gameClock:e.value.gameClock??e.value.session?.gameClock,updatedAt:e.value.updatedAt,
+     archived:Boolean(marker.value)});
    }
    return reply({schema:"RPG_LAB_SESSION_INDEX_V1",projectId,sessions});
   }
@@ -294,6 +313,8 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    if(!storedPack.value)return reply({error:"LAB_PROJECT_NOT_FOUND"},404);
    const record=await kv.get<LabSessionStored>([ROOT,"sessions",projectId,sessionId]);
    if(!record.value)return reply({error:"LAB_SESSION_NOT_FOUND"},404);
+   if((await kv.get(archivedLabKey(projectId,sessionId))).value)
+    return reply({error:"LAB_CAMPAIGN_ARCHIVED"},409);
    const pack=await decodeLabPack(storedPack.value);
    const session=await decodeLabSessionFromKv(kv,projectId,sessionId,record.value,pack);
    const ids=url.searchParams.get("npcIds");
@@ -330,6 +351,8 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    if(!packEntry.value)return reply({error:"LAB_PROJECT_NOT_FOUND"},404);
    const sessionKey=[ROOT,"sessions",projectId,sessionId];
    const current=await kv.get<LabSessionStored>(sessionKey);
+   if((await kv.get(archivedLabKey(projectId,sessionId))).value)
+    return reply({error:"LAB_CAMPAIGN_ARCHIVED"},409);
    if(req.method==="GET"){
     if(!current.value)return reply({error:"LAB_SESSION_NOT_FOUND"},404);
     return reply({schema:"RPG_LAB_SESSION_STORED_V1",revision:current.value.revision,updatedAt:current.value.updatedAt,
