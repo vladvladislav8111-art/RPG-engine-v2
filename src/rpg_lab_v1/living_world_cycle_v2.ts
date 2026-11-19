@@ -57,6 +57,27 @@ const tone= (profile:LabNpc,state:LabNpcState|undefined,focusKind?:string)=>{
  if(cues.length===0)cues.push("follow_canon_traits_without_assuming_politeness");
  return cues.slice(0,8);
 };
+/** The same deterministic NPC coverage set is used by the reader and the
+ * strict time-advance gate. This never decides an outcome or mutates NPCs.
+ */
+export function requiredLabWorldCycleActors(
+ session:LabSession,toMinute:number,max=12
+){
+ if(!Number.isSafeInteger(toMinute)||toMinute<0||toMinute>1e9||
+   !Number.isInteger(max)||max<1||max>16)
+  throw Error("LAB_WORLD_CYCLE_ACTOR_QUERY_INVALID");
+ const due=dueLabWorldProjects(session.worldProjects,toMinute);
+ const dueOwners=due.map(p=>p.ownerNpcId);
+ const ranked=Object.entries(session.npcs).map(([npcId,s])=>{
+  const projects=Object.values(session.worldProjects??{}).filter(p=>
+   p.ownerNpcId===npcId&&["accepted","active","blocked"].includes(p.status)).length;
+  return {npcId,score:projects*8+(s.currentGoal?2:0)+
+   (s.mood?3:0)+Object.keys(s.decisions??{}).length+
+   Object.keys(s.socialDynamics??{}).length};
+ }).sort((a,b)=>b.score-a.score||a.npcId.localeCompare(b.npcId))
+ .map(x=>x.npcId);
+ return [...new Set([...dueOwners,...ranked])].slice(0,max);
+}
 export type LabCycleRequest={
  npcIds:string[];fromMinute:number;toMinute:number;
  focusEventRef?:string;maxPerActor?:number;
@@ -236,6 +257,9 @@ export function previewLabLivingWorldCycle(pack:LabPack,
    contacts.length>0||rumors.length>0,
   committed:false,readOnly:true,gmOnly:true,notPlayerVisible:true,
   generatedFacts:false,automaticRelationshipsChanged:false,
+  suggestedCycleReviewActors:requiredLabWorldCycleActors(session,req.toMinute),
+  longTimeAdvanceNeedsReview:req.toMinute-req.fromMinute>=720&&
+   requiredLabWorldCycleActors(session,req.toMinute).length>0,
   noOffscreenWorkerRunning:true,
   note:"All six systems offer source-bounded possibilities. Neither intentions nor rumors nor research results are automatically facts."};
 }
