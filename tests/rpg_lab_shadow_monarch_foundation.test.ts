@@ -46,6 +46,8 @@ test("confirmed monster kill grants System XP once, including shadow kills; no F
  assert.equal(s.gold,160);assert.equal(s.xp,0);
  assert.equal(s.falna.divineLevel,0);
  assert.throws(()=>awardJinwooEncounter(s,e),/DUPLICATE/);
+ assert.throws(()=>awardJinwooEncounter(s,{...e,sourceRef:"kill.goblin.rewritten"}),/UNCONFIRMED/,
+  "Changing the sourceRef cannot re-award XP from a defeated target");
  assert.throws(()=>awardJinwooEncounter(old,{...e,confirmed:false}),/UNCONFIRMED/);
  assert.throws(()=>awardJinwooEncounter(old,{...e,isNewDefeat:false}),/UNCONFIRMED/);
  const shadow=awardJinwooEncounter(old,{...e,killer:"shadow",sourceRef:"kill.goblin.2",
