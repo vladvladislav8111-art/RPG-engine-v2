@@ -38,6 +38,14 @@
 - Loki can show canonical impudence without narrator-enforced chastity or automatic flirtation in every scene.
 - A private argument between two NPCs can be committed without the player even being in the same room; its participants retain the memory, other NPCs do not.
 
+## Persistent protagonist identity and unusual appearance
+
+- The \`LabSession.player.visibleFeatures\` registry stores player-approved, revisioned identity cues (e.g., Daedalus's visible halo and clockwork eyes). It does **not** mean any NPC has seen them.
+- Register or update cues only using a sourced \`character_setup\`, \`continuity_repair\`, or player-authorized \`player_turn\` with \`playerFeatureChanges\` and matching \`expectedRevision\`. Removing a feature is explicit and source-backed; narration cannot quietly erase it after 30 turns.
+- Every GM-only scene brief automatically includes **obvious** cues as potential first sightings, even when the NPC has no previous feature memory. Hidden/conditional forms require explicit visibility context.
+- Commit a witnessed \`features\` observation for each NPC actually seeing the cue. Only then may narration assert firsthand familiarity, and focus-event reviews can require acknowledging a remarkable first sight.
+- Do not interpret the candidate cue as proof of visibility through walls, disguises, darkness or absence. GM must adjudicate actual line-of-sight and context.
+
 ## Scoped proofs, including unsupported claims
 
 - \`worldEvidence\` is saved per explicit event and has \`kind\` (observed/measured/reported/hypothesis), \`level\` (established/provisional/unverified), \`scope\`, witness list and optional test \`method\`.
