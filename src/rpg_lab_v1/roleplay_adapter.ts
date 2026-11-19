@@ -11,6 +11,9 @@ import {previewLabStoryPaths} from "./story_consequences.ts";
 import {readLabPublicFog} from "./fog_of_war.ts";
 import {reviewLabNarration,type LabNarrativeReviewRequest} from "./narrative_guard.ts";
 import type {LabPack} from "./engine.ts";
+import {readDanmachiEraNpcContext} from "./danmachi_era_cores_v2.ts";
+import {proposeDanmachiNpcIntentCycle,type DanmachiActorSignal} from "./danmachi_intentions_v2.ts";
+import {auditDanmachiEraScene,type DanmachiNarrativeBeat} from "./danmachi_scene_audit_v2.ts";
 import {RPG_LAB_SCENE_REMINDER,RPG_BRIDGE_GM_GUIDE_VERSION} from "./gm_guide.ts";
 import type {LabSession} from "./session.ts";
 
@@ -33,6 +36,7 @@ export type LabRoleplaySceneRequest={
  projectId:string;sessionId:string;npcIds?:string[];
  eventRef?:string;featureIds?:string[];maxMemories?:number;
  toMinute?:number;dialogueText?:string;
+ danmachiSignals?:DanmachiActorSignal[];
 };
 export async function readLabRoleplayScene(load:LabRoleplayLoader,
  request:LabRoleplaySceneRequest){
@@ -78,6 +82,13 @@ export async function readLabRoleplayScene(load:LabRoleplayLoader,
     dialogueRelevantPersonalMemories:dialogueMemories,
     dialogueLookupDoesNotProveWitnessing:true}:{}),
   livingWorldCycle:worldCycle,
+  ...(s.pack.worldId==="danmachi.orario"?{
+   danmachiEraContext:readDanmachiEraNpcContext(s.pack,s.session,npcIds,
+     request.dialogueText??""),
+   danmachiNpcIntents:from===null?null:proposeDanmachiNpcIntentCycle(
+    s.pack,s.session,{npcIds,fromMinute:from,toMinute:to??from,
+     signals:request.danmachiSignals??[]}),
+  }:{}),
   storyRoutes:previewLabStoryPaths(s.pack,s.session),
   playerKnownSummary:{knownFacts:Object.keys(s.session.playerFog?.entries??{}).length,
    exploredAreas:Object.keys(s.session.playerFog?.areas??{}).length},
@@ -114,11 +125,17 @@ export async function readLabRoleplayWorldCycle(load:LabRoleplayLoader,
   fromMinute:from,toMinute:request.toMinute,npcIds:request.npcIds,
   focusEventRef:request.focusEventRef,maxPerActor:request.maxPerActor,
  });
- return {...cycle,packRevision:s.packRevision,
+ return {...cycle,
+   ...(s.pack.worldId==="danmachi.orario"?{
+    danmachiNpcIntents:proposeDanmachiNpcIntentCycle(s.pack,s.session,{
+     npcIds:request.npcIds,fromMinute:from,toMinute:request.toMinute})
+   }:{}),
+   packRevision:s.packRevision,
   sessionRevision:s.sessionRevision,sourceAttestedBySave:true};
 }
 export type LabRoleplayNarrationRequest=LabNarrativeReviewRequest&{
  projectId:string;sessionId:string;
+ danmachiAuditBeats?:DanmachiNarrativeBeat[];
 };
 export async function reviewLabRoleplayScene(load:LabRoleplayLoader,
  request:LabRoleplayNarrationRequest){
@@ -128,7 +145,12 @@ export async function reviewLabRoleplayScene(load:LabRoleplayLoader,
   beats:request.beats,contextEventRef:request.contextEventRef,
   requiredMemoryRefs:request.requiredMemoryRefs,
  },s.sessionRevision);
- return {...reviewed,packRevision:s.packRevision};
+ const eraAudit=request.danmachiAuditBeats===undefined?null:
+  auditDanmachiEraScene(s.pack,s.session,request.danmachiAuditBeats);
+ return {...reviewed,
+  ...(eraAudit?{danmachiEraAudit:eraAudit,
+   readyToRender:reviewed.readyToRender&&eraAudit.readyToRender}:{}),
+  packRevision:s.packRevision};
 }
 
 /** Private read-only tool: choose profiles from a dialogue without pretending
@@ -143,6 +165,10 @@ export async function readLabMentionedNpcDialogue(load:LabRoleplayLoader,
  const s=await loadExact(load,request.projectId,request.sessionId);
  const selection=readLabMentionedNpcCores(s.pack,s.session,
   request.dialogueText,request.maxActors??8,request.maxMemories??8);
- return {...selection,packRevision:s.packRevision,
+ return {...selection,
+  ...(s.pack.worldId==="danmachi.orario"?{
+   danmachiEraContext:readDanmachiEraNpcContext(s.pack,s.session,
+    selection.actors.map(x=>x.npcId),request.dialogueText)}:{}),
+  packRevision:s.packRevision,
   sessionRevision:s.sessionRevision,sourceAttestedBySave:true};
 }
