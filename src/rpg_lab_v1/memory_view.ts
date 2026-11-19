@@ -58,7 +58,8 @@ export function reviewLabSessionMemory(pack:LabPack,session:LabSession,req:LabMe
   npcSummaries:report,
   independentWorldEvents:(session.worldEvents??[]).filter(x=>
    (includePrivate||x.privacy==="public")&&
-   npcIds.includes(x.npcId)&&(!needle||x.action.toLowerCase().includes(needle)||
+   (npcIds.includes(x.npcId)||(x.targetNpcId!==undefined&&npcIds.includes(x.targetNpcId)))&&
+   (!needle||x.action.toLowerCase().includes(needle)||
     x.outcome.toLowerCase().includes(needle))).slice(-32),
   notes:"Subjective perceptions, hearsay and goal proposals are not objective canon. Features require direct sightings to increase habituation."};
 }
