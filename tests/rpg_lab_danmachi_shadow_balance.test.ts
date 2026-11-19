@@ -62,7 +62,7 @@ test("a verified shadow kill progresses its rank once and never duplicates Syste
   const targetRef="enemy.confirmed."+i;
   s=awardJinwooEncounter(s,{sourceRef:"evt.mob.kill."+i,
    targetRef,confirmed:true,xp:3,systemGold:1,killer:"shadow",
-   isNewDefeat:true,gmThreatRated:true});
+   shadowId:"mob.goblin.shadow.1",isNewDefeat:true,gmThreatRated:true});
   s=recordShadowVerifiedVictory(s,{
    sourceRef:"evt.shadow.victory."+i,
    shadowId:"mob.goblin.shadow.1",targetRef,
@@ -87,7 +87,8 @@ test("low-value enemies cannot count toward shadow promotion merely for existing
  const s=army();
  const k=awardJinwooEncounter(s,{sourceRef:"evt.weak.kill",
   targetRef:"enemy.weak",confirmed:true,xp:0,systemGold:0,
-  killer:"shadow",isNewDefeat:true,gmThreatRated:true});
+  killer:"shadow",shadowId:"mob.goblin.shadow.1",
+  isNewDefeat:true,gmThreatRated:true});
  assert.throws(()=>recordShadowVerifiedVictory(k,{
   sourceRef:"evt.shadow.weak",shadowId:"mob.goblin.shadow.1",
   targetRef:"enemy.weak",contributedToConfirmedKill:true,
