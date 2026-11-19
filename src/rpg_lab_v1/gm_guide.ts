@@ -19,7 +19,7 @@ export const RPG_LAB_SCENE_REMINDER=[
  "Read danmachiEraContext per actor; never share Finn/Riveria's future Xenos experience or Ottar's personal Maxim memories with another character.",
  "DanmachiNpcIntents are source-linked proposals, not automatic offscreen results. Resolve via personal evidence, GM event commit and a persistent worldProject/decision.",
  "Tag important canon claims and relation changes in danmachiAuditBeats; rejected leaks/unsaved outcomes require revision before narration.",
- "When testing Maxim's return, treat his lack of soul as test-scene evidence only, not global early-canon reality."
+ "When testing Maxim's return, treat his lack of soul as test-scene evidence only, not global early-canon reality.",
  "Bell's rescued Silverback route can lead to Ganesha training, but an invitation is NOT technique; actual timed, coached drills raise it. Falna XP still needs battles.",
  "An NPC's verbal tics and dialogue samples are style examples, not mandatory quotes; vary tone with scene and mood.",
  "Strict RPG Lab commits require narrationPlan for consequential NPC events and matching session CAS revision.",
