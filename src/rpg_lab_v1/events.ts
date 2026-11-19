@@ -5,6 +5,7 @@
 import {validateLabSession,type LabSession,type LabMemory,type LabNpcState,type LabWorkOrder} from "./session.ts";
 import type {LabPack} from "./engine.ts";
 import {noteNpcFeature,type NpcFeatureObservation} from "./npc_perception.ts";
+import {validateLabWorldEvidence,type LabWorldEvidenceInput} from "./world_evidence.ts";
 import {dueLabWorldProjects,allowedLabProjectTransition,validateLabNpcMood,validateLabWorldProject,
  validateLabNpcDecision,type LabNpcMood,type LabNpcDecision,type LabNpcDecisionStance,
  type LabWorldProject} from "./living_world.ts";
@@ -69,6 +70,7 @@ export type LabConfirmedEvent={
  moodChanges?:LabNpcMoodChange[];
  npcDecisionChanges?:LabNpcDecisionChange[];
  worldProjectChanges?:LabWorldProjectChange[];
+ worldEvidence?:LabWorldEvidenceInput[];
  workOrderChanges?:LabWorkOrderChange[];
  discovered?:string[];playerLocationId?:string;
  effects?:{resources?:Record<string,number>;inventory?:Record<string,number>};
@@ -303,6 +305,30 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
    action:interaction.action,outcome:interaction.outcome,
    privacy:interaction.privacy==="public"?"public":"hidden",
    ...(event.locationId?{locationId:event.locationId}:{})});
+ }
+ // World-level evidence is scoped: two 2mm tested strands do not prove
+ // a claimed 10mm capacity, nor does a breastplate test prove damage to gods.
+ const evidence=event.worldEvidence??[];
+ if(!Array.isArray(evidence)||evidence.length>24||
+   new Set(evidence.map(x=>x.factId)).size!==evidence.length)
+  throw Error("LAB_WORLD_EVIDENCE_BATCH_INVALID");
+ for(const input of evidence){
+  if(!record(input)||!good(input.factId)||
+     next.worldEvidence?.[input.factId])
+   throw Error("LAB_WORLD_EVIDENCE_DUPLICATE_OR_BAD_ID");
+  const fact=validateLabWorldEvidence({...input,sourceRef:event.sourceRef});
+  if(fact.observedBy.some(npcId=>!event.knownBy.includes(npcId)||
+    !observations.some(o=>o.npcId===npcId&&
+     ["seen","heard","experienced"].includes(o.channel))))
+   throw Error("LAB_WORLD_EVIDENCE_OBSERVER_NOT_ESTABLISHED");
+  if(fact.locationId!==undefined&&!pack.locations[fact.locationId])
+   throw Error("LAB_WORLD_EVIDENCE_LOCATION_UNKNOWN");
+  if(fact.supersedesFactId!==undefined&&
+     (!session.worldEvidence?.[fact.supersedesFactId]||
+      fact.supersedesFactId===fact.factId))
+   throw Error("LAB_WORLD_EVIDENCE_SUPERSEDED_SOURCE_UNKNOWN");
+  next.worldEvidence={...(next.worldEvidence??{}),
+   [fact.factId]:fact};
  }
  // Interpretations and current objectives are updated only from the NPC's own
  // confirmed memories. This does not alter immutable canonical personality.
