@@ -8,6 +8,7 @@ import {reviewLabSessionMemory,type LabMemoryViewRequest} from "./memory_view.ts
 import {withSessionDefaults,type LabSession} from "./session.ts";
 import {buildLabSceneBrief} from "./living_world.ts";
 import {narrativeMinute} from "./events.ts";
+import {reviewLabNarration,type LabNarrativeReviewRequest} from "./narrative_guard.ts";
 export type LabPackLoader=(projectId:string,expectedRevision?:number)=>Promise<{pack:LabPack;revision:number}>;
 export type LabSourceLoader=(projectId:string)=>Promise<GoogleSourceIndex>;
 export type LabSessionLoader=(projectId:string,sessionId:string)=>Promise<{
@@ -20,6 +21,25 @@ export async function hydrateLabBridgeRequest(req:WorldV3BatchRequest,load:LabPa
  const jobs=[];
  for(const job of req.jobs){
   const payload=job.payload;
+  // The draft must be checked against the actual saved campaign at a known
+  // revision; narrator-provided or cross-campaign memory cannot authorize it.
+  if(job.operation==="world_review"&&record(payload)&&record(payload.rpgLabNarrationV1)){
+   if(Object.keys(payload).length!==1||!loadSession)
+    throw Error("LAB_NARRATION_BRIDGE_ENVELOPE");
+   const spec=payload.rpgLabNarrationV1;
+   if(typeof spec.projectId!=="string"||!projectId.test(spec.projectId)||
+      typeof spec.sessionId!=="string"||!projectId.test(spec.sessionId))
+    throw Error("LAB_NARRATION_BRIDGE_REF_INVALID");
+   const loaded=await loadSession(spec.projectId,spec.sessionId);
+   if(loaded.pack.projectId!==spec.projectId||
+      loaded.session.projectId!==spec.projectId||
+      loaded.session.sessionId!==spec.sessionId)
+    throw Error("LAB_NARRATION_BRIDGE_PROJECT_MISMATCH");
+   const checked=reviewLabNarration(loaded.pack,loaded.session,
+    spec as LabNarrativeReviewRequest,loaded.sessionRevision);
+   jobs.push({...job,payload:{rpgLabNarrationResolvedV1:checked}});
+   continue;
+  }
   // Bounded GM-only roleplay state for an existing RPG Lab session.
   // Neither scene reaction nor private knowledge is generated from caller prose.
   if(job.operation==="world_review"&&record(payload)&&record(payload.rpgLabSceneV1)){
