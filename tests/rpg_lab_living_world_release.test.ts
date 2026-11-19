@@ -7,6 +7,7 @@ import {buildLabSceneBrief,dueLabWorldProjects,type LabWorldProject} from "../sr
 import {reviewLabSessionMemory} from "../src/rpg_lab_v1/memory_view.ts";
 import {hydrateLabBridgeRequest} from "../src/rpg_lab_v1/bridge.ts";
 import {dispatchWorldV3Batch,type WorldV3BatchRequest} from "../src/world_sim_v3/runtime_facade.ts";
+import {reviewLabNarration} from "../src/rpg_lab_v1/narrative_guard.ts";
 
 const pack:LabPack={
  schema:"RPG_LAB_PACK_V1",projectId:"orario_living_world",worldId:"danmachi.orario",
@@ -305,4 +306,60 @@ test("NPC decisions have separate durable topic history and require their own ev
  }));
  assert.equal(session.npcs["npc.loki"].decisions?.["bete.trust"].revision,2);
  assert.equal(session.npcs["npc.loki"].decisions?.["bete.trust"].stance,"counteroffer");
+});
+
+test("narrator guard rejects borrowed knowledge, unearned stance and missed relevant memory",async()=>{
+ let session=fresh();
+ session=applyConfirmedLabEvent(session,pack,evt("evt.rifle.scene","D0 09:00",{
+  knownBy:["npc.finn"],
+  observations:[{npcId:"npc.finn",channel:"seen",
+   perceivedFact:"Projectile pierced an iron chestplate",
+   learnedAt:"D0 09:00",confidence:"certain",salience:"important",privacy:"private"}],
+ }));
+ const input={npcIds:["npc.loki","npc.finn"],expectedSessionRevision:7,
+  requiredMemoryRefs:[{npcId:"npc.finn",sourceRef:"evt.rifle.scene"}],
+  beats:[{actorId:"npc.loki",kind:"speech" as const,
+   summary:"Loki incorrectly knows Finn's witnessed armor test",
+   factRefs:["evt.rifle.scene"],decision:{subjectId:"rifle.invention",stance:"accept" as const}}]};
+ const broken=reviewLabNarration(pack,session,input,7);
+ assert.equal(broken.readyToRender,false);
+ assert.ok(broken.failures.some(x=>x.code==="NPC_NOT_PERSONALLY_INFORMED"));
+ assert.ok(broken.failures.some(x=>x.code==="NPC_DECISION_NOT_COMMITTED"));
+ assert.ok(broken.failures.some(x=>x.code==="RELEVANT_MEMORY_OMITTED"));
+ const good=reviewLabNarration(pack,session,{...input,beats:[
+  {actorId:"npc.finn",kind:"speech" as const,
+   summary:"Acknowledges observed plate penetration, does not assert velocity",
+   factRefs:["evt.rifle.scene"]}]},7);
+ assert.equal(good.readyToRender,true);
+ assert.equal(good.narrativeTextSemanticsVerified,false);
+ assert.throws(()=>reviewLabNarration(pack,session,input,8),
+  /LAB_NARRATIVE_REVIEW_SOURCE_INVALID/);
+ const request:WorldV3BatchRequest={expectedSaveId:"TEST-SAVE",jobs:[{
+  id:"narration",operation:"world_review",payload:{rpgLabNarrationV1:{
+   projectId:pack.projectId,sessionId:session.sessionId,...input,
+  }}
+ }]};
+ const hydrated=await hydrateLabBridgeRequest(request,
+  async()=>{throw Error("wrong loader")},undefined,
+  async()=>({pack,packRevision:2,session,sessionRevision:7}));
+ const outcome=dispatchWorldV3Batch(hydrated,"TEST-SAVE").results[0].result;
+ assert.equal(outcome.ok,true);
+ if(!outcome.ok)throw Error("guard failed");
+ assert.equal((outcome.value as {readyToRender:boolean}).readyToRender,false);
+});
+test("narrator guard denies made-up feature familiarity and unrelated project ownership",()=>{
+ let session=fresh();
+ session=applyConfirmedLabEvent(session,pack,evt("evt.halo","D0 09:00",{
+  knownBy:["npc.loki"],features:[{npcId:"npc.loki",featureId:"daedalus.halo",
+   channel:"seen",privacy:"private"}],
+ }));
+ const result=reviewLabNarration(pack,session,{
+  npcIds:["npc.loki","npc.bete"],expectedSessionRevision:1,
+  beats:[{actorId:"npc.bete",kind:"reaction",summary:"Bete claims to know the halo",
+   factRefs:[],featureRefs:[{featureId:"daedalus.halo",knowledge:"seen"}],
+   projectId:"proj.heph.thread"}]
+ },1);
+ assert.equal(result.readyToRender,false);
+ assert.ok(result.failures.some(x=>x.code==="NPC_FEATURE_KNOWLEDGE_MISSING"));
+ assert.ok(result.failures.some(x=>x.code==="NPC_NOT_PROJECT_OWNER"));
 });
