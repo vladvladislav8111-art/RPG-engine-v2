@@ -93,6 +93,27 @@ export function previewShadowOrder(s:JinwooState,e:{
   needsConfirmedTravelAndCombatEvents:true,storedArmyUnchanged:true,
   noContinuousManaUpkeep:true,readOnly:true};
 }
+/** A player-approved deployment or recall updates the roster only;
+ * it NEVER simulates a victory, mission completion or NPC observation.
+ */
+export function setShadowDeployment(s:JinwooState,e:{
+ sourceRef:string;shadowId:string;command:"deploy"|"recall";
+ confirmedPlayerOrder:boolean;
+}):JinwooState{
+ if(!e.confirmedPlayerOrder||!valid(e.sourceRef)||
+  s.appliedRewardRefs.includes(e.sourceRef)||
+  s.phase==="player_system"||
+  !s.unlockedSkills.includes("shadow_extraction"))
+  throw Error("BALANCE_SHADOW_DEPLOYMENT_NOT_CONFIRMED");
+ const sh=s.shadowRoster.find(x=>x.id===e.shadowId);
+ if(!sh||(e.command==="deploy"&&!sh.stored)||
+  (e.command==="recall"&&sh.stored))
+  throw Error("BALANCE_SHADOW_DEPLOYMENT_STATE_INVALID");
+ const n=structuredClone(s);
+ n.shadowRoster.find(x=>x.id===e.shadowId)!.stored=e.command==="recall";
+ n.appliedRewardRefs.push(e.sourceRef);
+ return n;
+}
 export function recordShadowVerifiedVictory(s:JinwooState,e:{
  sourceRef:string;shadowId:string;targetRef:string;
  contributedToConfirmedKill:boolean;confirmedChallengeWorthXp:boolean;
@@ -105,6 +126,7 @@ export function recordShadowVerifiedVictory(s:JinwooState,e:{
   throw Error("BALANCE_SHADOW_VICTORY_NOT_CONFIRMED");
  const sh=s.shadowRoster.find(x=>x.id===e.shadowId);
  if(!sh)throw Error("BALANCE_SHADOW_NOT_OWNED");
+ if(sh.stored)throw Error("BALANCE_SHADOW_NOT_DEPLOYED");
  if((sh.victoryRefs??[]).includes(e.targetRef))
   throw Error("BALANCE_SHADOW_DUPLICATE_VICTORY");
  const n=structuredClone(s);
