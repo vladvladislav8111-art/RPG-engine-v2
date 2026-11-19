@@ -276,7 +276,7 @@ export function awardJinwooEncounter(s:JinwooState,e:{
   !["player","shadow"].includes(e.killer))
   throw Error("JINWOO_UNCONFIRMED_XP_OR_KILL");
  if(e.killer==="shadow"&&
-  (!e.shadowId||!s.shadowRoster.some(sh=>sh.id===e.shadowId)||
+  (!e.shadowId||!s.shadowRoster.some(sh=>sh.id===e.shadowId&&!sh.stored)||
    s.phase==="player_system"))
   throw Error("JINWOO_SHADOW_KILL_NOT_OWNED");
  if(e.killer==="player"&&e.shadowId!==undefined)
