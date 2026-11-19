@@ -5,6 +5,7 @@
 import {validateLabPack,type LabPack} from "./engine.ts";
 import {buildDanmachiCanonCast} from "./danmachi_cast.ts";
 import {buildDanmachiStoryArcs} from "./danmachi_story_arcs.ts";
+import {danmachiCanonFacts} from "./danmachi_canon_knowledge.ts";
 const loc=(name:string,kind:string,neighbors:Record<string,number>={})=>
  ({name,kind,neighbors});
 export const DANMACHI_STARTER_VERSION="DANMACHI_FRESH_WORLD_V1";
@@ -22,7 +23,6 @@ export function buildFreshDanmachiLabPack(projectId:string):LabPack{
   "orario.hestia.church":loc("Заброшенная церковь","familia",{"orario.plaza":15}),
   "orario.ganesha":loc("Резиденция семьи Ганеши","familia",{"orario.plaza":15}),
   "orario.monsterphilia":loc("Арена Монстрофилии","arena",{"orario.plaza":12}),
-  "orario.fog.plaza":loc("Район тумана близ площади","district",{"orario.plaza":18}),
   "orario.dungeon.gate":loc("Вход в Подземелье","dungeon",{"orario.guild":20}),
   "orario.dungeon.upper":loc("Верхние этажи Подземелья","dungeon",{"orario.dungeon.gate":6}),
   "orario.dungeon.middle":loc("Средние этажи Подземелья","dungeon",{"orario.dungeon.upper":18}),
@@ -34,6 +34,7 @@ export function buildFreshDanmachiLabPack(projectId:string):LabPack{
   formulas:{},resources:{hp:{min:0,max:100},mp:{min:0,max:100},
    stamina:{min:0,max:100}},lootTables:{},prices:{},economy:{taxRate:0},
   locations,npcProfiles:buildDanmachiCanonCast(),
+  canonFacts:structuredClone(danmachiCanonFacts),
   storyArcs:buildDanmachiStoryArcs(),
   progression:{}
  };
