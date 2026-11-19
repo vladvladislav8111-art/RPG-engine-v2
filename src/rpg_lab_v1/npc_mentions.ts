@@ -337,6 +337,14 @@ export type LabMentionLookup={
 const norm=(v:string)=>v.normalize("NFD").replace(/\p{M}/gu,"")
  .toLocaleLowerCase("ru-RU").replace(/\s+/gu," ").trim();
 const word=(v:string)=>/[\p{L}\p{N}_]/u.test(v);
+/** 'вина' is also a common Russian noun. A lower-case noun must not
+ * accidentally summon the character Вина in the GM selection.
+ * This is lookup disambiguation only, not an in-world inference.
+ */
+const commonWordNames=new Set(["вина"]);
+const visiblyNamed=(source:string,alias:string)=>
+ alias!=="вина"||/(?:^|[^\p{L}])Ви\u0301?на(?=$|[^\p{L}])/u.test(source);
+
 type Candidate={npcId:string;name:string;alias:string;kind:LabMentionHit["matchKind"];strength:number};
 type Span=Candidate&{start:number;end:number};
 function candidates(pack:LabPack):Candidate[]{
@@ -373,6 +381,8 @@ export function findLabNpcMentions(pack:LabPack,dialogue:string,max=8){
  const text=norm(dialogue);
  const spans:Span[]=[];
  for(const alias of candidates(pack)){
+  if(commonWordNames.has(alias.alias)&&!visiblyNamed(dialogue,alias.alias))
+   continue;
   let at=0;
   while((at=text.indexOf(alias.alias,at))!==-1){
    const end=at+alias.alias.length;
