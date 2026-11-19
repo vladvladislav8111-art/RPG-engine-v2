@@ -170,6 +170,17 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
  }
  return s;
 }
+/** The direct snapshot writer predates strict RPG Lab. It remains available
+ * only for legacy sessions; guarded sessions must use the event CAS path.
+ */
+export function assertLabDirectSessionPutAllowed(
+ previous:LabSession|null,candidate:LabSession){
+ if(previous?.roleplayGuard==="strict")
+  throw Error("LAB_STRICT_SESSION_PUT_FORBIDDEN");
+ if(candidate.roleplayGuard==="strict")
+  throw Error("LAB_STRICT_SESSION_CREATE_OR_UPGRADE_FORBIDDEN");
+ return true;
+}
 /** Fill convenient read-only inputs from a known session; never silently alter the snapshot. */
 export function withSessionDefaults(jobs:LabJob[],session:LabSession):LabJob[]{
  return jobs.map(job=>{
