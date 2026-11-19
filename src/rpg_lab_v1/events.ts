@@ -105,6 +105,17 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
  const previousMinute=narrativeMinute(session.gameClock),nextMinute=narrativeMinute(event.time);
  if(previousMinute!==null&&nextMinute!==null&&nextMinute<previousMinute)
   throw Error("LAB_EVENT_CLOCK_REGRESSION");
+ // Once persistent world work exists, every future clock advance must be
+ // comparable. An opaque date cannot silently bypass the due-review gate.
+ if(Object.values(session.worldProjects??{}).some(p=>
+    ["accepted","active","blocked"].includes(p.status))){
+   if(previousMinute===null||nextMinute===null)
+    throw Error("LAB_WORLD_PROJECT_CLOCK_COMPARABILITY_REQUIRED");
+   if(nextMinute-previousMinute>10080&&
+      Object.values(session.worldProjects??{}).some(p=>
+       p.nextReviewMinute!==undefined&&p.nextReviewMinute<=nextMinute))
+    throw Error("LAB_WORLD_PROJECT_CATCHUP_WINDOW_EXCEEDED");
+ }
  if(session.events.some(e=>e.sourceRef===event.sourceRef))throw Error("LAB_EVENT_ALREADY_APPLIED");
  if(session.events.length>=256)throw Error("LAB_EVENT_JOURNAL_FULL");
  if(new Set(event.knownBy).size!==event.knownBy.length||event.knownBy.some(k=>!pack.npcProfiles[k]))
