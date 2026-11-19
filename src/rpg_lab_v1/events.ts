@@ -6,7 +6,8 @@ import {validateLabSession,type LabSession,type LabMemory,type LabNpcState,type 
 import type {LabPack} from "./engine.ts";
 import {noteNpcFeature,type NpcFeatureObservation} from "./npc_perception.ts";
 import {dueLabWorldProjects,allowedLabProjectTransition,validateLabNpcMood,validateLabWorldProject,
- type LabNpcMood,type LabWorldProject} from "./living_world.ts";
+ validateLabNpcDecision,type LabNpcMood,type LabNpcDecision,type LabNpcDecisionStance,
+ type LabWorldProject} from "./living_world.ts";
 import {newLinosState,validateLinosState,LINOS_RANKS,
  resolveLinosCast,regenerateLinosMp,type LinosAbilityRequest,type LinosState,type LinosScores,
  type LinosRank,type LinosSkill} from "./linos.ts";
@@ -49,6 +50,10 @@ export type LabNpcInteraction={
 };
 export type LabIndependentAction={npcId:string;action:string;outcome:string;
  locationId?:string;privacy:"public"|"hidden"};
+export type LabNpcDecisionChange={
+ npcId:string;subjectId:string;stance:LabNpcDecisionStance;reason:string;
+ evidenceRefs:string[];privacy:"public"|"private";nextReviewMinute?:number;
+};
 export type LabNpcMoodChange={
  npcId:string;evidenceRefs:string[];
  mood:null|{label:string;intensity:number;settleAfterMinute?:number;context?:string};
@@ -62,6 +67,7 @@ export type LabConfirmedEvent={
  npcInteractions?:LabNpcInteraction[];
  npcSocial?:LabNpcSocialChange[];
  moodChanges?:LabNpcMoodChange[];
+ npcDecisionChanges?:LabNpcDecisionChange[];
  worldProjectChanges?:LabWorldProjectChange[];
  workOrderChanges?:LabWorkOrderChange[];
  discovered?:string[];playerLocationId?:string;
@@ -407,6 +413,36 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
    const m:LabNpcMood={...change.mood,causeRef:event.sourceRef,sinceMinute:nextMinute};
    state.mood=validateLabNpcMood(m);
   }
+  next.npcs[change.npcId]=state;
+ }
+ // Decisions survive interruptions, apologies and narration resets. They may be
+ // revised only by another source-linked decision from the same NPC.
+ const decisions=event.npcDecisionChanges??[];
+ if(!Array.isArray(decisions)||decisions.length>24||
+  new Set(decisions.map(d=>d.npcId+"|"+d.subjectId)).size!==decisions.length)
+  throw Error("LAB_NPC_DECISION_BATCH_INVALID");
+ for(const change of decisions){
+  if(!record(change)||!good(change.npcId)||!pack.npcProfiles[change.npcId]||
+      !good(change.subjectId)||!phrase(change.reason,320)||
+      !bounded(change.evidenceRefs,12)||change.evidenceRefs.length<1||
+      !["public","private"].includes(change.privacy)||nextMinute===null)
+   throw Error("LAB_NPC_DECISION_CHANGE_INVALID");
+  const state:LabNpcState=next.npcs[change.npcId]??{knownFacts:[],memories:[]};
+  const ownAction=event.worldActions?.some(a=>a.npcId===change.npcId)===true;
+  if(!change.evidenceRefs.every(ref=>state.memories.some(m=>m.sourceRef===ref)||
+     (ref===event.sourceRef&&ownAction)))
+   throw Error("LAB_NPC_DECISION_UNVERIFIED_EVIDENCE");
+  const old=state.decisions?.[change.subjectId];
+  if(!old&&Object.keys(state.decisions??{}).length>=32)
+   throw Error("LAB_NPC_DECISION_LIMIT");
+  const decision:LabNpcDecision={
+   subjectId:change.subjectId,stance:change.stance,reason:change.reason,
+   sourceRef:event.sourceRef,madeAtMinute:nextMinute,
+   revision:(old?.revision??0)+1,privacy:change.privacy,
+   ...(change.nextReviewMinute!==undefined?{nextReviewMinute:change.nextReviewMinute}:{})
+  };
+  state.decisions={...(state.decisions??{}),
+   [change.subjectId]:validateLabNpcDecision(decision)};
   next.npcs[change.npcId]=state;
  }
  // Stateful NPC/faction work. Nothing advances in the background simply because
