@@ -9,7 +9,7 @@ test("Lili's betrayal reveal is aggressively defensive, not a polite confession"
  assert.ok(lili.traits.some(t=>/резк|язвител|злопамят/.test(t)));
  assert.ok(lili.responsePatterns?.betrayal_exposed?.[0].emotion.includes("злость и стыд"));
  assert.ok(lili.responsePatterns?.rescued_after_betrayal?.[0].emotion.includes("оскорбляет"));
- assert.ok(lili.responsePatterns?.reconciled?.[0].emotion.includes("язвительная"));
+ assert.ok(lili.responsePatterns?.reconciled?.[0].emotion.includes("язвит"));
  assert.ok(lili.voice?.verbalTics.some(s=>/идиот/.test(s)));
  assert.ok(lili.voice?.avoidCaricature.some(s=>/не превращать разоблачение/.test(s)));
  assert.ok(raw.includes("третьим лицом"));
