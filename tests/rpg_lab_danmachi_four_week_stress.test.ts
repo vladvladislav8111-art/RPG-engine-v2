@@ -37,7 +37,7 @@ test("one-month narrative: witnesses, reports, secrecy and independent actions d
  assert.ok(s.npcs["npc.hestia"].memories.some(x=>x.relayedSourceRef==="evt.bell.minotaur"));
  assert.equal(s.npcs["npc.eina"],undefined);
 
- const family=["npc.freya","npc.ottar","npc.allen","npc.hedin","npc.horn"];
+ const family=["npc.ottar","npc.allen","npc.hedin","npc.horn","npc.hogni"];
  s=add(s,event("evt.san.assault","D2 12:00","assault",
   "Незнакомец атаковал владения Фрейи и без тяжёлых травм удерживал бойцов в воздухе",
   family));
@@ -63,7 +63,8 @@ test("one-month narrative: witnesses, reports, secrecy and independent actions d
   "Незнакомец ушёл, Фрейя не смогла объяснить ситуацию",family));
  s=add(s,event("evt.letter.one","D9 00:10","unknown_letter",
   "В стену ворот прилетел первый металлический штырь",["npc.ottar","npc.hedin"]));
- assert.equal(s.npcs["npc.freya"].memories.some(x=>x.sourceRef==="evt.letter.one"),false);
+ assert.equal(s.npcs["npc.freya"],undefined,
+  "The real Freya was absent from San's assault and did not see the letter");
 
  const agenda=proposeDanmachiNpcIntentCycle(pack,s,{
   npcIds:["npc.ottar","npc.hedin","npc.freya"],
