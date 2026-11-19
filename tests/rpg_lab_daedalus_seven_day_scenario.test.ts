@@ -242,30 +242,26 @@ function runScenario(){
   worldProjectChanges:[{projectId:"heph.application",expectedRevision:2,
    record:blocked}],
  }));
+ // Building communication equipment is a confirmed player accomplishment,
+ // not evidence any NPC saw it or that long-range transmission was tested.
  commit(evt("evt.communication","D5 13:00",{
-  locationId:"manor",knownBy:["npc.finn","npc.riveria","npc.lefiya"],
-  observations:[
-   observation("npc.finn","Saw Daedalus assemble a communication apparatus; range not measured",
-    "D5 13:00"),
-   observation("npc.riveria","Observed assembled device with magic-stone components",
-    "D5 13:00"),
-   observation("npc.lefiya","Observed a completed communications prototype",
-    "D5 13:00")
-  ],
-  worldEvidence:[{factId:"device.communication.prototype",kind:"observed",
-   level:"established",statement:"Communication apparatus has been assembled",
-   scope:"Existence of prototype only; working range and reliability not measured",
-   significance:"notable",
-   observedBy:["npc.finn","npc.riveria","npc.lefiya"]}],
+  locationId:"manor",
+  summary:"Daedalus assembled communication equipment in private; range and reliability untested",
+ }));
+ // Assembly of the AWP-type rifle takes place in Daedalus's own room;
+ // the test witnesses are established only at the later range event.
+ commit(evt("evt.awp_assembled","D6 12:00",{
+  locationId:"manor",
+  summary:"Daedalus completed AWP-like long rifle in a private room",
  }));
  commit(evt("evt.awp","D6 15:00",{
-  locationId:"range",knownBy:["npc.finn","npc.tiona","npc.bete"],
+  locationId:"range",knownBy:["npc.tiona","npc.tione","npc.instructor"],
   observations:[
-   observation("npc.finn","Witnessed long rifle penetrate an iron breastplate at 100m",
+   observation("npc.tiona","Saw AWP-type rifle perforate both sides of an iron breastplate",
     "D6 15:00"),
-   observation("npc.tiona","Saw AWP-type rifle perforate both sides of iron breastplate",
+   observation("npc.tione","Witnessed a single long-rifle shot pass through iron plate",
     "D6 15:00"),
-   observation("npc.bete","Saw weapon penetrate iron breastplate with a single shot",
+   observation("npc.instructor","Witnessed iron plate perforated on private range at 100m",
     "D6 15:00")
   ],
   worldEvidence:[{factId:"weapon.awp.armor",kind:"observed",
@@ -273,7 +269,33 @@ function runScenario(){
    statement:"A long rifle shot pierced both walls of a particular iron breastplate",
    scope:"Observed at 100m with this plate; no projectile velocity, magic defense or Ottar testing",
    significance:"transformative",
-   observedBy:["npc.finn","npc.tiona","npc.bete"]}],
+   observedBy:["npc.tiona","npc.tione","npc.instructor"]}],
+ }));
+ // Finn learned the test from Tiona and inspected the damaged target
+ // afterwards, but did not directly witness the shot itself.
+ commit(evt("evt.finn_awp_report","D6 16:00",{
+  locationId:"manor",
+  npcInteractions:[{initiatorNpcId:"npc.tiona",recipientNpcId:"npc.finn",
+   action:"Tiona tells Finn about penetration observed at the range",
+   outcome:"Finn requests the damaged breastplate for inspection",
+   salience:"important",privacy:"small_group"}],
+  observations:[{npcId:"npc.finn",channel:"report",
+   sourceActor:"npc.tiona",relayedSourceRef:"evt.awp",
+   perceivedFact:"Tiona reports long rifle pierced armor at 100m",
+   learnedAt:"D6 16:00",confidence:"likely",
+   salience:"important",privacy:"small_group"}],
+  rumorRelays:[{speakerNpcId:"npc.tiona",listenerNpcId:"npc.finn",
+   sourceMemoryRef:"evt.awp"}],
+ }));
+ commit(evt("evt.finn_plate_inspect","D6 17:00",{
+  locationId:"manor",knownBy:["npc.finn"],
+  observations:[observation("npc.finn",
+   "Inspected breastplate with visible entry and exit holes, did not witness shot",
+   "D6 17:00")],
+  worldEvidence:[{factId:"weapon.awp.damaged_plate",kind:"observed",
+   level:"established",statement:"Finn physically inspected the damaged iron breastplate",
+   scope:"Visible holes and target condition; no personal shot observation",
+   significance:"notable",observedBy:["npc.finn"]}],
  }));
  return {state,rev,commit};
 }
