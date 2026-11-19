@@ -561,3 +561,64 @@ test("relayed test results can be discussed as reports, never firsthand proofs",
  assert.equal(pretends.readyToRender,false);
  assert.ok(pretends.failures.some(x=>x.code==="NPC_DIRECT_CONFIRMATION_MISSING"));
 });
+
+test("player's unusual appearance survives 45 turns without becoming NPC omniscience",()=>{
+ let session=fresh();
+ session=applyConfirmedLabEvent(session,pack,evt("evt.daedalus.identity","D0 08:15",{
+  kind:"character_setup",knownBy:[],
+  playerFeatureChanges:[
+   {featureId:"daedalus.halo",action:"set",expectedRevision:0,
+    playerApproved:true,feature:{description:"A visible radiant halo",
+     significance:"transformative",visibility:"obvious"}},
+   {featureId:"daedalus.clock_eyes",action:"set",expectedRevision:0,
+    playerApproved:true,feature:{description:"Clockwork dial eyes with moving hands",
+     significance:"transformative",visibility:"obvious"}},
+   {featureId:"daedalus.hidden_form",action:"set",expectedRevision:0,
+    playerApproved:true,feature:{description:"A private transformation",
+     significance:"transformative",visibility:"conditional"}}
+  ],
+ }));
+ for(let i=0;i<45;i++)
+  session=applyConfirmedLabEvent(session,pack,evt("evt.day."+i,"D0 08:15"));
+ const initial=buildLabSceneBrief(pack,session,{npcIds:["npc.loki","npc.finn"]});
+ for(const actor of initial.actors){
+  assert.equal(actor.featureAwareness.some(f=>f.featureId==="daedalus.halo"&&
+   f.possibleFirstSighting&&!f.personallySeen),true);
+  assert.equal(actor.featureAwareness.some(f=>f.featureId==="daedalus.clock_eyes"),true);
+  assert.equal(actor.featureAwareness.some(f=>f.featureId==="daedalus.hidden_form"),false);
+ }
+ assert.equal(initial.appearanceSource,"committed_player_profile");
+ session=applyConfirmedLabEvent(session,pack,evt("evt.loki.sees","D0 09:00",{
+  knownBy:["npc.loki"],features:[{npcId:"npc.loki",featureId:"daedalus.halo",
+   channel:"seen",significance:"transformative",privacy:"private"}],
+  observations:[{npcId:"npc.loki",channel:"seen",
+   perceivedFact:"Saw Daedalus's halo",learnedAt:"D0 09:00",
+   confidence:"certain",salience:"important",privacy:"private"}],
+ }));
+ const again=buildLabSceneBrief(pack,session,{npcIds:["npc.loki","npc.finn"]});
+ assert.equal(again.actors[0].featureAwareness.find(f=>
+  f.featureId==="daedalus.halo")?.personallySeen,true);
+ assert.equal(again.actors[1].featureAwareness.find(f=>
+  f.featureId==="daedalus.halo")?.personallySeen,false);
+ assert.equal(session.player.visibleFeatures?.["daedalus.halo"].lastUpdatedRef,
+  "evt.daedalus.identity");
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,
+  evt("evt.bad_change","D0 09:05",{
+   kind:"player_turn",
+   playerFeatureChanges:[{featureId:"daedalus.halo",action:"set",
+     expectedRevision:0,playerApproved:true,
+     feature:{description:"No longer has a halo",
+      significance:"routine",visibility:"obvious"}}]
+  })),/LAB_PLAYER_FEATURE_REVISION_CONFLICT/);
+});
+test("appearance edits require user authorization and do not invent automatic witnesses",()=>{
+ const session=fresh();
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,
+  evt("evt.bad_profile","D0 08:15",{
+   kind:"character_setup",playerFeatureChanges:[
+    {featureId:"daedalus.halo",action:"set",expectedRevision:0,
+     playerApproved:false as true,feature:{description:"Halo",
+      significance:"notable",visibility:"obvious"}}
+   ]})),/LAB_PLAYER_FEATURE_CHANGE_INVALID/);
+ assert.equal(session.npcs["npc.loki"],undefined);
+});
