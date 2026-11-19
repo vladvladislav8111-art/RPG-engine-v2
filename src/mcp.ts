@@ -17,8 +17,10 @@ import {
 import { intBetween } from "./rng.ts";
 import { WORLD_V3_OPERATIONS, type WorldV3BatchRequest } from "./world_sim_v3/runtime_facade.ts";
 import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
-import {createLabCampaign,commitLabCampaignEvent,readLabConfirmedEvent,loadLabSessionFromKv} from "./rpg_lab_v1/http.ts";
-import {readLabRoleplayScene,reviewLabRoleplayScene,readLabRoleplayWorldCycle} from "./rpg_lab_v1/roleplay_adapter.ts";
+import {createLabCampaign,commitLabCampaignEvent,readLabConfirmedEvent,loadLabSessionFromKv,
+ listLabCampaignInventory,archiveLabCampaigns,installFreshDanmachiWorld} from "./rpg_lab_v1/http.ts";
+import {readLabRoleplayScene,reviewLabRoleplayScene,readLabRoleplayWorldCycle,
+ readLabPlayerFog,readLabStoryOptions} from "./rpg_lab_v1/roleplay_adapter.ts";
 import {getRpgBridgeGmGuide} from "./rpg_lab_v1/gm_guide.ts";
 import type {LabConfirmedEvent} from "./rpg_lab_v1/events.ts";
 import { RULESET_VERSION } from "./rules.ts";
@@ -655,6 +657,89 @@ function buildServer() {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async (input) => toolJson(resolveInjurySimulation(input)),
+  );
+
+  server.registerTool(
+    "rpg_lab_campaign_inventory",
+    {
+      title:"RPG Lab: list current and archived isolated campaigns",
+      description:"READ ONLY. Shows saved RPG Lab project/session IDs, revisions, game clocks and archive flags. Use to find old campaigns before a clean start. Does not list legacy Shura saves or hidden memories. No deletion, creation or migration.",
+      inputSchema:z.object({includeArchived:z.boolean().default(false)}),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await listLabCampaignInventory(input.includeArchived));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_INVENTORY_FAILED"});}
+    },
+  );
+  server.registerTool(
+    "rpg_lab_archive_campaigns",
+    {
+      title:"RPG Lab: reversible archive of selected older campaigns",
+      description:"WRITE ACTION. Archive ONLY explicitly supplied RPG Lab project/session pairs using their current expectedRevision. Requires explicit player request and confirmation phrase. No delete; blocks further gameplay commits, hides archived sessions from active index, leaves old event archive and Shura intact. Never call to wipe all data without inventory review.",
+      inputSchema:z.object({
+        confirm:z.literal("ARCHIVE_RPG_LAB_ONLY"),
+        reason:z.string().min(8).max(300),
+        targets:z.array(z.object({
+          projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+          sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+          expectedRevision:z.number().int().min(1),
+        })).min(1).max(4),
+      }),
+      annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await archiveLabCampaigns(input.targets,input.reason));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_ARCHIVE_FAILED"});}
+    },
+  );
+  server.registerTool(
+    "rpg_lab_install_danmachi_world",
+    {
+      title:"RPG Lab: install fresh DanMachi canon templates into a new project",
+      description:"WRITE ACTION. Create a brand new DanMachi project/pack with broad anime character cores, character speech idiolects, fog-ready setting and conditional story arcs. Does NOT create a campaign session, overwrite any old project or import earlier Linos/Daedalus memories. The project ID must be unused. Use only after the user chooses a new fresh world.",
+      inputSchema:z.object({
+        confirm:z.literal("INSTALL_NEW_DANMACHI_WORLD"),
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+      }),
+      annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await installFreshDanmachiWorld(input.projectId));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_WORLD_INSTALL_FAILED"});}
+    },
+  );
+  server.registerTool(
+    "rpg_lab_story_paths",
+    {
+      title:"RPG Lab: preview causal and alternative DanMachi plot routes",
+      description:"READ ONLY, GM PRIVATE. Review arcs and beats actually enabled by confirmed story flags, with missing prerequisites, mutually exclusive routes and independently trained NPC techniques. Canon scenes are anchors, not mandatory occurrences. Do not show hidden future events to the player.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+      }),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await readLabStoryOptions(loadLabSessionFromKv,input.projectId,input.sessionId));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_STORY_READ_FAILED"});}
+    },
+  );
+  server.registerTool(
+    "rpg_lab_player_fog",
+    {
+      title:"RPG Lab: player-known map and lore only",
+      description:"READ ONLY. Reveal only previously observed, reported or documented player knowledge and discovered areas. Explicitly excludes GM-only secrets, NPC private memories and hidden story arc blueprint. Use this for player-facing journal and map instead of leaking the GM scene brief.",
+      inputSchema:z.object({
+        projectId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+        sessionId:z.string().regex(/^[A-Za-z0-9_-]{3,64}$/),
+      }),
+      annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    },
+    async input=>{
+      try{return toolJson(await readLabPlayerFog(loadLabSessionFromKv,input.projectId,input.sessionId));}
+      catch(error){return toolJson({ok:false,error:error instanceof Error?error.message:"LAB_FOG_READ_FAILED"});}
+    },
   );
 
   server.registerTool(
