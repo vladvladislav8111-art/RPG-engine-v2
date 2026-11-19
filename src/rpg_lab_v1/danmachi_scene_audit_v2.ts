@@ -30,7 +30,7 @@ const personallyKnown=(s:LabSession,actorId:string,ref:string)=>
 const evidenceConfirmed=(s:LabSession,actorId:string,ref:string)=>{
  const ev=s.worldEvidence?.[ref];
  return !!ev&&ev.observedBy.includes(actorId)&&
-  ev.status==="confirmed";
+  ev.level==="established"&&["observed","measured"].includes(ev.kind);
 };
 export function auditDanmachiEraScene(pack:LabPack,session:LabSession,
  beats:DanmachiNarrativeBeat[]){
