@@ -132,6 +132,17 @@ test("DanMachi stone removed or destroyed prevents ordinary shadow extraction",(
   sourceRef:"evt.extract.3",targetRef:"enemy.orario.goblin.2",
   corpsePresent:true,magicStoneIntact:true}),/ALREADY_OWNED/);
 });
+test("a deceased human can be extracted without a monster core when remains exist",()=>{
+ const s=classed();
+ const extracted=attemptJinwooShadowExtraction(s,{
+  sourceRef:"evt.human.extract.1",targetRef:"deceased.bandit.1",
+  confirmedDeath:true,originalKind:"human",name:"Бандит",
+  powerTier:"common",targetPower:"weaker",corpsePresent:true,
+  magicStoneIntact:false,residualImprint:false,corruptedMana:false,
+  minutesSinceDeath:2,roll:1});
+ assert.equal(extracted.success,true);
+ assert.equal(extracted.next.shadowRoster[0].originalKind,"human");
+});
 test("Extraction respects three attempts, mana corruption and stronger-than-owner limits",()=>{
  let s=classed();
  for(let i=0;i<3;i++){
