@@ -429,3 +429,58 @@ test("important weapon demonstration is not magically known by every god",()=>{
  assert.equal(fin.actors[0].knownWorldEvidence[0].scope.includes("no tested effect against Ottar"),true);
  assert.equal(fin.actors[0].knownWorldEvidence[0].noExtrapolation,true);
 });
+
+test("focused scene cannot ignore first remarkable sight or transformative measured event",()=>{
+ let session=fresh();
+ session=applyConfirmedLabEvent(session,pack,evt("evt.first_halo","D0 09:00",{
+  knownBy:["npc.loki"],
+  observations:[{npcId:"npc.loki",channel:"seen",
+   perceivedFact:"The visitor has a luminous halo and mechanical clock eyes",
+   learnedAt:"D0 09:00",confidence:"certain",salience:"important",privacy:"private"}],
+  features:[{npcId:"npc.loki",featureId:"daedalus.halo",
+   channel:"seen",significance:"transformative",privacy:"private"}],
+ }));
+ const ignore=reviewLabNarration(pack,session,{
+  npcIds:["npc.loki"],expectedSessionRevision:3,contextEventRef:"evt.first_halo",
+  beats:[{actorId:"npc.loki",kind:"speech",summary:"Hi, a normal visitor",
+   factRefs:[]}]},3);
+ assert.equal(ignore.readyToRender,false);
+ assert.ok(ignore.failures.some(x=>x.code==="FOCUSED_EVENT_IGNORED"));
+ assert.ok(ignore.failures.some(x=>x.code==="FIRST_SIGNIFICANT_FEATURE_IGNORED"));
+ const acknowledge=reviewLabNarration(pack,session,{
+  npcIds:["npc.loki"],expectedSessionRevision:3,contextEventRef:"evt.first_halo",
+  beats:[{actorId:"npc.loki",kind:"reaction",
+   summary:"Loki notices the bizarre halo and decides whether to tease",
+   factRefs:["evt.first_halo"],
+   featureRefs:[{featureId:"daedalus.halo",knowledge:"seen"}]}]},3);
+ assert.equal(acknowledge.readyToRender,true);
+});
+test("focused weapon test cannot be reduced to missing velocity measurements",()=>{
+ let session=fresh();
+ session=applyConfirmedLabEvent(session,pack,evt("evt.rifle_proof","D0 09:00",{
+  knownBy:["npc.finn"],
+  observations:[{npcId:"npc.finn",channel:"seen",
+   perceivedFact:"An unblessed inventor pierced both sides of iron armor",
+   learnedAt:"D0 09:00",confidence:"certain",salience:"important",privacy:"private"}],
+  worldEvidence:[{factId:"rifle.demonstrated.armor",
+   statement:"Iron breastplate was perforated twice by one projectile",
+   scope:"One demonstrated plate; velocity and against-Ottar performance unknown",
+   kind:"observed",level:"established",significance:"transformative",
+   observedBy:["npc.finn"]}],
+ }));
+ const ignore=reviewLabNarration(pack,session,{
+  npcIds:["npc.finn"],expectedSessionRevision:4,
+  contextEventRef:"evt.rifle_proof",beats:[{
+   actorId:"npc.finn",kind:"speech",summary:"The velocity was not measured",
+   factRefs:["evt.rifle_proof"]}]},4);
+ assert.equal(ignore.readyToRender,false);
+ assert.ok(ignore.failures.some(x=>x.code==="TRANSFORMATIVE_EVIDENCE_IGNORED"));
+ const acknowledge=reviewLabNarration(pack,session,{
+  npcIds:["npc.finn"],expectedSessionRevision:4,
+  contextEventRef:"evt.rifle_proof",beats:[{
+   actorId:"npc.finn",kind:"speech",
+   summary:"The plate was pierced, but the weapon's limits need separate tests",
+   factRefs:["evt.rifle_proof"],
+   worldClaims:[{factId:"rifle.demonstrated.armor",assertion:"established"}]}]},4);
+ assert.equal(acknowledge.readyToRender,true);
+});
