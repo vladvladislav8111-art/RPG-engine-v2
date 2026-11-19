@@ -8,6 +8,7 @@ import {newLinosState,linosProfile,previewLinosCast,regenerateLinosMp,
 import {proposeIndependentWorldAgenda} from "./autonomy.ts";
 import {previewLabLivingWorldCycle} from "./living_world_cycle_v2.ts";
 import {validateLabStoryDefs,previewLabStoryPaths,type LabStoryArcDef} from "./story_consequences.ts";
+import type {LabCanonFact} from "./danmachi_canon_knowledge.ts";
 import {buildLabSceneBrief,dueLabWorldProjects,type LabWorldProject} from "./living_world.ts";
 import type {LabSession} from "./session.ts";
 export type LabResource={min:number;max:number};
@@ -35,7 +36,7 @@ export type LabPack={
  lootTables:Record<string,LabLootTable>;prices:Record<string,LabPrice>;recipes?:Record<string,LabRecipe>;
  economy:{taxRate:number};locations:Record<string,LabLocation>;
  npcProfiles:Record<string,LabNpc>;worldProcesses?:Record<string,LabWorldProcess>;
- storyArcs?:Record<string,LabStoryArcDef>;
+ storyArcs?:Record<string,LabStoryArcDef>;canonFacts?:Record<string,LabCanonFact>;
  encounterProfiles?:Record<string,LabEncounterProfile>;bestiary?:Record<string,LabMonster>;
  progression:{xpThresholdFormula?:string;thresholds?:number[]};
 };
@@ -111,9 +112,18 @@ export function validateLabPack(pack:LabPack):LabPack{
   if(v.tags!==undefined)stringList(v.tags,20);
   for(const [dest,cost] of entries(v.neighbors,32)) {ident(dest);numeric(cost,0.001,1e6);}
  }
+ if(pack.canonFacts!==undefined){
+  for(const [,fact] of entries(pack.canonFacts,300)){
+   if(!safeObj(fact)||!text(fact.summary,450)||
+      !["public","private"].includes(fact.visibility))throw Error("LAB_CANON_FACT_INVALID");
+   ident(fact.entryArc);
+  }
+ }
  for(const [id,v] of entries(pack.npcProfiles,128)){
   ident(id);if(!safeObj(v))throw Error("LAB_NPC_DEF");
   text(v.name,150);ident(v.canonRef);stringList(v.traits,30);stringList(v.goals,20);stringList(v.knownFacts,128);
+  if(pack.canonFacts&&v.knownFacts.some(ref=>!pack.canonFacts?.[ref]))
+   throw Error("LAB_CANON_NPC_FACT_UNKNOWN:"+id);
   if(v.speechStyle!==undefined)text(v.speechStyle,600);
   if(v.faction!==undefined)text(v.faction,80);
   if(v.entryArc!==undefined)ident(v.entryArc);
