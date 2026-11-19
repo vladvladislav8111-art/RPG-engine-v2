@@ -5,10 +5,12 @@
 import type {LabStoryArcDef,LabStoryBeatDef} from "./story_consequences.ts";
 const b=(beatId:string,description:string,requiresFlags:string[],
  dramaticQuestion:string,possibleConsequences:string[],
- blocksFlags:string[]=[],alternativeTo?:string):LabStoryBeatDef=>({
+ blocksFlags:string[]=[],alternativeTo?:string,
+ requiresTechnique?:LabStoryBeatDef["requiresTechnique"]):LabStoryBeatDef=>({
  beatId,description,requiresFlags,dramaticQuestion,possibleConsequences,
  ...(blocksFlags.length?{blocksFlags}:{}),
- ...(alternativeTo?{alternativeTo}:{})
+ ...(alternativeTo?{alternativeTo}:{}),
+ ...(requiresTechnique?{requiresTechnique}:{})
 });
 const arcs:Record<string,LabStoryArcDef>={
  "orario.arrival":{
@@ -70,7 +72,7 @@ const arcs:Record<string,LabStoryArcDef>={
     ["bell.minotaur_approach","bell.training_accepted"],
     "Умеет ли Белл использовать отработанные движения под настоящим давлением?",
     ["Работа ног и защита становятся более грамотными","Противник всё ещё сильнее","Не выдавать победу только за факт обучения"],
-    [],"encounter")
+    [],"encounter",{trainingId:"bell.ganesha.footwork",minGrade:"basic"})
   ]
  },
  "lili.and.soma":{
