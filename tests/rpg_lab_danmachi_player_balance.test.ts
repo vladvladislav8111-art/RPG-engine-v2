@@ -148,11 +148,19 @@ test("balanced XP is actually committed only after confirmed encounter and only 
  assert.throws(()=>commitBalancedMonsterDefeat(n,{
   ...input,sourceRef:"evt.goblin.forged"}),/UNCONFIRMED_XP_OR_KILL/);
 });
-test("shadow victories credit System XP without granting another bonus when another actor attacks",()=>{
+test("shadow victories need an owned soldier and cannot duplicate Player XP",()=>{
  const s=newJinwooPreparation();
+ assert.throws(()=>commitBalancedMonsterDefeat(s,{
+  sourceRef:"evt.phantom.kill",monsterId:"kobold",floor:2,
+  monsterRef:"monster.kobold.phantom",confirmedDefeat:true,killer:"shadow"
+ }),/SHADOW_KILL_NOT_OWNED/);
+ s.phase="shadow_class";
+ s.shadowRoster.push({id:"shadow.kobold.ally",name:"Союзная тень",
+  originRef:"evt.shadow.origin",originalKind:"monster",powerTier:"common",
+  defeatedCount:0,stored:false});
  const n=commitBalancedMonsterDefeat(s,{sourceRef:"evt.shadow.kill",
   monsterId:"kobold",floor:2,monsterRef:"monster.kobold.1",
-  confirmedDefeat:true,killer:"shadow"});
+  confirmedDefeat:true,killer:"shadow",shadowId:"shadow.kobold.ally"});
  assert.ok(n.xp>0);
  assert.throws(()=>commitBalancedMonsterDefeat(n,{sourceRef:"evt.player.steal.same",
   monsterId:"kobold",floor:2,monsterRef:"monster.kobold.1",
