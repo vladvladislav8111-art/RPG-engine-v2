@@ -27,6 +27,7 @@ const arcs:Record<string,LabStoryArcDef>={
   title:"Монстрофилия и Сильвербек",era:"early",entryArc:"start",
   summary:"Сильвербек вырывается; судьба Белла не обязана копировать оригинальный бой",
   canonAnchor:"Монстрофилия, семья Ганеши, Белл с Гестией и сбежавший Сильвербек",
+  mutuallyExclusiveFlags:[["bell.won_silverback","silverback.saved_by_player"]],
   beats:[
    b("escape","Сильвербек вырывается на улицы",["monsterphilia.started"],
     "Кто оказался под угрозой и кто прибыл на помощь?",
