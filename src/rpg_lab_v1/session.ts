@@ -30,6 +30,8 @@ export type LabWorkOrder={
 };
 export type LabSession={
  schema:"RPG_LAB_SESSION_V1";projectId:string;sessionId:string;gameClock:string;
+ /** New sessions default strict; legacy sessions without this flag remain compatible. */
+ roleplayGuard?:"strict";
  player:{resources:Record<string,number>;stats:Record<string,number>;inventory:Record<string,number>;locationId?:string;linos?:LinosState;workOrders?:Record<string,LabWorkOrder>;visibleFeatures?:Record<string,LabPlayerFeature>};
  discovered:string[];npcs:Record<string,LabNpcState>;worldProjects?:Record<string,LabWorldProject>;worldEvidence?:Record<string,LabWorldEvidence>;
  events:{sourceRef:string;summary:string;time:string;knownBy:string[];locationId?:string;kind?:string}[];
@@ -49,6 +51,8 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
  if(!s||s.schema!=="RPG_LAB_SESSION_V1"||!id(s.sessionId)||!txt(s.gameClock,100))
   throw Error("LAB_SESSION_SCHEMA");
  if(s.projectId!==pack.projectId)throw Error("LAB_SESSION_PROJECT_MISMATCH");
+ if(s.roleplayGuard!==undefined&&s.roleplayGuard!=="strict")
+  throw Error("LAB_ROLEPLAY_GUARD_INVALID");
  if(JSON.stringify(s).length>LAB_SESSION_MAX_TEXT_UNITS)
   throw Error("LAB_SESSION_SIZE_LIMIT");
  if(!s.player||!map(s.player.resources,128)||!map(s.player.stats,128)||!map(s.player.inventory,500))throw Error("LAB_SESSION_PLAYER_INVALID");
