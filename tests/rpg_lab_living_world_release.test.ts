@@ -274,3 +274,35 @@ test("an NPC can open their own hidden research project without the player's pre
  assert.equal(reviewLabSessionMemory(pack,session,{
   npcIds:["npc.smith"],includePrivate:true}).independentWorldEvents.length,1);
 });
+
+test("NPC decisions have separate durable topic history and require their own evidence",()=>{
+ let session=fresh();
+ session=applyConfirmedLabEvent(session,pack,evt("evt.insult","D0 09:00",{
+  npcInteractions:[{initiatorNpcId:"npc.bete",recipientNpcId:"npc.loki",
+   action:"Bete mocks Loki",outcome:"Loki does not forgive the mockery",
+   salience:"important",privacy:"private"}],
+  npcDecisionChanges:[{npcId:"npc.loki",subjectId:"bete.trust",
+   stance:"avoid",reason:"Bete crossed a personal line",evidenceRefs:["evt.insult"],
+   privacy:"private"}],
+ }));
+ for(let i=0;i<28;i++)session=applyConfirmedLabEvent(session,pack,evt("evt.quiet."+i,"D0 09:00"));
+ const v=buildLabSceneBrief(pack,session,{npcIds:["npc.loki"]});
+ assert.equal(v.actors[0].priorDecisions[0].stance,"avoid");
+ assert.equal(v.actors[0].priorDecisions[0].reason,"Bete crossed a personal line");
+ assert.equal(session.npcs["npc.loki"].decisions?.["bete.trust"].revision,1);
+ assert.throws(()=>applyConfirmedLabEvent(session,pack,evt("evt.unauthorized","D0 10:00",{
+  npcDecisionChanges:[{npcId:"npc.finn",subjectId:"bete.trust",
+   stance:"accept",reason:"Forgive automatically",evidenceRefs:["evt.insult"],
+   privacy:"private"}],
+ })),/LAB_NPC_DECISION_UNVERIFIED_EVIDENCE/);
+ session=applyConfirmedLabEvent(session,pack,evt("evt.reconcile","D0 10:00",{
+  knownBy:["npc.loki"],
+  observations:[{npcId:"npc.loki",channel:"heard",perceivedFact:"Bete explained himself",
+   learnedAt:"D0 10:00",confidence:"certain",salience:"ordinary",privacy:"private"}],
+  npcDecisionChanges:[{npcId:"npc.loki",subjectId:"bete.trust",
+   stance:"counteroffer",reason:"Willing to cooperate, not instantly trust",
+   evidenceRefs:["evt.reconcile"],privacy:"private"}],
+ }));
+ assert.equal(session.npcs["npc.loki"].decisions?.["bete.trust"].revision,2);
+ assert.equal(session.npcs["npc.loki"].decisions?.["bete.trust"].stance,"counteroffer");
+});
