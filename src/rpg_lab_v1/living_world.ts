@@ -5,6 +5,24 @@
 import type {LabPack} from "./engine.ts";
 import type {LabSession} from "./session.ts";
 
+export type LabNpcDecisionStance="accept"|"refuse"|"counteroffer"|"defer"|
+ "challenge"|"withdraw"|"ignore"|"approach"|"confront"|"cooperate"|"avoid";
+export type LabNpcDecision={
+ subjectId:string;stance:LabNpcDecisionStance;reason:string;
+ sourceRef:string;madeAtMinute:number;revision:number;
+ privacy:"public"|"private";nextReviewMinute?:number;
+};
+export function validateLabNpcDecision(d:LabNpcDecision):LabNpcDecision{
+ if(!d||!goodId(d.subjectId)||!goodId(d.sourceRef)||!text(d.reason,320)||
+  !["accept","refuse","counteroffer","defer","challenge","withdraw","ignore",
+    "approach","confront","cooperate","avoid"].includes(d.stance)||
+  !minute(d.madeAtMinute)||!Number.isSafeInteger(d.revision)||d.revision<1||
+  d.revision>10000||!["public","private"].includes(d.privacy)||
+  (d.nextReviewMinute!==undefined&&(!minute(d.nextReviewMinute)||
+    d.nextReviewMinute<=d.madeAtMinute)))
+  throw Error("LAB_NPC_DECISION_INVALID");
+ return d;
+}
 export type LabNpcMood={
  label:string;intensity:number;causeRef:string;sinceMinute:number;
  settleAfterMinute?:number;context?:string;
@@ -129,6 +147,7 @@ export function buildLabSceneBrief(pack:LabPack,session:LabSession,req:LabSceneB
    mood:state?.mood??null,relationships:state?.relationships??{},
    eventObservation:observation,memories:relevant,featureAwareness,
    activeResponsibilities:work,
+   priorDecisions:Object.values(state?.decisions??{}).sort((a,b)=>b.madeAtMinute-a.madeAtMinute).slice(0,24),
    decisionMustFollowOwnKnowledge:true,playerApprovalNotAssumed:true,
    noAutomaticReconciliation:true,permissionToDisagreeOrRefuse:true};
  });
