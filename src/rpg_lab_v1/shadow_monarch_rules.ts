@@ -2,19 +2,22 @@
  *
  * Pure, testable rulebook only. NO live campaign/save mutations. No automatic
  * system/falna grants. "Adaptation" numeric values are not Solo Leveling canon.
- * Enable only after the player approves which phase of Jinwoo they control.
+ * Player controls a NEW hero with equivalent Player/Monarch powers, not Sung Jinwoo.
  */
 export type JinwooPhase="player_system"|"shadow_class"|"true_monarch";
 export type PostAscensionInterface="canon_disappears"|"crossover_persists";
-export type ShadowTraceRule="corpse_required"|"monarch_imprint";
+export type ShadowTraceRule="intact_magic_stone"|"corpse_required"|"monarch_imprint";
 export type JinwooStat="strength"|"stamina"|"agility"|"perception"|"intelligence";
 export const JINWOO_STATS:JinwooStat[]=[
  "strength","stamina","agility","perception","intelligence"
 ];
 export const JINWOO_CAMPAIGN_PRESET={
- id:"danmachi.jinwoo.crossover_v1",
+ id:"danmachi.player.shadow_monarch_crossover_v2",
  storyAnchor:"danmachi.v1.first_minotaur_rescue",
- heroIdentity:"Sung Jinwoo (appearance pending)",
+ heroIdentity:null,
+ heroIsSungJinwoo:false,
+ entry:"Player first awakening in an Orario medical ward, no imported Korean life",
+ systemActivation:"confirmed_first_login_in_orario",
  playerControls:"All protagonist speech, behavior, trust and development decisions",
  defaultPhase:"player_system" as JinwooPhase,
  alternatives:["shadow_class","true_monarch"] as JinwooPhase[],
@@ -36,13 +39,13 @@ export const JINWOO_CANON_VS_ADAPTATION={
  ],
  adaptation:[
  "All store prices and thresholds below are game-design values, NOT official Solo Leveling prices.",
- "The XP curve, Falna projection coefficients and shadow success chances are crossover balance conventions.",
+ "The XP curve, additive Falna-to-System bonuses and shadow success chances are crossover balance conventions.",
  "If the Player interface survives full succession, that is an explicit alternate-universe rule.",
- "A destroyed magic stone gives no extraction corpse; a post-ascension imprint exception requires enabling that rule.",
+ "An intact monster magic stone can be used as a shadow-body blueprint; this is a DanMachi crossover rule, NOT canon. Consuming the stone forfeits Guild valis.",
  "Story thresholds for Monarch's Domain, Shadow Exchange and Black Heart are evidence-gated, not automatically earned.",
  ]
 } as const;
-export type ShopKind="consumable"|"weapon"|"utility"|"quest";
+export type ShopKind="consumable"|"weapon"|"armor"|"utility"|"material"|"rune"|"quest";
 export type ShopEntry={
  id:string;name:string;kind:ShopKind;goldPrice:number;
  minSystemLevel:number;unique:boolean;
@@ -105,19 +108,34 @@ export interface JinwooShadow{
  powerTier:"common"|"elite"|"knight"|"commander"|"marshal";
  defeatedCount:number;stored:boolean;
 }
+export interface JinwooMagicStone{
+ id:string;monsterRef:string;monsterName:string;kind:"monster";
+ powerRating:number;powerTier:JinwooShadow["powerTier"];
+ guildValueValis:number;corruptedMana:boolean;
+ intact:boolean;state:"held"|"consumed_by_shadow"|"sold";
+ collectedRef:string;
+}
+export interface JinwooFalnaScores{
+ strength:number;endurance:number;dexterity:number;agility:number;magic:number;
+}
+export const ZERO_FALNA_SCORES:Readonly<JinwooFalnaScores>={
+ strength:0,endurance:0,dexterity:0,agility:0,magic:0
+};
 export interface JinwooState{
  schema:"DANMACHI_JINWOO_PREP_V1";
  phase:JinwooPhase;postAscensionInterface:PostAscensionInterface;
  shadowTraceRule:ShadowTraceRule;
  systemLevel:number;xp:number;freeStatPoints:number;stats:JinwooStats;
  hp:number;mp:number;fatigue:number;
- gold:number;inventory:Record<string,number>;
+ gold:number;valis:number;inventory:Record<string,number>;
+ magicStones:Record<string,JinwooMagicStone>;
  shadowRoster:JinwooShadow[];extractionAttempts:Record<string,number>;
  unlockedShopItems:string[];unlockedSkills:string[];
  appliedRewardRefs:string[];defeatedTargetRefs:string[];completedDailyDays:string[];
  storyFlags:string[]; 
  /** A Falna cannot exist before a god gives a blessing. Never auto-rank on System level-up. */
- falna:{blessed:boolean;divineLevel:number;lastUpdatedRef:string|null};
+ falna:{blessed:boolean;godId:string|null;divineLevel:number;
+  lastUpdatedRef:string|null;status:JinwooFalnaScores;skills:string[]};
 }
 export const JINWOO_INITIAL_STATS:Readonly<JinwooStats>={
  strength:10,stamina:10,agility:10,perception:10,intelligence:10
@@ -134,13 +152,14 @@ export function newJinwooPreparation(config?:{
  const stats={...JINWOO_INITIAL_STATS};
  return {schema:"DANMACHI_JINWOO_PREP_V1",
   phase,postAscensionInterface:config?.postAscensionInterface??"canon_disappears",
-  shadowTraceRule:config?.shadowTraceRule??"corpse_required",
+  shadowTraceRule:config?.shadowTraceRule??"intact_magic_stone",
   systemLevel:1,xp:0,freeStatPoints:0,stats,
   hp:playerMaxHp(stats),mp:playerMaxMp(stats),fatigue:0,
-  gold:0,inventory:{},shadowRoster:[],extractionAttempts:{},
+  gold:0,valis:0,inventory:{},magicStones:{},shadowRoster:[],extractionAttempts:{},
   unlockedShopItems:[],unlockedSkills:[],appliedRewardRefs:[],defeatedTargetRefs:[],
   completedDailyDays:[],storyFlags:[],
-  falna:{blessed:false,divineLevel:0,lastUpdatedRef:null}};
+  falna:{blessed:false,godId:null,divineLevel:0,lastUpdatedRef:null,
+   status:{...ZERO_FALNA_SCORES},skills:[]}};
 }
 const validRef=(x:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(x);
 function requireReward(s:JinwooState,ref:string){
@@ -334,33 +353,82 @@ export function resurrectJinwooShadow(s:JinwooState,e:{
  target.defeatedCount++;target.stored=true;
  n.mp-=e.manaCost;n.appliedRewardRefs.push(e.sourceRef);return n;
 }
+/** Falna is an INDEPENDENT earned blessing and buffs the Player's System.
+ * House rule: +1 System stat for each 50 earned corresponding Falna points;
+ * +5 across the five attributes per Falna level after level 1.
+ * Falna never copies System XP/stats and cannot override later Monarch tiers.
+ */
+export const FALNA_BONUS_POINTS_PER_STAT=50;
+export const FALNA_BONUS_PER_DIVINE_LEVEL=5;
 export type FalnaProjection={
- blessed:boolean;divineLevel:number|null;sourceOfCombatPower:"SYSTEM_NOT_FALNA";
- display:{
-  strength:number;endurance:number;dexterity:number;agility:number;magic:number;
- }|null;
+ blessed:boolean;divineLevel:number|null;sourceOfCombatPower:"SYSTEM_PLUS_FALNA";
+ display:JinwooFalnaScores|null;
+ base:JinwooStats;bonus:JinwooStats;total:JinwooStats;
  overRank:boolean;
  explanation:string;
 };
-/** Display-only: Falna stats reflect the System; they never also grant power.
- * 12 points per post-baseline stat is a house rule; caps apply to a status
- * sheet, NOT to genuine System potential. Perception is not dexterity itself.
- */
 export function projectJinwooFalna(s:JinwooState):FalnaProjection{
- if(!s.falna.blessed)return {blessed:false,divineLevel:null,display:null,
-  overRank:false,sourceOfCombatPower:"SYSTEM_NOT_FALNA",
-  explanation:"Без благословения бога настоящей Фальны нет; личный HUD не виден богам."};
- const stat=(n:number)=>Math.max(0,Math.round((n-10)*12));
- const r={
-  strength:stat(s.stats.strength),endurance:stat(s.stats.stamina),
-  dexterity:stat((s.stats.agility+s.stats.perception)/2),
-  agility:stat(s.stats.agility),magic:stat(s.stats.intelligence),
+ const blessed=s.falna.blessed;
+ const r=blessed?s.falna.status:null;
+ const levelBonus=blessed?Math.max(0,s.falna.divineLevel-1)*
+  FALNA_BONUS_PER_DIVINE_LEVEL:0;
+ const val=(v:number)=>Math.floor(v/FALNA_BONUS_POINTS_PER_STAT)+levelBonus;
+ const bonus:JinwooStats={
+  strength:r?val(r.strength):0,
+  stamina:r?val(r.endurance):0,
+  agility:r?val(r.agility):0,
+  perception:r?val(r.dexterity):0,
+  intelligence:r?val(r.magic):0
  };
- const overflow=Object.values(r).some(x=>x>999);
- return {blessed:true,divineLevel:s.falna.divineLevel,
-  display:Object.fromEntries(Object.entries(r).map(([k,v])=>
-   [k,Math.min(999,v)])) as FalnaProjection["display"],
-  overRank:overflow,sourceOfCombatPower:"SYSTEM_NOT_FALNA",
-  explanation:"Отображение параметров Системы в Фальне без второго увеличения силы. "+
-   "Ранг Фальны меняется только при подтверждённом событии благословения и обновления богом."};
+ const total={...s.stats};
+ for(const k of JINWOO_STATS)total[k]+=bonus[k];
+ return {blessed,divineLevel:blessed?s.falna.divineLevel:null,display:r?{...r}:null,
+  base:{...s.stats},bonus,total,sourceOfCombatPower:"SYSTEM_PLUS_FALNA",
+  overRank:!!r&&Object.values(r).some(x=>x>999),
+  explanation:blessed?"Фальна является независимым божественным усилением поверх Системы Игрока; "+
+   "новая сила не конвертируется обратно в очки Фальны.":
+   "До принятия благословения бога Система Игрока существует самостоятельно."};
+}
+export function grantJinwooFalna(s:JinwooState,e:{
+ sourceRef:string;godId:string;godConfirmed:boolean;
+}):JinwooState{
+ requireReward(s,e.sourceRef);
+ if(s.falna.blessed||!e.godConfirmed||!validRef(e.godId))
+  throw Error("JINWOO_FALNA_GOD_CONSENT_REQUIRED");
+ const n=clone(s);n.falna={blessed:true,godId:e.godId,
+  divineLevel:1,lastUpdatedRef:e.sourceRef,
+  status:{...ZERO_FALNA_SCORES},skills:[]};
+ n.appliedRewardRefs.push(e.sourceRef);return n;
+}
+export function updateJinwooFalna(s:JinwooState,e:{
+ sourceRef:string;godId:string;godConfirmed:boolean;
+ newStatus:JinwooFalnaScores;
+ levelUpFeatRef?:string;newSkill?:string;
+}):JinwooState{
+ requireReward(s,e.sourceRef);
+ if(!s.falna.blessed||!e.godConfirmed||e.godId!==s.falna.godId)
+  throw Error("JINWOO_FALNA_GOD_CONSENT_REQUIRED");
+ for(const k of ["strength","endurance","dexterity","agility","magic"] as const){
+  const v=e.newStatus[k];
+  if(!Number.isSafeInteger(v)||v<s.falna.status[k]||v>1999)
+   throw Error("JINWOO_FALNA_STATUS_INVALID");
+ }
+ if(e.levelUpFeatRef!==undefined&&(!validRef(e.levelUpFeatRef)||
+  !s.storyFlags.includes(e.levelUpFeatRef)))
+  throw Error("JINWOO_FALNA_LEVEL_FEAT_UNVERIFIED");
+ if(e.newSkill!==undefined&&
+  (!validRef(e.newSkill)||s.falna.skills.includes(e.newSkill)))
+  throw Error("JINWOO_FALNA_SKILL_UNVERIFIED");
+ const n=clone(s);
+ n.falna.status={...e.newStatus};
+ if(e.levelUpFeatRef!==undefined)n.falna.divineLevel++;
+ if(e.newSkill!==undefined)n.falna.skills.push(e.newSkill);
+ n.falna.lastUpdatedRef=e.sourceRef;
+ n.appliedRewardRefs.push(e.sourceRef);return n;
+}
+export function effectiveJinwooMaxHp(s:JinwooState){
+ return playerMaxHp(projectJinwooFalna(s).total);
+}
+export function effectiveJinwooMaxMp(s:JinwooState){
+ return playerMaxMp(projectJinwooFalna(s).total);
 }
