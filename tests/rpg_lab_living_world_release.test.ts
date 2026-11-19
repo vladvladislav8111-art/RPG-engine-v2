@@ -516,7 +516,7 @@ test("same-minute player dialogue is not blocked by a due offscreen review",()=>
   worldActions:[{npcId:"npc.smith",action:"reviewed schedule",
    outcome:"testing rescheduled",privacy:"hidden"}],
   worldProjectChanges:[{projectId:"proj.heph.thread",expectedRevision:1,
-   record:research("active",2,m(1,9),m(1,12))}]
+   record:{...research("active",2,m(1,9),m(1,12)),latestEvidenceRef:"evt.up_to_due"}}]
  }));
  const sameTime=applyConfirmedLabEvent(session,pack,
   evt("evt.dialogue","D1 09:00",{summary:"A short continuation at the same minute"}));
