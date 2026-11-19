@@ -75,3 +75,10 @@ This is a structural guard, not a full natural-language judge: it cannot prove a
 - One cohesive feature branch, tests on GitHub Actions, then human review, then **one** approved Deno production release. Not a deployment per tweak.
 - Source-bound proposals are **read-only**. Legacy Shura saves, money, XP, Falna and RPG Lab unrelated campaigns stay unchanged until a correctly authorized isolated semantic commit.
 - The universal module cannot itself generate brilliant dialogue or know every fictional canon. The narrator must reason in language over bounded private evidence; validation and regression tests prevent common continuity failures but do not prove perfect character interpretation.
+
+
+## Living World V2 integrated review
+
+Call the new direct read-only \`rpg_lab_world_cycle\` for major demonstrations, meetings and in-world time advances. It combines source-backed evidence significance, NPC self-interested decision alternatives, canonical temperament cues, staff-limited offscreen work, directed NPC-to-NPC social contacts and provenance-gated rumor opportunities. Its results are **never automatic committed facts**.
+
+A strict session with an NPC history/project, advancing at least 12 in-world hours, must attach \`event.worldCycleReview\` specifying exact \`fromMinute/toMinute\` and a meaningful \`actorReviews\` entry for every \`suggestedCycleReviewActors\` NPC. If the actor status is \`acted\`, the event must contain that actor's real action, decision, contact, rumor relay or project update; \`no_change\` or \`blocked\` require a reason. Review actor source refs against actual NPC memory or owned project. NPC knowledge remains private until a real contact relay.
