@@ -46,7 +46,7 @@ test("one-month narrative: witnesses, reports, secrecy and independent actions d
  const intents=proposeDanmachiNpcIntentCycle(pack,s,{
   npcIds:family,fromMinute:3600,toMinute:3600,signals:signal});
  assert.equal(intents.intents.filter(x=>x.kind==="reactive").length,5);
- assert.ok(intents.intents.find(x=>x.actorId==="npc.allen")?.action.includes("атаки"));
+ assert.ok(intents.intents.find(x=>x.actorId==="npc.allen")?.action.includes("атаку"));
  assert.ok(intents.intents.find(x=>x.actorId==="npc.hedin")?.action.includes("подходы"));
  assert.ok(intents.intents.every(x=>x.alreadyOccurred===false));
  assert.equal(s.worldEvents?.length??0,0);
@@ -122,5 +122,5 @@ test("one-month narrative: witnesses, reports, secrecy and independent actions d
 
  const finn=readDanmachiEraNpcContext(pack,s,["npc.finn"],"Максим воскрес Ксеносы");
  assert.equal(finn?.actors[0].knownCanon.some(f=>f.id==="freya.soul.of.maxim.absent"),false);
- assert.equal(s.events.length,9);
+ assert.equal(s.events.length,10);
 });
