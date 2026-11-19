@@ -136,7 +136,7 @@ export function buildLabSceneBrief(pack:LabPack,session:LabSession,req:LabSceneB
     interpretation:old?.lastInterpretation??null,sourceRef:old?.lastSeenRef??old?.lastHeardRef??null,
     mustNotInheritOtherNpcFamiliarity:true};
   });
-  const ownsSources=new Set((state?.memories??[]).map(m=>m.sourceRef));
+  const ownsSources=new Set((state?.memories??[]).flatMap(m=>[m.sourceRef,...(m.relayedSourceRef?[m.relayedSourceRef]:[])]));
   const knownWorldEvidence=Object.values(session.worldEvidence??{})
    .filter(f=>ownsSources.has(f.sourceRef))
    .sort((a,b)=>{
