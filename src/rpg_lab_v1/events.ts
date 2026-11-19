@@ -439,9 +439,12 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
   }else{
    if(candidate.startedMinute!==nextMinute||candidate.originRef!==event.sourceRef)
     throw Error("LAB_WORLD_PROJECT_ORIGIN_INVALID");
-   if(!event.knownBy.includes(candidate.ownerNpcId)||
-      !observations.some(o=>o.npcId===candidate.ownerNpcId&&
-       ["seen","heard","experienced"].includes(o.channel)))
+   const witnessedAcceptance=event.knownBy.includes(candidate.ownerNpcId)&&
+    observations.some(o=>o.npcId===candidate.ownerNpcId&&
+     ["seen","heard","experienced"].includes(o.channel));
+   const independentAcceptance=event.worldActions?.some(a=>
+    a.npcId===candidate.ownerNpcId);
+   if(!witnessedAcceptance&&!independentAcceptance)
     throw Error("LAB_WORLD_PROJECT_OWNER_UNAWARE");
   }
   // Direct participation or an established responsibility is required. A player
@@ -450,7 +453,8 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
    throw Error("LAB_WORLD_PROJECT_INITIAL_STATUS");
   if(prev&&!event.worldActions?.some(a=>a.npcId===candidate.ownerNpcId)&&
       !observations.some(o=>o.npcId===candidate.ownerNpcId)&&
-      !event.kind.includes("world"))
+      !event.npcInteractions?.some(a=>a.initiatorNpcId===candidate.ownerNpcId||
+       a.recipientNpcId===candidate.ownerNpcId))
    throw Error("LAB_WORLD_PROJECT_NO_OWNER_ACTION");
   next.worldProjects={...(next.worldProjects??{}),
     [change.projectId]:structuredClone(candidate)};
