@@ -6,6 +6,7 @@ import {validateLabAmbientRumor,type LabAmbientRumor} from "./ambient_rumors.ts"
 import {validateLabNpcAdaptation,type LabNpcAdaptationState} from "./npc_adaptation.ts";
 import {validateLinosState,type LinosState} from "./linos.ts";
 import {validateOrarioPlayerState} from "./orario_player_validation.ts";
+import {validateNpcSuspicion,type NpcPlayerSuspicion} from "./danmachi_suspicion.ts";
 import type {JinwooState} from "./shadow_monarch_rules.ts";
 import {validateFeatureMemory,type NpcFeatureMemory} from "./npc_perception.ts";
 import {validateLabSocialVector,type LabSocialVector} from "./social_dynamics_v2.ts";
@@ -30,7 +31,7 @@ export type LabNpcState={knownFacts:string[];memories:LabMemory[];currentGoal?:s
  mood?:LabNpcMood;decisions?:Record<string,LabNpcDecision>;
  socialDynamics?:Record<string,LabSocialVector>;
  adaptations?:Record<string,LabNpcAdaptationState>;
- locationId?:string;locationSourceRef?:string;};
+ locationId?:string;locationSourceRef?:string;suspicion?:NpcPlayerSuspicion;};
 /** Explicit commercial commitments. Amounts are ledger facts, NOT cash effects. */
 export type LabWorkOrder={
  title:string;clientNpcId:string;signedAt:string;dueFrom:string;dueTo:string;
@@ -150,6 +151,7 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
   const state=raw as LabNpcState;
   if(!pack.npcProfiles[npcId]||!state||!list(state.knownFacts,128)||!Array.isArray(state.memories)||state.memories.length>128)
    throw Error("LAB_SESSION_NPC_INVALID");
+  if(state.suspicion!==undefined)validateNpcSuspicion(state.suspicion);
   if(state.perceptions!==undefined){
    if(!map(state.perceptions,32))throw Error("LAB_NPC_FEATURES_INVALID");
    for(const [featureId,feature] of Object.entries(state.perceptions)){
