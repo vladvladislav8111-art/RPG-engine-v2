@@ -12,6 +12,7 @@ import {previewOwnedEquipmentEncounter,type Loadout} from
  "./danmachi_player_equipment.ts";
 import {previewInjuryPenalties,applyConfirmedInjury} from
  "./orario_player_survival.ts";
+import {getPlayerSkillBattleModifiers} from "./orario_player_skills.ts";
 const safeRef=(x:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(x);
 function hash(ref:string,salt:string):number{
  let h=2166136261;for(const c of ref+"|"+salt){
@@ -50,6 +51,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  sourceRef:string;playerCommitted:true;
  move:CombatMove|"retreat";loadout:Loadout;
  proficiencyBonus?:number;positionBonus?:number;spellMpCost?:number;
+ currentMinute?:number;
 }):BattleResolution{
  const battle=s.activeEncounter,mob=battle&&ORARIO_MONSTER_BY_ID[battle.monsterId];
  if(!battle||!mob||!e.playerCommitted||!safeRef(e.sourceRef)||
@@ -59,11 +61,20 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  const next=structuredClone(s);
  const active=next.activeEncounter!;
  const injury=previewInjuryPenalties(next);
- const wear=previewOwnedEquipmentEncounter(next,{
+ const minute=e.currentMinute??-1;
+ if(e.currentMinute!==undefined&&
+  (!Number.isSafeInteger(e.currentMinute)||e.currentMinute<0))
+  throw Error("PLAYER_BATTLE_TIME_INVALID");
+ // Expired System skills never affect combat, and their modifier snapshot
+ // cannot mutate base System attributes or permanently award levels.
+ const modifiers=getPlayerSkillBattleModifiers(next,minute);
+ const battleStats={...next,stats:{...next.stats,
+  agility:next.stats.agility+modifiers.agilityBonus}};
+ const wear=previewOwnedEquipmentEncounter(battleStats,{
   monsterId:battle.monsterId,floor:battle.floor,
   loadout:e.loadout,move:e.move==="retreat"?"guard":e.move,
   ...(e.proficiencyBonus!==undefined?{proficiencyBonus:e.proficiencyBonus}:{}),
-  positionBonus:(e.positionBonus??0)-injury.speedPenalty,
+  positionBonus:(e.positionBonus??0)+modifiers.positionBonus-injury.speedPenalty,
   ...(e.spellMpCost!==undefined?{spellMpCost:e.spellMpCost}:{}),
   ...(battle.irregularRef?{confirmedIrregularRef:battle.irregularRef}:{})
  });
@@ -71,8 +82,8 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  let dealt=0,taken=0,injuryRef:undefined|string;
  if(e.move==="retreat"){
   const evade=Math.max(10,Math.min(92,Math.round(45+
-   (next.stats.agility-mob.combat.agility)*.6-injury.speedPenalty+
-   (e.positionBonus??0))));
+   (battleStats.stats.agility-mob.combat.agility)*.6-injury.speedPenalty+
+   (e.positionBonus??0)+modifiers.positionBonus))));
   if(rolls.player<=evade){
    active.round++;
    next.activeEncounter=undefined;
@@ -106,7 +117,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
    systemGoldGranted:raised.gold-oldGold};
  }
  if(rolls.enemy<=wear.exchange.counterHitChancePercent){
-  taken=Math.max(0,wear.exchange.counterDamageIfHit-
+  taken=Math.max(0,wear.exchange.counterDamageIfHit+
     injury.defensePenalty);
   next.hp=Math.max(0,next.hp-taken);
   const maxHp=100+next.stats.stamina*20;
