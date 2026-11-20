@@ -76,7 +76,9 @@ const plain=(n:number)=>Math.round(n*1e6)/1e6;
 export function validateLabPack(pack:LabPack):LabPack{
  if(!safeObj(pack)||pack.schema!=="RPG_LAB_PACK_V1")throw Error("LAB_PACK_SCHEMA");
  ident(pack.projectId);ident(pack.worldId);validateFormulaRegistry(pack.formulas);
- if(JSON.stringify(pack).length>220000)throw Error("LAB_PACK_TOO_LARGE");
+ // Full canonical NPC deep cores are persisted in the compressed world pack.
+ // Allow their completed coverage without removing safety bounds on the world size.
+ if(JSON.stringify(pack).length>280000)throw Error("LAB_PACK_TOO_LARGE");
  for(const [,v] of entries(pack.resources,128)){
   if(!safeObj(v))throw Error("LAB_RESOURCE_DEF");
   numeric(v.min,0,1e12);numeric(v.max,v.min as number,1e12);
