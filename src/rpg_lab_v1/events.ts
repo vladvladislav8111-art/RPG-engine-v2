@@ -153,6 +153,12 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
    throw Error("ORARIO_PLAYER_EVENT_CONFLICT");
   if(event.playerSystem.kind==="init"&&event.kind!=="character_setup")
    throw Error("ORARIO_PLAYER_INIT_KIND_REQUIRED");
+  if(["falna_bless","falna_update"].includes(event.playerSystem.kind)){
+   const godId=event.playerSystem.args.godId;
+   if(typeof godId!=="string"||!pack.npcProfiles[godId]||
+      !event.knownBy.includes(godId))
+    throw Error("ORARIO_PLAYER_FALNA_GOD_NOT_PRESENT");
+  }
  }
  if(event.linos!==undefined){
   if(pack.worldId!=="danmachi.orario"||!nextTimeValid(event.time,session.gameClock))
