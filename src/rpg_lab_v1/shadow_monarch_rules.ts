@@ -194,6 +194,8 @@ export interface JinwooState{
  dailyTraining?:import("./orario_player_survival.ts").DailyTraining;
  dailyHistory?:number[];
  systemDropRefs?:string[];
+ /** Strict evidence from a confirmed fight, keyed by defeated targetRef. */
+ defeatEvidence?:Record<string,{monsterId:string;sourceRef:string;floor:number}>;
  activeSkills?:import("./orario_player_skills.ts").ActivePlayerSkill[];
  activeEncounter?:PlayerCombatEncounter;
 
