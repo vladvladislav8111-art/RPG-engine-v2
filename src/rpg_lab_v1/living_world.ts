@@ -4,6 +4,7 @@
  */
 import type {LabPack} from "./engine.ts";
 import type {LabSession} from "./session.ts";
+import {readChromaPaletteAnchor} from "./chroma_palette.ts";
 
 export type LabNpcDecisionStance="accept"|"refuse"|"counteroffer"|"defer"|
  "challenge"|"withdraw"|"ignore"|"approach"|"confront"|"cooperate"|"avoid";
@@ -196,6 +197,8 @@ export function buildLabSceneBrief(pack:LabPack,session:LabSession,req:LabSceneB
   observedSourceRef:req.eventRef??null,
   eventCommitted:Boolean(event),actors,
   uncommittedEventIsNotWitnessedProof:!event,
+  chromaPaletteAnchor:session.player.chromaPalette?
+    readChromaPaletteAnchor(session.player.chromaPalette):null,
   appearanceSource:session.player.visibleFeatures?
     "committed_player_profile":"not_recorded",
   narratorConstraints:[
