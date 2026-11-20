@@ -16,6 +16,7 @@ import {proposeDanmachiNpcIntentCycle,type DanmachiActorSignal} from "./danmachi
 import {auditDanmachiEraScene,type DanmachiNarrativeBeat} from "./danmachi_scene_audit_v2.ts";
 import {readOrarioPlayerHud} from "./orario_player_event.ts";
 import {previewArmyBalance} from "./danmachi_shadow_balance.ts";
+import {readPrivateNpcSuspicion} from "./danmachi_suspicion.ts";
 import {RPG_LAB_SCENE_REMINDER,RPG_BRIDGE_GM_GUIDE_VERSION} from "./gm_guide.ts";
 import type {LabSession} from "./session.ts";
 
@@ -87,6 +88,7 @@ export async function readLabRoleplayScene(load:LabRoleplayLoader,
   ...(s.pack.worldId==="danmachi.orario"?{
    danmachiEraContext:readDanmachiEraNpcContext(s.pack,s.session,npcIds,
      request.dialogueText??""),
+   danmachiNpcSuspicion:readPrivateNpcSuspicion(s.session,npcIds),
    danmachiNpcIntents:from===null?null:proposeDanmachiNpcIntentCycle(
     s.pack,s.session,{npcIds,fromMinute:from,toMinute:to??from,
      signals:request.danmachiSignals??[]}),
