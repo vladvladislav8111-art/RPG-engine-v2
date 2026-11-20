@@ -161,6 +161,14 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
       !event.knownBy.includes(godId))
     throw Error("ORARIO_PLAYER_FALNA_GOD_NOT_PRESENT");
   }
+  if(event.playerSystem.kind==="medical_care"){
+   const healerId=event.playerSystem.args.healerNpcId;
+   if(event.kind!=="medical_care"||
+     event.playerLocationId!=="orario.medical_ward"||
+     typeof healerId!=="string"||!pack.npcProfiles[healerId]||
+     !event.knownBy.includes(healerId))
+    throw Error("ORARIO_PLAYER_MEDICAL_HEALER_NOT_CONFIRMED");
+  }
  }
  if(event.linos!==undefined){
   if(pack.worldId!=="danmachi.orario"||!nextTimeValid(event.time,session.gameClock))
