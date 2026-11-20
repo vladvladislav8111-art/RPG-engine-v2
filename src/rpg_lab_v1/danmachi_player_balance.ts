@@ -159,7 +159,7 @@ export type ExchangePreview={
 export function previewCombatExchange(s:JinwooState,params:{
  monsterId:string;floor:number;move:CombatMove;
  weaponPower:number;armorPower:number;positionBonus?:number;
- proficiencyBonus?:number;spellMpCost?:number;monsterCount?:number;
+ proficiencyBonus?:number;spellMpCost?:number;spellId?:string;monsterCount?:number;
  confirmedIrregularRef?:string;
 }):ExchangePreview{
  const threat=comparePlayerToOrarioMonster(s,params);
@@ -169,13 +169,20 @@ export function previewCombatExchange(s:JinwooState,params:{
   !safeNum(params.proficiencyBonus??0,-10,20))
   throw Error("BALANCE_BATTLE_INPUT_INVALID");
  const spellCost=params.spellMpCost??0;
+ const spellId=params.spellId;
+ const legitimateSpell=typeof spellId==="string"&&
+  /^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(spellId)&&
+  (s.unlockedSkills.includes(spellId)||s.falna.skills.includes(spellId))&&
+  (spellId==="rulers_authority"||spellId.startsWith("magic_")||
+   spellId.startsWith("spell_")||
+   (s.falna.skills.includes(spellId)&&
+    /^(fire|ice|wind|thunder|lightning|water|earth|dark|light|bolt|arc|flame|frost|nova|ray|arrow|blast)/i.test(spellId)));
  if(params.move==="magic"&&
   (!Number.isSafeInteger(spellCost)||spellCost<1||
-   spellCost>s.mp||
-   (!s.unlockedSkills.some(k=>k.includes("magic")||k.includes("rulers_authority"))&&
-    s.falna.skills.length===0)))
+   spellCost>s.mp||!legitimateSpell))
   throw Error("BALANCE_MAGIC_NOT_AVAILABLE");
- if(params.move!=="magic"&&params.spellMpCost!==undefined)
+ if(params.move!=="magic"&&
+  (params.spellMpCost!==undefined||spellId!==undefined))
   throw Error("BALANCE_MAGIC_COST_WITHOUT_SPELL");
  const guard=params.move==="guard";
  const pos=params.positionBonus??0,prof=params.proficiencyBonus??0;
