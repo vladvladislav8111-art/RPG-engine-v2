@@ -41,11 +41,14 @@ export function previewVerifiedLoadout(s:JinwooState,e:Loadout){
  let attack=0,armor=0,speedPenalty=0,pierce=0;
  for(const id of ids){
   const m=SYSTEM_EQUIPMENT_EFFECTS[id],entry=catalog[id];
-  if(!m||!entry||(s.inventory[id]??0)<1)
+  const loadedKnives=id==="daggers_throwing"&&
+   (s.ammoRemaining?.daggers_throwing??0)>0;
+  if(!m||!entry||((s.inventory[id]??0)<1&&!loadedKnives))
    throw Error("PLAYER_EQUIPMENT_NOT_OWNED_OR_UNSUPPORTED");
   if(m.skillGate&&!s.unlockedSkills.includes(m.skillGate))
    throw Error("PLAYER_EQUIPMENT_SKILL_LOCKED");
-  if(id==="shortbow"&&(s.inventory.arrow_bundle??0)<1)
+  if(id==="shortbow"&&(s.inventory.arrow_bundle??0)<1&&
+    (s.ammoRemaining?.arrow_bundle??0)<1)
    throw Error("PLAYER_EQUIPMENT_AMMUNITION_REQUIRED");
   if(slots.has(m.slot))throw Error("PLAYER_EQUIPMENT_SLOT_COLLISION");
   if((id===e.weaponId&&m.slot!=="weapon")||
