@@ -24,6 +24,7 @@ import {
 } from "./preview_kv_probe.ts";
 import { simulateWorldV3BatchLive } from "./world_sim_v3/live_gateway.ts";
 import {handleRpgLabHttp} from "./rpg_lab_v1/http.ts";
+import {ORARIO_PLAYER_RELEASE} from "./rpg_lab_v1/orario_release.ts";
 import {RPG_LAB_UI_V1} from "./rpg_lab_v1/ui.ts";
 import type { WorldV3BatchRequest } from "./world_sim_v3/runtime_facade.ts";
 import { RULESET_VERSION } from "./rules.ts";
@@ -64,6 +65,7 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
         status: "ready",
         engineVersion: RULESET_VERSION,
         bridgeIntegration:bridgeFeatureStatus(),
+        orarioPlayerRelease:ORARIO_PLAYER_RELEASE,
         hudUiVersion: HUD_UI_VERSION,
         writesEnabled: config.allowWrites,
         rawCommitsEnabled: config.allowRawCommits,
@@ -390,6 +392,7 @@ export async function handleHttpRequest(req: Request): Promise<Response> {
         writesEnabled: config.allowWrites,
         rawCommitsEnabled: config.allowRawCommits,
         worldSimulationV3: config.worldSimV3Enabled ? "READ_ONLY_PROPOSALS" : "DISABLED",
+        orarioPlayerRelease:ORARIO_PLAYER_RELEASE,
         saveId: state["CONTROL!B2"]?.[0]?.[0] ?? null,
         worldTime: state["CONTROL!B5"]?.[0]?.[0] ?? null,
         locationId: state["CONTROL!B6"]?.[0]?.[0] ?? null,
