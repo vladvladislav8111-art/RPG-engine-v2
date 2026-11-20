@@ -83,7 +83,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  if(e.move==="retreat"){
   const evade=Math.max(10,Math.min(92,Math.round(45+
    (battleStats.stats.agility-mob.combat.agility)*.6-injury.speedPenalty+
-   (e.positionBonus??0)+modifiers.positionBonus))));
+   (e.positionBonus??0)+modifiers.positionBonus)));
   if(rolls.player<=evade){
    active.round++;
    next.activeEncounter=undefined;
