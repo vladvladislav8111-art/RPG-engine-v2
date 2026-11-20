@@ -159,6 +159,14 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
     ...q,sourceRef,confirmed:q.confirmed===true
    } as Parameters<typeof grantJinwooStoryUnlock>[1]);
   case "change_class":
+   if(q.to==="shadow_class"&&
+      (current.dungeonKeys["job.change"]?.state!=="cleared"||
+       !verifySystemDungeonBossEvidence(current,"job.change")))
+    throw Error("ORARIO_PLAYER_JOB_TRIAL_NOT_CLEARED");
+   if(q.to==="true_monarch"&&
+      (current.dungeonKeys["temple.return"]?.state!=="cleared"||
+       !verifySystemDungeonBossEvidence(current,"temple.return")))
+    throw Error("ORARIO_PLAYER_MONARCH_SUCCESSION_NOT_CLEARED");
    return changeJinwooPhase(current,{
     ...q,sourceRef,confirmed:q.confirmed===true
    } as Parameters<typeof changeJinwooPhase>[1]);
