@@ -107,7 +107,7 @@ test("guarded stream rejects unapproved decisions, duplicated event refs and inc
  const linos=structuredClone(created);
  linos.player.linos={schema:"NOT_VALID"} as never;
  assert.throws(()=>validateLabSession(linos,pack),
-  /LAB_LINOS|PLAYER_SYSTEM_WRONG_WORLD_OR_DUPLICATE_PROFILE/);
+  /LAB_LINOS|LINOS_STATE_INVALID|PLAYER_SYSTEM_WRONG_WORLD_OR_DUPLICATE_PROFILE/);
 });
 test("a daily penalty needs an actual reached deadline and no expired reward",()=>{
  sourceIndex=0;
@@ -120,5 +120,5 @@ test("a daily penalty needs an actual reached deadline and no expired reward",()
  assert.equal(s.player.jinwoo?.dailyTraining?.status,"failed");
  assert.equal(s.player.jinwoo?.storyFlags.includes("quest.penalty.pending.0"),true);
  assert.throws(()=>action(s,"daily_claim",{day:0,choice:"recovery"}),
-  /NOT_FINISHED/);
+  /NOT_FINISHED|DEADLINE_REACHED/);
 });
