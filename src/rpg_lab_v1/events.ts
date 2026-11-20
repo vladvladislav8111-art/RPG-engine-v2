@@ -6,6 +6,7 @@ import {validateLabSession,type LabSession,type LabMemory,type LabNpcState,
  type LabWorkOrder,type LabPlayerFeature} from "./session.ts";
 import type {LabPack} from "./engine.ts";
 import {applyOrarioPlayerAction,type OrarioPlayerAction} from "./orario_player_event.ts";
+import {applyNpcSuspicionChanges,type NpcSuspicionChange} from "./danmachi_suspicion.ts";
 import {applyLabAmbientRumorChanges,type LabAmbientRumorChange} from "./ambient_rumors.ts";
 import {evolveLabNpcAdaptation,type LabNpcAdaptationChange} from "./npc_adaptation.ts";
 import {noteNpcFeature,type NpcFeatureObservation} from "./npc_perception.ts";
@@ -82,6 +83,7 @@ export type LabConfirmedEvent={
  knownBy:string[];observations?:LabNpcObservation[];
  features?:NpcFeatureObservation[];linos?:LabLinosTurn;
  playerSystem?:OrarioPlayerAction;
+ npcSuspicionChanges?:NpcSuspicionChange[];
  worldActions?:LabIndependentAction[];
  npcInteractions?:LabNpcInteraction[];
  npcPositions?:LabNpcPositionChange[];
@@ -742,6 +744,13 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
  }
  const localRumors=applyLabAmbientRumorChanges(session,pack,event);
  if(localRumors!==undefined)next.ambientRumors=localRumors;
+ const suspicion=applyNpcSuspicionChanges(session,pack,event);
+ if(suspicion!==null)
+  for(const [npcId,state] of Object.entries(suspicion))
+   if(state.suspicion!==undefined){
+    const actor=next.npcs[npcId]??{knownFacts:[],memories:[]};
+    actor.suspicion=state.suspicion;next.npcs[npcId]=actor;
+   }
  if(event.playerSystem!==undefined){
   next.player.jinwoo=applyOrarioPlayerAction(session,event.playerSystem,
     event.sourceRef,event.time);
