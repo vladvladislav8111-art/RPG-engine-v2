@@ -38,6 +38,30 @@ test("first-time Player can confront goblins; Minotaur and Goliath remain overwh
  assert.ok(minotaur.estimatedEngagementRatio>goliath.estimatedEngagementRatio);
  assert.equal(goliath.noVictoryGuaranteed,true);
 });
+test("milestone calibration: balanced System L10/L20/L40 has meaningful Dungeon progression",()=>{
+ const build=(level:number,evenStat:number)=>{
+  const s=newJinwooPreparation();
+  s.systemLevel=level;
+  s.stats={strength:evenStat,stamina:evenStat,agility:evenStat,
+   perception:evenStat,intelligence:evenStat};
+  return s;
+ };
+ // Illustrative balanced builds: automatic +1 to all five on level-up,
+ // and the five assignable points spread across all five attributes.
+ const l10=build(10,28);
+ const l20=build(20,48);
+ const l40=build(40,88);
+ assert.equal(comparePlayerToOrarioMonster(l10,{monsterId:"war_shadow",floor:6})
+  .outlook,"advantaged");
+ assert.equal(comparePlayerToOrarioMonster(l10,{monsterId:"minotaur",floor:15})
+  .outlook,"dangerous");
+ assert.equal(comparePlayerToOrarioMonster(l20,{monsterId:"minotaur",floor:15})
+  .outlook,"contested");
+ assert.equal(comparePlayerToOrarioMonster(l40,{monsterId:"minotaur",floor:15})
+  .outlook,"advantaged");
+ assert.ok(["dangerous","overwhelming"].includes(
+  comparePlayerToOrarioMonster(l40,{monsterId:"goliath_17",floor:17}).outlook));
+});
 test("groups, exhaustion and terrain alter threat without giving free victories",()=>{
  const s=newJinwooPreparation();
  const one=comparePlayerToOrarioMonster(s,{monsterId:"goblin",floor:1});
