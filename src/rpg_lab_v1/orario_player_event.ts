@@ -269,9 +269,8 @@ export function readOrarioPlayerHud(s:LabSession){
   falna:{blessed:p.falna.blessed,divineLevel:p.falna.blessed?
    p.falna.divineLevel:null},
   encounter:p.activeEncounter?{
-   enemyRef:p.activeEncounter.enemyRef,
-   enemyHp:p.activeEncounter.enemyHp,
-   monsterId:p.activeEncounter.monsterId,
-   round:p.activeEncounter.round
+   active:true,enemyLabel:"Противник",
+   round:p.activeEncounter.round,
+   enemyStatisticsHidden:true
   }:null,readOnly:true};
 }
