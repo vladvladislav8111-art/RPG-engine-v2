@@ -13,6 +13,7 @@ import {previewOwnedEquipmentEncounter,type Loadout} from
 import {previewInjuryPenalties,applyConfirmedInjury} from
  "./orario_player_survival.ts";
 import {getPlayerSkillBattleModifiers} from "./orario_player_skills.ts";
+import {isSystemEncounterId,systemEncounterEntryAllowed} from "./orario_system_encounters.ts";
 const safeRef=(x:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(x);
 function hash(ref:string,salt:string):number{
  let h=2166136261;for(const c of ref+"|"+salt){
@@ -36,6 +37,9 @@ export function startConfirmedOrarioBattle(s:JinwooState,e:{
   throw Error("PLAYER_BATTLE_NOT_AUTHORIZED");
  const mob=ORARIO_MONSTER_BY_ID[e.monsterId];
  if(!mob)throw Error("PLAYER_BATTLE_ENEMY_UNKNOWN");
+ if(isSystemEncounterId(e.monsterId)&&
+  !systemEncounterEntryAllowed(s,e.monsterId))
+  throw Error("PLAYER_BATTLE_SYSTEM_INSTANCE_NOT_ENTERED");
  if(!Number.isSafeInteger(e.floor)||e.floor<1||e.floor>100)
   throw Error("PLAYER_BATTLE_FLOOR_INVALID");
  if((e.floor<mob.floorMin||e.floor>mob.floorMax)&&
