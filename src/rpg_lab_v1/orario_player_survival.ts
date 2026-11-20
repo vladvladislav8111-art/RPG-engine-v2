@@ -231,9 +231,10 @@ export function failConfirmedDailyTraining(s:JinwooState,e:{
  n.appliedRewardRefs.push(e.sourceRef);return n;
 }
 export const ORARIO_RARE_REWARD_POOL=[
- {id:"wound_dressing",weight:30},{id:"potion_hp_small",weight:25},
- {id:"potion_mp_small",weight:20},{id:"ointment_burn",weight:10},
- {id:"potion_fatigue",weight:10},{id:"rune_perception",weight:5}
+ {id:"wound_dressing",weight:25},{id:"potion_hp_small",weight:22},
+ {id:"potion_mp_small",weight:18},{id:"ointment_burn",weight:10},
+ {id:"potion_fatigue",weight:10},{id:"rune_perception",weight:5},
+ {id:"system_instant_dungeon_key",weight:10}
 ] as const;
 function deterministicRoll(ref:string){let h=2166136261;
  for(const x of ref){h^=x.charCodeAt(0);h=Math.imul(h,16777619);}
@@ -252,6 +253,15 @@ export function openConfirmedDailyBox(s:JinwooState,e:{
  let reward=ORARIO_RARE_REWARD_POOL[0].id as string;
  for(const item of ORARIO_RARE_REWARD_POOL){roll-=item.weight;
   if(roll<=0){reward=item.id;break;}}
+ if(reward==="system_instant_dungeon_key"){
+  // The first key can be found for real. Duplicates are replaced with
+  // mundane recovery supplies instead of spawning another instance.
+  if(n.storyFlags.includes("quest.reward.instant_key_from_box")){
+   reward="wound_dressing";
+  }else{
+   n.storyFlags.push("quest.reward.instant_key_from_box");
+  }
+ }
  n.inventory[reward]=(n.inventory[reward]??0)+1;
  n.appliedRewardRefs.push(e.sourceRef);
  return {next:n,reward};
