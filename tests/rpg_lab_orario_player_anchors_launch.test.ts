@@ -93,13 +93,13 @@ test("NPC suspicion remains private even when scene context returns useful Playe
    tag:"odd",delta:12,context:"Сомневается"}]}};
  const load=async()=>({pack,packRevision:1,session:s,sessionRevision:6});
  const publicInfo=await readLabPlayerFog(load,pack.projectId,s.sessionId);
- assert.equal(publicInfo.orarioPlayerAnchors.hero.name,"Кай Арден");
+ assert.equal(publicInfo.orarioPlayerAnchors!.hero.name,"Кай Арден");
  assert.equal(JSON.stringify(publicInfo).includes("Сомневается"),false);
  assert.equal(JSON.stringify(publicInfo).includes("privateNpcAnchors"),false);
  const scene=await readLabRoleplayScene(load,{projectId:pack.projectId,
   sessionId:s.sessionId,npcIds:["npc.eina"],dialogueText:"Эйна"});
- assert.equal(scene.orarioPrivateSceneAnchors.privateNpcAnchors[0].suspicion,31);
- assert.equal(scene.orarioPlayerAnchors.hero.name,"Кай Арден");
+ assert.equal(scene.orarioPrivateSceneAnchors!.privateNpcAnchors[0].suspicion,31);
+ assert.equal(scene.orarioPlayerAnchors!.hero.name,"Кай Арден");
  assert.equal(scene.playerOnlySystemMenus,true);
 });
 test("unrelated campaign gets no Player anchor or hero profile",()=>{
