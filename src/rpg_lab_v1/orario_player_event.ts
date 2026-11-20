@@ -8,7 +8,7 @@ import {
  newOrarioPlayerAwakening,activateOrarioPlayerSystem,
  allocateJinwooPoints,purchaseJinwooItem,grantJinwooFalna,
  updateJinwooFalna,grantJinwooStoryUnlock,changeJinwooPhase,
- recruitFirstKnightFromClassTrial,type JinwooState
+ recruitFirstKnightFromClassTrial,JINWOO_SKILL_GRAPH,type JinwooState
 } from "./shadow_monarch_rules.ts";
 import {
  startConfirmedDailyTraining,recordConfirmedTraining,
@@ -154,10 +154,19 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
    return extractShadowFromMagicStone(current,{
     ...q,sourceRef,confirmedShadowCommand:a.playerApproved===true
    } as Parameters<typeof extractShadowFromMagicStone>[1]).next;
-  case "unlock":
+  case "unlock":{
+   if(q.type==="skill"){
+    const skill=JINWOO_SKILL_GRAPH.find(x=>x.id===q.id);
+    if(!skill||(skill.phase==="shadow_class"&&
+       current.phase==="player_system")||
+      (skill.phase==="true_monarch"&&
+       current.phase!=="true_monarch"))
+     throw Error("ORARIO_PLAYER_SKILL_PHASE_UNAVAILABLE");
+   }
    return grantJinwooStoryUnlock(current,{
     ...q,sourceRef,confirmed:q.confirmed===true
    } as Parameters<typeof grantJinwooStoryUnlock>[1]);
+  }
   case "change_class":
    if(q.to==="shadow_class"&&
       (current.dungeonKeys["job.change"]?.state!=="cleared"||
