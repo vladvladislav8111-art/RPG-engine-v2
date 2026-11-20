@@ -196,6 +196,8 @@ export interface JinwooState{
  systemDropRefs?:string[];
  /** Strict evidence from a confirmed fight, keyed by defeated targetRef. */
  defeatEvidence?:Record<string,{monsterId:string;sourceRef:string;floor:number}>;
+ /** Remaining projectiles in the currently loaded bow or throwing-knife set. */
+ ammoRemaining?:{arrow_bundle?:number;daggers_throwing?:number};
  activeSkills?:import("./orario_player_skills.ts").ActivePlayerSkill[];
  activeEncounter?:PlayerCombatEncounter;
 
