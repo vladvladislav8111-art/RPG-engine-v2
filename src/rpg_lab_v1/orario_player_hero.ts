@@ -3,7 +3,7 @@
  * Protagonist speech, beliefs, goals and decisions remain entirely player-led.
  */
 export type OrarioHeroProfile={
- id:string;name:string;age:number;race:string;sex:string;
+ id:string;name:string;age:number|null;race:string;sex:string;
  heightCm:number;appearance:string;
  knownHistory:string;practicalKnowledge:string[];
  backgroundMystery:string;
@@ -26,8 +26,8 @@ const validId=(x:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(x);
 export function validateOrarioHeroProfile(x:OrarioHeroProfile):OrarioHeroProfile{
  if(!x||!validId(x.id)||typeof x.name!=="string"||
   x.name.length<2||x.name.length>80||
-  !Number.isInteger(x.age)||x.age<15||x.age>120||
-  !["человек","эльф","полуэльф","зверочеловек","дварф","амазонка","другой"].includes(x.race)||
+  !(x.age===null||(typeof x.age==="number"&&Number.isInteger(x.age)&&x.age>=15&&x.age<=120))||
+  !["человек","эльф","полуэльф","зверочеловек","дварф","амазонка","ирид","другой"].includes(x.race)||
   typeof x.sex!=="string"||x.sex.length>30||
   !Number.isInteger(x.heightCm)||x.heightCm<100||x.heightCm>260||
   typeof x.appearance!=="string"||x.appearance.length>450||

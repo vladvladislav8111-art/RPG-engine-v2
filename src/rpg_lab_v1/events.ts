@@ -6,6 +6,9 @@ import {validateLabSession,type LabSession,type LabMemory,type LabNpcState,
  type LabWorkOrder,type LabPlayerFeature} from "./session.ts";
 import type {LabPack} from "./engine.ts";
 import {applyOrarioPlayerAction,type OrarioPlayerAction} from "./orario_player_event.ts";
+import {validateOrarioHeroProfile,type OrarioHeroProfile} from "./orario_player_hero.ts";
+import {freshChromaPalette,applyChromaPaletteChanges,
+ type ChromaPaletteChange,type ChromaStainChange} from "./chroma_palette.ts";
 import {applyNpcSuspicionChanges,type NpcSuspicionChange} from "./danmachi_suspicion.ts";
 import {applyLabAmbientRumorChanges,type LabAmbientRumorChange} from "./ambient_rumors.ts";
 import {evolveLabNpcAdaptation,type LabNpcAdaptationChange} from "./npc_adaptation.ts";
@@ -83,6 +86,9 @@ export type LabConfirmedEvent={
  knownBy:string[];observations?:LabNpcObservation[];
  features?:NpcFeatureObservation[];linos?:LabLinosTurn;
  playerSystem?:OrarioPlayerAction;
+ heroProfile?:OrarioHeroProfile;
+ chromaReaction?:ChromaPaletteChange;
+ chromaStainChanges?:ChromaStainChange[];
  npcSuspicionChanges?:NpcSuspicionChange[];
  worldActions?:LabIndependentAction[];
  npcInteractions?:LabNpcInteraction[];
@@ -187,6 +193,23 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
  if(nextStory!==undefined)next.storyState=nextStory;
  // Main-character appearance is persistent state, not a transient narrator
  // reminder. Registering it changes no NPC's personal knowledge.
+ if(event.heroProfile!==undefined){
+  if(event.kind!=="character_setup"||session.player.hero!==undefined||
+     event.playerSystem?.kind!=="init"||
+     event.playerSystem.playerApproved!==true)
+   throw Error("ORARIO_HERO_PROFILE_EVENT_INVALID");
+  next.player.hero=validateOrarioHeroProfile(event.heroProfile);
+  if(event.heroProfile.id==="hero.chroma")
+   next.player.chromaPalette=freshChromaPalette();
+ }
+ if(event.chromaReaction!==undefined||event.chromaStainChanges!==undefined){
+  if(!session.player.chromaPalette||
+     !["player_turn","continuity_repair"].includes(event.kind))
+   throw Error("CHROMA_PIGMENT_EVENT_INVALID");
+  next.player.chromaPalette=applyChromaPaletteChanges(
+   session.player.chromaPalette,event.chromaReaction,
+   event.chromaStainChanges,event.sourceRef,event.time);
+ }
  const changes=event.playerFeatureChanges??[];
  if(!Array.isArray(changes)||changes.length>24||
   new Set(changes.map(x=>x.featureId)).size!==changes.length)

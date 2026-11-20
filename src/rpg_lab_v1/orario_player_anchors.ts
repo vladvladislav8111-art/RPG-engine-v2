@@ -7,6 +7,7 @@
  */
 import type {LabSession} from "./session.ts";
 import type {LabPack} from "./engine.ts";
+import {readChromaPaletteAnchor} from "./chroma_palette.ts";
 import {effectiveJinwooMaxHp,effectiveJinwooMaxMp,shadowCapacity,
  xpToNextLevel} from "./shadow_monarch_rules.ts";
 import {previewInjuryPenalties} from "./orario_player_survival.ts";
@@ -43,6 +44,7 @@ export function readOrarioPlayerAnchors(s:LabSession,pack?:LabPack){
   schema:"RPG_LAB_ORARIO_PLAYER_ANCHORS_V1",
   available:false,readOnly:true,
   hero:{id:"hero.unset",name:"Игрок",race:"не определена",age:null},
+  chromaPalette:s.player.chromaPalette?readChromaPaletteAnchor(s.player.chromaPalette):null,
   scene:{gameClock:s.gameClock,location:locationOf(s,pack),
    locationId:s.player.locationId??null,guard:s.roleplayGuard??"legacy"},
   vitals:{hp:null,mp:null,stamina:null,injuries:[] as {
@@ -58,6 +60,7 @@ export function readOrarioPlayerAnchors(s:LabSession,pack?:LabPack){
  const base={
   schema:"RPG_LAB_ORARIO_PLAYER_ANCHORS_V1",
   available:true,readOnly:true,
+  chromaPalette:s.player.chromaPalette?readChromaPaletteAnchor(s.player.chromaPalette):null,
   hero:{id:hero?.id??"hero.unset",
    name:hero?.name??"Игрок",
    race:hero?.race??"не определена",

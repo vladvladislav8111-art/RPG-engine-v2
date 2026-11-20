@@ -42,7 +42,7 @@ const withMemories=()=>{
 test("70 character identities survive; major DanMachi actors have distinct detailed cores",()=>{
  assert.equal(Object.keys(pack.npcProfiles).length,DANMACHI_STARTING_NPC_COUNT);
  assert.equal(DANMACHI_STARTING_NPC_COUNT,70);
- assert.equal(DANMACHI_DEEP_CORE_COUNT,53);
+ assert.equal(DANMACHI_DEEP_CORE_COUNT,DANMACHI_STARTING_NPC_COUNT);
  const deep=Object.values(pack.npcProfiles).filter(n=>n.deepCore);
  assert.equal(deep.length,DANMACHI_DEEP_CORE_COUNT);
  for(const [id,npc] of Object.entries(pack.npcProfiles)){

@@ -162,10 +162,10 @@ export async function createLabCampaign(args:{
  if(characterProfile==="orario_player"&&pack.worldId!=="danmachi.orario")
   throw Error("ORARIO_PLAYER_WRONG_WORLD");
  if(characterProfile==="orario_player"&&locationId!==undefined&&
-    locationId!=="orario.medical_ward")
-  throw Error("ORARIO_PLAYER_MUST_START_AT_MEDICAL_WARD");
+    !["orario.medical_ward","orario.gate"].includes(locationId))
+  throw Error("ORARIO_PLAYER_MUST_START_AT_ALLOWED_LOCATION");
  const startingLocation=characterProfile==="orario_player"?
-  "orario.medical_ward":locationId;
+  (locationId??"orario.medical_ward"):locationId;
  if(locationId!==undefined&&(!pack.locations[locationId]||!projectRe.test(locationId.replace(/[.:-]/g,"_"))))
   throw Error("LAB_NEW_CAMPAIGN_LOCATION_INVALID");
  const session:LabSession={schema:"RPG_LAB_SESSION_V1",projectId,sessionId,gameClock,
