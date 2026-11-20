@@ -32,6 +32,7 @@ import {
  recoverShadowWithBalancedMana
 } from "./danmachi_shadow_balance.ts";
 import {recordConfirmedMonsterDrop} from "./orario_player_loot.ts";
+import {verifySystemDungeonBossEvidence} from "./orario_system_encounters.ts";
 import {activateConfirmedPlayerSkill} from "./orario_player_skills.ts";
 import {narrativeMinute} from "./events.ts";
 import type {LabSession} from "./session.ts";
@@ -174,6 +175,9 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
     ...q,sourceRef,confirmedEntry:q.confirmedEntry===true
    } as Parameters<typeof enterSystemDungeon>[1]);
   case "dungeon_clear":
+   if(typeof q.dungeonId!=="string"||
+      !verifySystemDungeonBossEvidence(current,q.dungeonId))
+    throw Error("ORARIO_SYSTEM_DUNGEON_BOSS_NOT_DEFEATED");
    return completeSystemDungeon(current,{
     ...q,sourceRef,confirmedClear:q.confirmedClear===true
    } as Parameters<typeof completeSystemDungeon>[1]);
