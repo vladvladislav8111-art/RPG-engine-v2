@@ -15,6 +15,13 @@ export const RPG_LAB_SCENE_REMINDER=[
  "Living World V2 proposes event significance, NPC decisions, canonical tone, independent contacts, due work and rumor routes together.",
  "Long strict-game time skips require source-bound worldCycleReview, even if the player was elsewhere.",
  "Fresh DanMachi: player fog is separate from GM/private lore; never disclose future canon arcs until earned.",
+ "Orario original Player: use the saved Kai Arden profile or the player's confirmed edits, never Jin-Woo's identity or Linos's previous save.",
+ "Before first awakening, the Player HUD must not reveal System numbers, future skills or private boss data.",
+ "In every new Orario combat show Player HP, MP and derived stamina (100 minus fatigue), but not unstudied enemy HP or NPC system statistics.",
+ "Player-visible anchors come from orarioPlayerAnchors; the NPC's private suspicion and memories belong only to orarioPrivateSceneAnchors, GM-only.",
+ "Use rpg_lab_player_fog / session player-hud for current Player anchors; render_current_hud belongs to LEGACY Shura and must not be confused with the new campaign.",
+ "Refresh the authoritative anchor display after the saved turn; do not claim an automatic save without an accepted commit.",
+
  "Early DanMachi anchor: Bell is already Hestia Familia and Ais's FIRST Minotaur rescue opens Day 0; avoid invented absolute calendar dates and future Xenos knowledge.",
  "Read danmachiEraContext per actor; never share Finn/Riveria's future Xenos experience or Ottar's personal Maxim memories with another character.",
  "DanmachiNpcIntents are source-linked proposals, not automatic offscreen results. Resolve via personal evidence, GM event commit and a persistent worldProject/decision.",
@@ -54,6 +61,9 @@ export function getRpgBridgeGmGuide(){
    {name:"rpg_lab_read_session",kind:"READ",use:"Read saved RPG Lab clock, state and authoritative session revision"},
    {name:"rpg_lab_story_paths",kind:"READ",use:"GM-only conditional story branches and real independent NPC technique practice; not railroaded scenes"},
    {name:"rpg_lab_player_fog",kind:"READ",use:"Player-safe discovered places and reported/observed facts only, excluding GM secrets"},
+   {name:"Orario RPG Lab Player HUD",kind:"READ",use:"GET /rpg-lab/v1/projects/{projectId}/sessions/{sessionId}/player-hud after the first Player session has been created; returns privacy-safe anchors, not old Shura HUD"},
+   {name:"Orario RPG Lab launch",kind:"WRITE",use:"In the RPG Lab browser UI, explicitly install a NEW Orario world and create a NEW Kai Arden campaign. No existing data is migrated or overwritten"},
+
    {name:"rpg_lab_scene_context",kind:"READ",use:"Before NPC scenes: read per-actor canon, mood, familiarity, knowledge, decisions, open projects and unified world-cycle hints. Can also find actors from dialogueText"},
    {name:"rpg_lab_mention_context",kind:"READ",use:"Resolve NPC names and inflections from dialogue into GM-only deep cores plus each NPC's personal memories; ambiguity never guessed"},
    {name:"rpg_lab_world_cycle",kind:"READ",use:"One bounded causal preview: significance, autonomous choices, voice cues, offscreen tasks, NPC contacts and source-traced rumor opportunities"},
@@ -76,6 +86,8 @@ export function getRpgBridgeGmGuide(){
    "6a. In a strict campaign, supply event.narrationPlan{npcIds,beats}; every long skip with active NPCs also needs worldCycleReview coverage.",
    "7. Commit once with rpg_lab_commit_event and matching expectedRevision; on failure, reload/reconcile. Never narrate a refused commit as completed.",
    "8. Optionally call rpg_lab_review_narration and use the result to check grounded scene beats; then render natural dialogue.",
+   "9. Read fresh orarioPlayerAnchors for the visible status line; show HP/MP/Stamina bars at battle start and resources after damage. Do not paste orarioPrivateSceneAnchors into the narrative.",
+
   ],
   npcKnowledgeRule:"The world ledger may prove something; a given NPC knows only what they witnessed, inferred, or heard from a traced source.",
   exampleFacts:{
