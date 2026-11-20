@@ -5,6 +5,8 @@ import type {LabPack,LabJob} from "./engine.ts";
 import {validateLabAmbientRumor,type LabAmbientRumor} from "./ambient_rumors.ts";
 import {validateLabNpcAdaptation,type LabNpcAdaptationState} from "./npc_adaptation.ts";
 import {validateLinosState,type LinosState} from "./linos.ts";
+import {validateOrarioPlayerState} from "./orario_player_validation.ts";
+import type {JinwooState} from "./shadow_monarch_rules.ts";
 import {validateFeatureMemory,type NpcFeatureMemory} from "./npc_perception.ts";
 import {validateLabSocialVector,type LabSocialVector} from "./social_dynamics_v2.ts";
 import {validateLabWorldEvidence,type LabWorldEvidence} from "./world_evidence.ts";
@@ -42,7 +44,7 @@ export type LabSession={
  schema:"RPG_LAB_SESSION_V1";projectId:string;sessionId:string;gameClock:string;
  /** New sessions default strict; legacy sessions without this flag remain compatible. */
  roleplayGuard?:"strict";
- player:{resources:Record<string,number>;stats:Record<string,number>;inventory:Record<string,number>;locationId?:string;linos?:LinosState;workOrders?:Record<string,LabWorkOrder>;visibleFeatures?:Record<string,LabPlayerFeature>};
+ player:{resources:Record<string,number>;stats:Record<string,number>;inventory:Record<string,number>;locationId?:string;linos?:LinosState;jinwoo?:JinwooState;workOrders?:Record<string,LabWorkOrder>;visibleFeatures?:Record<string,LabPlayerFeature>};
  discovered:string[];npcs:Record<string,LabNpcState>;worldProjects?:Record<string,LabWorldProject>;worldEvidence?:Record<string,LabWorldEvidence>;
  playerFog?:LabPlayerFog;storyState?:LabStoryState;
  ambientRumors?:Record<string,LabAmbientRumor>;
@@ -107,6 +109,11 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
  }
  if(s.player.locationId!==undefined&&( !id(s.player.locationId)||!pack.locations[s.player.locationId]))throw Error("LAB_SESSION_LOCATION_INVALID");
  if(s.player.linos!==undefined){if(pack.worldId!=="danmachi.orario")throw Error("LAB_LINOS_WRONG_WORLD");validateLinosState(s.player.linos);}
+ if(s.player.jinwoo!==undefined){
+  if(pack.worldId!=="danmachi.orario"||s.player.linos!==undefined)
+   throw Error("LAB_PLAYER_SYSTEM_WRONG_WORLD_OR_DUPLICATE_PROFILE");
+  validateOrarioPlayerState(s.player.jinwoo);
+ }
  for(const [k,v] of Object.entries(s.player.resources)){if(!n(v)||!pack.resources[k]||v<pack.resources[k].min||v>pack.resources[k].max)throw Error("LAB_SESSION_RESOURCE_INVALID");}
  for(const v of Object.values(s.player.stats))if(!n(v))throw Error("LAB_SESSION_STAT_INVALID");
  for(const v of Object.values(s.player.inventory))if(!n(v)||!Number.isInteger(v))throw Error("LAB_SESSION_ITEM_INVALID");
