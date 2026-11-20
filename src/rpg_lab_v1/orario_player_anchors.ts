@@ -39,8 +39,20 @@ const locationOf=(s:LabSession,pack?:LabPack)=>
  s.player.locationId||"Местонахождение не подтверждено";
 export function readOrarioPlayerAnchors(s:LabSession,pack?:LabPack){
  const p=s.player.jinwoo;
- if(!p)return {schema:"RPG_LAB_ORARIO_PLAYER_ANCHORS_V1",
-  available:false,readOnly:true};
+ if(!p)return {
+  schema:"RPG_LAB_ORARIO_PLAYER_ANCHORS_V1",
+  available:false,readOnly:true,
+  hero:{id:"hero.unset",name:"Игрок",race:"не определена",age:null},
+  scene:{gameClock:s.gameClock,location:locationOf(s,pack),
+   locationId:s.player.locationId??null,guard:s.roleplayGuard??"legacy"},
+  vitals:{hp:null,mp:null,stamina:null,injuries:[] as {
+   location:string;kind:string;severity:number;treated:boolean}[]},
+  systemActivated:false,
+  system:null,falna:null,currencies:null,inventory:null,
+  activeQuest:null,shadows:null,openKeys:[] as {id:string;status:string}[],
+  intactStones:null,combat:null,
+  displayPolicy:ORARIO_ANCHOR_POLICY
+ };
  const hidden=p.awaitingActivation===true;
  const hero=s.player.hero;
  const base={
@@ -109,7 +121,17 @@ export function readOrarioPlayerAnchors(s:LabSession,pack?:LabPack){
  return base;
 }
 export function readOrarioGmAnchors(s:LabSession,npcIds:string[]){
- if(!s.player.jinwoo)return {available:false,readOnly:true};
+ if(!s.player.jinwoo)return {
+  schema:"RPG_LAB_ORARIO_GM_ANCHORS_V1",
+  audience:"GM_ONLY" as const,available:false,readOnly:true,
+  privateNpcAnchors:[] as {npcId:string;memories:number;
+   suspicion:number;personalKnowledgeNotShared:boolean;
+   mustReadActualCoreBeforeDialogue:boolean}[],
+  worldEvents:0,openProjects:0,rumorCandidates:0,
+  playerActionsRemainPlayerControlled:true,
+  sourceRefAndRevisionRequired:true,
+  spoilerFilterEnforcedInPlayerAnchors:true
+ };
  if(!Array.isArray(npcIds)||npcIds.length>8||
   npcIds.some(x=>typeof x!=="string"||x.length>80))
   throw Error("ORARIO_GM_ANCHOR_NPC_SELECTION_INVALID");
