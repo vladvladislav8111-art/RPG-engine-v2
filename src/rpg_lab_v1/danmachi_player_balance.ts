@@ -7,6 +7,7 @@
  */
 import {awardJinwooEncounter,projectJinwooFalna,
  type JinwooStats,type JinwooState} from "./shadow_monarch_rules.ts";
+import {SYSTEM_ENCOUNTER_BY_ID} from "./orario_system_encounters.ts";
 type Tier="ordinary"|"elite"|"rare"|"monster_rex";
 export type DanmachiMonsterBalance={
  id:string;name:string;floorMin:number;floorMax:number;
@@ -70,8 +71,10 @@ export const ORARIO_MONSTER_BALANCE:readonly DanmachiMonsterBalance[]=[
   features:["огромный размер","ударная волна","босс этажа"],
   loreNote:"Обычный Голиаф 17F, не чёрный аномальный Голиаф 18F"},
 ];
-export const ORARIO_MONSTER_BY_ID:Readonly<Record<string,DanmachiMonsterBalance>>=
- Object.fromEntries(ORARIO_MONSTER_BALANCE.map(x=>[x.id,x]));
+export const ORARIO_MONSTER_BY_ID:Readonly<Record<string,DanmachiMonsterBalance>>={
+ ...Object.fromEntries(ORARIO_MONSTER_BALANCE.map(x=>[x.id,x])),
+ ...SYSTEM_ENCOUNTER_BY_ID
+};
 const clamp=(n:number,a:number,b:number)=>Math.max(a,Math.min(b,n));
 const safeNum=(x:number,lo:number,hi:number)=>Number.isFinite(x)&&x>=lo&&x<=hi;
 const weighted=(s:JinwooStats,kind:"attack"|"guard"|"magic")=>
@@ -240,13 +243,18 @@ export function commitBalancedMonsterDefeat(s:JinwooState,e:{
 }):JinwooState{
  if(!e.confirmedDefeat)throw Error("BALANCE_UNCONFIRMED_DEFEAT");
  const reward=previewBalancedMonsterReward(s,e);
- return awardJinwooEncounter(s,{
+ const n=awardJinwooEncounter(s,{
   sourceRef:e.sourceRef,targetRef:e.monsterRef,
   confirmed:true,xp:reward.xp,systemGold:reward.systemGold,
   killer:e.killer,shadowId:e.shadowId,
   isNewDefeat:!reward.playerAlreadyReceivedXp,
   gmThreatRated:true
  });
+ n.defeatEvidence={...(n.defeatEvidence??{}),[e.monsterRef]:{
+  monsterId:e.monsterId,sourceRef:e.sourceRef,
+  floor:e.floor
+ }};
+ return n;
 }
 export const CROSSOVER_BALANCE_NOTES=[
  "Solo Leveling five stats are not numerically identical to Falna's five per-level abilities.",
