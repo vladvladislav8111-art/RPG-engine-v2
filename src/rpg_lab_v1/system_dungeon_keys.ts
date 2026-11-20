@@ -39,7 +39,8 @@ function conditions(s:JinwooState,d:SystemDungeonDefinition):boolean{
  if(s.systemLevel<d.minSystemLevel)return false;
  switch(d.rewardCondition){
   case "daily_random_box":return s.completedDailyDays.length>=1&&
-   s.storyFlags.includes("quest.reward.instant_key_from_box");
+   s.storyFlags.includes("quest.reward.instant_key_from_box")&&
+   (s.inventory.system_instant_dungeon_key??0)>0;
   case "player_level_40":return s.phase==="player_system"&&
    s.systemLevel>=40;
   case "secret_daily":return s.storyFlags.includes("quest.secret_daily.overachievement");
@@ -61,6 +62,11 @@ export function issueSystemDungeonKey(s:JinwooState,e:{
   !conditions(s,d))
   throw Error("SYSTEM_DUNGEON_KEY_REWARD_NOT_EARNED");
  const n=structuredClone(s);
+ if(e.dungeonId==="instant.first"){
+  n.inventory.system_instant_dungeon_key--;
+  if(n.inventory.system_instant_dungeon_key===0)
+   delete n.inventory.system_instant_dungeon_key;
+ }
  n.dungeonKeys[e.dungeonId]={
   id:d.id,issuedRef:e.sourceRef,state:"held"} as SystemDungeonKeyState;
  n.appliedRewardRefs.push(e.sourceRef);
