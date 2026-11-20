@@ -44,6 +44,17 @@ export function validateOrarioPlayerState(s:JinwooState):JinwooState{
    !nat(st.guildValueValis)||!nat(st.powerRating))
    throw Error("ORARIO_PLAYER_MAGIC_STONE_INVALID");
  }
+ if(s.defeatEvidence!==undefined){
+  if(!keys(s.defeatEvidence,10000))
+   throw Error("ORARIO_PLAYER_DEFEAT_EVIDENCE_INVALID");
+  for(const [ref,e] of Object.entries(s.defeatEvidence)){
+   if(!id(ref)||!id(e.monsterId)||!id(e.sourceRef)||
+      !nat(e.floor)||e.floor<1||e.floor>100||
+      !s.defeatedTargetRefs.includes(ref)||
+      !s.appliedRewardRefs.includes(e.sourceRef))
+    throw Error("ORARIO_PLAYER_DEFEAT_EVIDENCE_INVALID");
+  }
+ }
  const shadowIds=new Set<string>();
  for(const sh of s.shadowRoster){
   if(!id(sh.id)||shadowIds.has(sh.id)||
