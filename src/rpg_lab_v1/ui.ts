@@ -71,6 +71,7 @@ small{color:#98a9c4}.success{color:#85e6bb}.error{color:#ff9e9e}
 <article><h2>⚔ DanMachi × Solo Leveling: игровые якоря</h2>
 <p>Отдельная кампания Кая Ардена. Якоря показывают только известные Игроку сведения. Память и подозрения NPC остаются в закрытом контексте ведущего. Бой отображает HP, MP и производную выносливость (100 минус усталость).</p>
 <div>
+<button id="orarioPrefillIds" class="secondary">Подставить ID новой кампании</button>
 <button id="orarioInstallWorld" class="secondary">Установить новый мир Орарио</button>
 <button id="orarioLaunch" class="secondary">Создать новую кампанию Кая</button>
 <button id="orarioReloadAnchors">Обновить якоря</button>
@@ -205,6 +206,12 @@ async function refreshOrarioAnchors(){
  const r=await api(sessionPath()+"/player-hud","GET");
  renderOrarioAnchors(r);return r;
 }
+el("orarioPrefillIds").onclick=()=>act(async()=>{
+ el("project").value="orario_shadow_kai";
+ el("sessionId").value="kai_day0";
+ show({newProjectId:"orario_shadow_kai",newSessionId:"kai_day0",
+  note:"Только заполнены поля, ничего не создано."});
+});
 el("orarioReloadAnchors").onclick=()=>act(async()=>show(await refreshOrarioAnchors()));
 el("orarioInstallWorld").onclick=()=>act(async()=>{
  const name=el("project").value.trim();
