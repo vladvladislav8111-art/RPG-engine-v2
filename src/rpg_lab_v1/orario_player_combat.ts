@@ -55,7 +55,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  sourceRef:string;playerCommitted:true;
  move:CombatMove|"retreat";loadout:Loadout;
  proficiencyBonus?:number;positionBonus?:number;spellMpCost?:number;
- currentMinute?:number;
+ spellId?:string;currentMinute?:number;
 }):BattleResolution{
  const battle=s.activeEncounter,mob=battle&&ORARIO_MONSTER_BY_ID[battle.monsterId];
  if(!battle||!mob||!e.playerCommitted||!safeRef(e.sourceRef)||
@@ -80,6 +80,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
   ...(e.proficiencyBonus!==undefined?{proficiencyBonus:e.proficiencyBonus}:{}),
   positionBonus:(e.positionBonus??0)+modifiers.positionBonus-injury.speedPenalty,
   ...(e.spellMpCost!==undefined?{spellMpCost:e.spellMpCost}:{}),
+  ...(e.spellId!==undefined?{spellId:e.spellId}:{}),
   ...(battle.irregularRef?{confirmedIrregularRef:battle.irregularRef}:{})
  });
  // Fired projectiles are consumed on each attack, even when they miss.
