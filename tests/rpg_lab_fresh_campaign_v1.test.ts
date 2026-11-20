@@ -224,7 +224,7 @@ test("large anime voice/canon pack survives encoded KV gzip round-trip",async()=
  const stored=await encodeLabPack(pack,1);
  assert.equal(stored.revision,1);
  assert.equal(stored.codec,"gzip-v1");
- assert.ok(stored.packedGzip&&stored.packedGzip.length<50000);
+ assert.ok(stored.packedGzip&&stored.packedGzip.length<60000);
  const decoded=await decodeLabPack(stored);
  assert.equal(Object.keys(decoded.npcProfiles).length,DANMACHI_STARTING_NPC_COUNT);
  assert.equal(Object.keys(decoded.storyArcs??{}).length,DANMACHI_CANON_ARC_COUNT);

@@ -42,7 +42,7 @@ test("70 distinct deep cores are meaningful, validated and canon character templ
  assert.match(pack.npcProfiles["npc.lili"].deepCore!.arcGuard,/Сомы/);
  assert.match(pack.npcProfiles["npc.ryuu"].deepCore!.arcGuard,/трагическое прошлое/);
  assert.match(pack.npcProfiles["npc.freya"].deepCore!.arcGuard,/Сир/);
- assert.ok(!pack.npcProfiles["npc.alicia"].deepCore);
+ assert.ok(pack.npcProfiles["npc.alicia"].deepCore?.publicFace);
 });
 test("names and grammatical cases resolve individually with no forced scene presence",()=>{
  const found=findLabNpcMentions(pack,
