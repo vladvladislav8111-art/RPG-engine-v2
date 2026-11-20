@@ -14,6 +14,8 @@ import type {LabPack} from "./engine.ts";
 import {readDanmachiEraNpcContext} from "./danmachi_era_cores_v2.ts";
 import {proposeDanmachiNpcIntentCycle,type DanmachiActorSignal} from "./danmachi_intentions_v2.ts";
 import {auditDanmachiEraScene,type DanmachiNarrativeBeat} from "./danmachi_scene_audit_v2.ts";
+import {readOrarioPlayerHud} from "./orario_player_event.ts";
+import {previewArmyBalance} from "./danmachi_shadow_balance.ts";
 import {RPG_LAB_SCENE_REMINDER,RPG_BRIDGE_GM_GUIDE_VERSION} from "./gm_guide.ts";
 import type {LabSession} from "./session.ts";
 
@@ -89,6 +91,11 @@ export async function readLabRoleplayScene(load:LabRoleplayLoader,
     s.pack,s.session,{npcIds,fromMinute:from,toMinute:to??from,
      signals:request.danmachiSignals??[]}),
   }:{}),
+  ...(s.session.player.jinwoo?{
+   orarioPlayerSystem:readOrarioPlayerHud(s.session),
+   orarioPlayerArmy:previewArmyBalance(s.session.player.jinwoo),
+   playerOnlySystemMenus:true
+  }:{}),
   storyRoutes:previewLabStoryPaths(s.pack,s.session),
   playerKnownSummary:{knownFacts:Object.keys(s.session.playerFog?.entries??{}).length,
    exploredAreas:Object.keys(s.session.playerFog?.areas??{}).length},
@@ -110,7 +117,9 @@ export async function readLabStoryOptions(load:LabRoleplayLoader,
 export async function readLabPlayerFog(load:LabRoleplayLoader,
  projectId:string,sessionId:string){
  const s=await loadExact(load,projectId,sessionId);
- return {...readLabPublicFog(s.session),sessionRevision:s.sessionRevision};
+ return {...readLabPublicFog(s.session),
+   ...(s.session.player.jinwoo?{orarioPlayer:readOrarioPlayerHud(s.session)}:{}),
+   sessionRevision:s.sessionRevision};
 }
 export type LabRoleplayWorldCycleRequest={
  projectId:string;sessionId:string;npcIds:string[];
