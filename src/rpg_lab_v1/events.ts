@@ -166,7 +166,9 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
    if(event.kind!=="medical_care"||
      event.playerLocationId!=="orario.medical_ward"||
      typeof healerId!=="string"||!pack.npcProfiles[healerId]||
-     !event.knownBy.includes(healerId))
+     !event.knownBy.includes(healerId)||
+     !(event.observations??[]).some(o=>o.npcId===healerId&&
+       o.channel==="experienced"))
     throw Error("ORARIO_PLAYER_MEDICAL_HEALER_NOT_CONFIRMED");
   }
  }
