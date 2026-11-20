@@ -31,13 +31,14 @@ import {
  setShadowDeployment,recordShadowVerifiedVictory,
  recoverShadowWithBalancedMana
 } from "./danmachi_shadow_balance.ts";
+import {recordConfirmedMonsterDrop} from "./orario_player_loot.ts";
 import {narrativeMinute} from "./events.ts";
 import type {LabSession} from "./session.ts";
 const playable=new Set([
  "init","activate","start_battle","combat_exchange",
  "daily_start","daily_progress","daily_claim","daily_fail",
  "purchase","use_item","spend_points","falna_bless","falna_update",
- "stone_collect","stone_sell","stone_extract",
+ "stone_collect","stone_sell","stone_extract","monster_drop",
  "unlock","change_class","plot_key","dungeon_key","dungeon_enter",
  "dungeon_clear","first_knight","shadow_deploy","shadow_victory",
  "shadow_revive","daily_box","injury"
@@ -128,6 +129,11 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
    return updateJinwooFalna(current,{
     ...q,sourceRef,godConfirmed:q.godConfirmed===true
    } as Parameters<typeof updateJinwooFalna>[1]);
+  case "monster_drop":
+   return recordConfirmedMonsterDrop(current,{
+    ...q,sourceRef,confirmedDefeat:q.confirmedDefeat===true,
+    confirmedSearch:a.playerApproved===true
+   } as Parameters<typeof recordConfirmedMonsterDrop>[1]).next;
   case "stone_collect":
    return addConfirmedMagicStone(current,{
     ...q,sourceRef,confirmedLoot:q.confirmedLoot===true
