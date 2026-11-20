@@ -77,8 +77,8 @@ export function applyConfirmedCombatDamage(s:JinwooState,e:{
  * severe wounds. Passage of world time is verified by the event adapter.
  */
 export function completeConfirmedRest(s:JinwooState,e:{
- sourceRef:string;minutes:number;safeRestLocation:true;
- playerConfirmed:true;
+ sourceRef:string;minutes:number;safeRestLocation:boolean;
+ playerConfirmed:boolean;
 }):JinwooState{
  source(s,e.sourceRef);
  if(!e.playerConfirmed||!e.safeRestLocation||s.activeEncounter||
@@ -102,7 +102,7 @@ export function completeConfirmedRest(s:JinwooState,e:{
  * Severe injuries persist for later follow-up.
  */
 export function receiveConfirmedMedicalCare(s:JinwooState,e:{
- sourceRef:string;confirmedHealer:true;atOrarioWard:true;
+ sourceRef:string;confirmedHealer:boolean;atOrarioWard:boolean;
  minutes:number;confirmedRescue?:boolean;costValis:number;
 }):JinwooState{
  source(s,e.sourceRef);
