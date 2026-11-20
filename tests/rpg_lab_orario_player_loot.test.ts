@@ -4,8 +4,9 @@ import {newJinwooPreparation} from "../src/rpg_lab_v1/shadow_monarch_rules.ts";
 import {recordConfirmedMonsterDrop,SYSTEM_MONSTER_DROPS} from
  "../src/rpg_lab_v1/orario_player_loot.ts";
 import {ORARIO_MONSTER_BALANCE} from "../src/rpg_lab_v1/danmachi_player_balance.ts";
+import {SYSTEM_ENCOUNTER_MOBS} from "../src/rpg_lab_v1/orario_system_encounters.ts";
 test("bonus tables cover each supported local monster without guaranteed S-rank keys",()=>{
- const monsters=ORARIO_MONSTER_BALANCE.map(m=>m.id);
+ const monsters=[...ORARIO_MONSTER_BALANCE,...SYSTEM_ENCOUNTER_MOBS].map(m=>m.id);
  assert.deepEqual(monsters.sort(),Object.keys(SYSTEM_MONSTER_DROPS).sort());
  for(const table of Object.values(SYSTEM_MONSTER_DROPS)){
   assert.ok(table.reduce((sum,x)=>sum+x.weight,0)<=100);
