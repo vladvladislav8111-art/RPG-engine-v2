@@ -68,6 +68,16 @@ small{color:#98a9c4}.success{color:#85e6bb}.error{color:#ff9e9e}
 <small>Версия сессии: <span id="sessionVersion">0</span></small>
 </div><div><label>Состояние (JSON)</label><textarea id="session" rows="9"></textarea></div></div>
 </article>
+<article><h2>⚔ DanMachi × Solo Leveling: игровые якоря</h2>
+<p>Отдельная кампания Кая Ардена. Якоря показывают только известные Игроку сведения. Память и подозрения NPC остаются в закрытом контексте ведущего. Бой отображает HP, MP и производную выносливость (100 минус усталость).</p>
+<div>
+<button id="orarioInstallWorld" class="secondary">Установить новый мир Орарио</button>
+<button id="orarioLaunch" class="secondary">Создать новую кампанию Кая</button>
+<button id="orarioReloadAnchors">Обновить якоря</button>
+</div>
+<small>Используются ID проекта и сессии сверху. Существующие проекты или сохранения не перезаписываются. Создание выполняется только по нажатию.</small>
+<pre id="orarioAnchorsDisplay" aria-live="polite">Выбери кампанию и нажми «Обновить якоря».</pre>
+</article>
 <article><h2>6. Подтверждённый игровой ход и память NPC</h2>
 <p>Сохранение требует завершённого исхода сцены, ссылки sourceRef и явного списка очевидцев. Проверка версий не допускает повторной записи.</p>
 <textarea id="sessionEvent" rows="6" spellcheck="false">{"sourceRef":"day1.scene001","kind":"scene","time":"D1 09:10","summary":"Событие состоялось","knownBy":[],"gmConfirmed":true}</textarea>
@@ -146,6 +156,71 @@ el("addNpc").onclick=()=>act(async()=>{
  el("pack").value=JSON.stringify(p,null,2);show({added:"npc",unsaved:true});
 });
 function sessionPath(){return base+project()+"/sessions/"+encodeURIComponent(el("sessionId").value.trim());}
+function orarioBar(label,current,max){
+ if(typeof current!=="number"||typeof max!=="number"||max<=0)return label+": нет данных";
+ const n=Math.max(0,Math.min(12,Math.round(current/max*12)));
+ return label+": "+String(Math.round(current))+"/"+String(Math.round(max))+
+  " ["+"█".repeat(n)+"░".repeat(12-n)+"]";
+}
+function renderOrarioAnchors(payload){
+ const a=payload.anchors;
+ if(!a||!a.available){
+  el("orarioAnchorsDisplay").textContent="Для этой сессии Система Игрока не активирована или отсутствует.";
+  return;
+ }
+ const lines=[a.hero.name+" | "+a.scene.gameClock+" | "+a.scene.location];
+ lines.push(orarioBar("HP",a.vitals.hp.current,a.vitals.hp.max));
+ if(!a.systemActivated){
+  lines.push("Система: первое пробуждение ещё не подтверждено");
+ }else{
+  lines.push(orarioBar("MP",a.vitals.mp.current,a.vitals.mp.max));
+  lines.push(orarioBar("Выносливость",a.vitals.stamina.current,a.vitals.stamina.max));
+  lines.push("Уровень Системы "+a.system.level+" | XP "+a.system.xp+
+   "/"+a.system.xpRequired+" | Очки "+a.system.unspentPoints);
+  lines.push("Золото Системы "+a.currencies.systemGold+" | Валисы "+a.currencies.valis+
+   " | Фальна "+(a.falna.present?"уровень "+a.falna.divineLevel:"отсутствует"));
+  if(a.combat){
+   lines.push("⚔ БОЙ, раунд "+a.combat.round+
+    " | параметры противника скрыты | решения за игроком");
+  }
+  if(a.activeQuest){
+   const q=a.activeQuest, ex=q.exercises;
+   lines.push("Задание дня ("+q.status+"): отжимания "+ex.pushups+
+    "/100, приседания "+ex.squats+"/100, пресс "+ex.situps+
+    "/100, бег "+ex.runMeters+"/10000 м");
+   if(q.remainingMinutes!==null)lines.push("До завершения: "+q.remainingMinutes+" мин");
+  }
+  if(a.shadows.capacity>0)lines.push("Тени: "+a.shadows.count+"/"+a.shadows.capacity+
+   " | призваны "+a.shadows.active+" | в хранилище "+a.shadows.stored);
+  if(a.openKeys.length)lines.push("Открытые ключи: "+
+   a.openKeys.map(x=>x.id+" ("+x.status+")").join(", "));
+  if(a.intactStones)lines.push("Целые магические камни: "+a.intactStones);
+ }
+ if(a.vitals.injuries.length)lines.push("Травмы: "+a.vitals.injuries.map(x=>
+  x.location+" / "+x.kind+" ("+x.severity+")").join("; "));
+ lines.push("Состояние взято из сохранения, версия "+payload.revision+".");
+ el("orarioAnchorsDisplay").textContent=lines.join("\n");
+}
+async function refreshOrarioAnchors(){
+ const r=await api(sessionPath()+"/player-hud","GET");
+ renderOrarioAnchors(r);return r;
+}
+el("orarioReloadAnchors").onclick=()=>act(async()=>show(await refreshOrarioAnchors()));
+el("orarioInstallWorld").onclick=()=>act(async()=>{
+ const name=el("project").value.trim();
+ const r=await api("/rpg-lab/v1/danmachi/starter","POST",{
+  confirm:"INSTALL_NEW_DANMACHI_WORLD",projectId:name});
+ await refreshPack();show(r);
+});
+el("orarioLaunch").onclick=()=>act(async()=>{
+ const r=await api("/rpg-lab/v1/danmachi/player-session","POST",{
+  confirm:"CREATE_NEW_ORARIO_PLAYER",
+  projectId:el("project").value.trim(),sessionId:el("sessionId").value.trim()});
+ sessionRevision=r.revision;el("sessionVersion").textContent=sessionRevision;
+ const loaded=await api(sessionPath(),"GET");
+ el("session").value=JSON.stringify(loaded.session,null,2);
+ await refreshOrarioAnchors();show(r);
+});
 el("loadMemory").onclick=()=>act(async()=>{
  const qs=new URLSearchParams();
  const ids=el("memoryNpcIds").value.trim();
@@ -167,6 +242,7 @@ el("newSession").onclick=()=>act(async()=>{
 el("loadSession").onclick=()=>act(async()=>{
  const r=await api(sessionPath(),"GET");sessionRevision=r.revision;el("sessionVersion").textContent=sessionRevision;
  el("session").value=JSON.stringify(r.session,null,2);show(r);
+ if(r.session.player&&r.session.player.jinwoo)await refreshOrarioAnchors();
 });
 el("saveSession").onclick=()=>act(async()=>{
  const r=await api(sessionPath(),"PUT",{expectedRevision:sessionRevision,session:JSON.parse(el("session").value)});
@@ -177,6 +253,7 @@ el("commitEvent").onclick=()=>act(async()=>{
  const result=await api(sessionPath()+"/events","POST",body);
  sessionRevision=result.revision;el("sessionVersion").textContent=sessionRevision;
  const latest=await api(sessionPath(),"GET");el("session").value=JSON.stringify(latest.session,null,2);
+ if(latest.session.player&&latest.session.player.jinwoo)await refreshOrarioAnchors();
  show(result);
 });
 el("dungeonSample").onclick=()=>act(async()=>{
