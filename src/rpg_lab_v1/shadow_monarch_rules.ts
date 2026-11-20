@@ -183,8 +183,18 @@ export interface SystemDungeonKeyState{
  id:string;issuedRef:string;state:"held"|"entered"|"cleared";
  entryLocationRef?:string;completionRef?:string;
 }
+export interface PlayerCombatEncounter{
+ enemyRef:string;monsterId:string;floor:number;
+ enemyHp:number;round:number;startedRef:string;
+ irregularRef?:string;lastCombatRef?:string;
+}
 export interface JinwooState{
  schema:"DANMACHI_JINWOO_PREP_V1";
+ injuries?:import("./orario_player_survival.ts").PlayerInjury[];
+ dailyTraining?:import("./orario_player_survival.ts").DailyTraining;
+ dailyHistory?:number[];
+ activeEncounter?:PlayerCombatEncounter;
+
  phase:JinwooPhase;postAscensionInterface:PostAscensionInterface;
  /** The selected new campaign begins here, before the first System panel. */
  awaitingActivation?:boolean;
