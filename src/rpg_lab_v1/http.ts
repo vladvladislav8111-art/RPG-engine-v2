@@ -318,7 +318,7 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    }
    return reply({schema:"RPG_LAB_SESSION_INDEX_V1",projectId,sessions});
   }
-  const playerHudPath=/^\\/rpg-lab\\/v1\\/projects\\/([A-Za-z0-9_-]{3,64})\\/sessions\\/([A-Za-z0-9_-]{3,64})\\/player-hud$/.exec(path);
+  const playerHudPath=/^\/rpg-lab\/v1\/projects\/([A-Za-z0-9_-]{3,64})\/sessions\/([A-Za-z0-9_-]{3,64})\/player-hud$/.exec(path);
   if(playerHudPath&&req.method==="GET"){
    const loaded=await loadLabSessionFromKv(playerHudPath[1],playerHudPath[2]);
    return reply({schema:"RPG_LAB_ORARIO_PLAYER_HUD_V1",
