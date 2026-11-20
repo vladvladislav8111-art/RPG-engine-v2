@@ -13,6 +13,7 @@ import type {LabSession} from "../src/rpg_lab_v1/session.ts";
 function player(){
  const s=newJinwooPreparation();s.completedDailyDays=["0"];
  s.storyFlags.push("quest.reward.instant_key_from_box");
+ s.inventory.system_instant_dungeon_key=1;
  return s;
 }
 test("Kasaka and Igris do not spawn as random Upper Dungeon mobs without a System key",()=>{
