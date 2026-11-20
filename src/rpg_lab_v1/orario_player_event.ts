@@ -62,7 +62,7 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
   throw Error("ORARIO_PLAYER_ACTION_NOT_PLAYER_APPROVED");
  if(a.kind==="init"){
   if(s.player.jinwoo||s.player.linos||
-   s.player.locationId!=="orario.medical_ward")
+   !["orario.medical_ward","orario.gate"].includes(s.player.locationId??""))
    throw Error("ORARIO_PLAYER_INIT_WRONG_CAMPAIGN");
   return newOrarioPlayerAwakening();
  }
