@@ -194,6 +194,7 @@ export interface JinwooState{
  dailyTraining?:import("./orario_player_survival.ts").DailyTraining;
  dailyHistory?:number[];
  systemDropRefs?:string[];
+ activeSkills?:import("./orario_player_skills.ts").ActivePlayerSkill[];
  activeEncounter?:PlayerCombatEncounter;
 
  phase:JinwooPhase;postAscensionInterface:PostAscensionInterface;
