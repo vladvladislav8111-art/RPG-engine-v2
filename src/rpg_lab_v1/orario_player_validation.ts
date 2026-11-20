@@ -87,6 +87,10 @@ export function validateOrarioPlayerState(s:JinwooState):JinwooState{
     nat(d.exercises[k as keyof typeof d.exercises])))
    throw Error("ORARIO_PLAYER_DAILY_INVALID");
  }
+ if(s.systemDropRefs!==undefined&&(!Array.isArray(s.systemDropRefs)||
+  s.systemDropRefs.length>10000||
+  !unique(s.systemDropRefs)))
+  throw Error("ORARIO_PLAYER_DROP_CLAIMS_INVALID");
  if(s.dailyHistory!==undefined&&(!Array.isArray(s.dailyHistory)||
   s.dailyHistory.length>500||s.dailyHistory.some(v=>!nat(v))))
   throw Error("ORARIO_PLAYER_DAILY_HISTORY_INVALID");
