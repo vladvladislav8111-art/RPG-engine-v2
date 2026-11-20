@@ -63,8 +63,8 @@ test("Chroma reaction and material stain persist across unrelated later turns",(
    intensity:"strong",control:"involuntary",playerEmotionConfirmed:true},
   chromaStainChanges:[{action:"add",stainId:"stain.scarf.1",
    target:"Шарф Хромы",surface:"fabric",color:"сливовый",
-   description:"След окрашенных слез",durability:"fabric_decades",
-   playerActionConfirmed:true}]
+   description:"След окрашенных слез",durability:"ordinary",
+   confirmedPhysicalConsequence:true}]
  });
  assert.equal(s.player.chromaPalette?.reaction?.emotion,"печаль");
  assert.equal(Object.keys(s.player.chromaPalette?.stains??{}).length,1);
@@ -73,7 +73,7 @@ test("Chroma reaction and material stain persist across unrelated later turns",(
   summary:"Хрома продолжил путь; след еще не смыли",knownBy:[],gmConfirmed:true
  });
  assert.equal(s.player.chromaPalette?.reaction?.emotion,"печаль");
- assert.equal(s.player.chromaPalette?.stains["stain.scarf.1"]?.durability,"fabric_decades");
+ assert.equal(s.player.chromaPalette?.stains["stain.scarf.1"]?.durability,"ordinary");
  const anchor=buildLabSceneBrief(pack,s,{npcIds:["npc.apollo","npc.hermes"]});
  assert.equal(anchor.chromaPaletteAnchor?.activeReaction?.emotion,"печаль");
  assert.equal(anchor.chromaPaletteAnchor?.physicalStains.length,1);

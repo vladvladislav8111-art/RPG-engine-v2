@@ -29,7 +29,7 @@ export type ChromaStainChange=
  |{action:"add";stainId:string;target:string;
    surface:ChromaPigmentStain["surface"];color:string;
    description:string;durability:ChromaPigmentStain["durability"];
-   playerActionConfirmed:true}
+   playerActionConfirmed?:true;confirmedPhysicalConsequence?:true}
  |{action:"remove";stainId:string;
    reason:string;confirmedRemoval:true};
 const ident=(v:unknown)=>typeof v==="string"&&
@@ -105,7 +105,9 @@ export function applyChromaPaletteChanges(
      throw Error("CHROMA_STAIN_REMOVAL_UNVERIFIED");
     delete next.stains[c.stainId];
    }else if(c.action==="add"){
-    if(c.playerActionConfirmed!==true||next.stains[c.stainId])
+    if(!(c.playerActionConfirmed===true||
+       (c.confirmedPhysicalConsequence===true&&reaction?.action==="manifest"&&
+        reaction.playerEmotionConfirmed===true))||next.stains[c.stainId])
      throw Error("CHROMA_STAIN_ADDITION_UNVERIFIED");
     next.stains[c.stainId]={
      stainId:c.stainId,target:c.target,surface:c.surface,

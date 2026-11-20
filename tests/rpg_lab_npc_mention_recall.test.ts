@@ -21,12 +21,12 @@ const memory=(sourceRef:string,summary:string,npcId:string,salience="important")
  knownBy:[npcId],locationId:"orario.plaza",channel:"seen",salience,
  confidence:"certain",privacy:"private"
 });
-test("53 distinct deep cores are meaningful, validated and canon character templates remain fixed",()=>{
+test("70 distinct deep cores are meaningful, validated and canon character templates remain fixed",()=>{
  assert.equal(DANMACHI_STARTING_NPC_COUNT,70);
- assert.equal(DANMACHI_DEEP_CORE_COUNT,53);
+ assert.equal(DANMACHI_DEEP_CORE_COUNT,DANMACHI_STARTING_NPC_COUNT);
  assert.equal(DANMACHI_ALIAS_PROFILE_COUNT,53);
  validateLabPack(pack);
- assert.equal(Object.values(pack.npcProfiles).filter(p=>p.deepCore).length,53);
+ assert.equal(Object.values(pack.npcProfiles).filter(p=>p.deepCore).length,DANMACHI_STARTING_NPC_COUNT);
  for(const [id,npc] of Object.entries(pack.npcProfiles)){
   if(!npc.deepCore)continue;
   const c=npc.deepCore;

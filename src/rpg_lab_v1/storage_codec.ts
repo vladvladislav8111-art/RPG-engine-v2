@@ -26,7 +26,7 @@ export async function encodeLabPack(pack:LabPack,revision:number):Promise<LabSto
  const metadata={revision,updatedAt:new Date().toISOString(),
   projectId:pack.projectId,worldId:pack.worldId};
  if(json.byteLength<=45000)return {...metadata,pack};
- const zipped=await boundedBytes(new Blob([json]).stream().pipeThrough(new CompressionStream("gzip")),50000);
+ const zipped=await boundedBytes(new Blob([json]).stream().pipeThrough(new CompressionStream("gzip")),60000);
  return {...metadata,packedGzip:zipped,codec:"gzip-v1"};
 }
 export async function decodeLabPack(stored:LabStored):Promise<LabPack>{
