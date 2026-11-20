@@ -32,10 +32,11 @@ import {
  recoverShadowWithBalancedMana
 } from "./danmachi_shadow_balance.ts";
 import {recordConfirmedMonsterDrop} from "./orario_player_loot.ts";
+import {activateConfirmedPlayerSkill} from "./orario_player_skills.ts";
 import {narrativeMinute} from "./events.ts";
 import type {LabSession} from "./session.ts";
 const playable=new Set([
- "init","activate","start_battle","combat_exchange",
+ "init","activate","start_battle","combat_exchange","activate_skill",
  "daily_start","daily_progress","daily_claim","daily_fail",
  "purchase","use_item","spend_points","falna_bless","falna_update",
  "stone_collect","stone_sell","stone_extract","monster_drop",
@@ -82,8 +83,14 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
    } as Parameters<typeof startConfirmedOrarioBattle>[1]);
   case "combat_exchange":
    return resolveConfirmedOrarioExchange(current,{
-    ...q,sourceRef,playerCommitted:a.playerApproved===true
+    ...q,sourceRef,playerCommitted:a.playerApproved===true,
+    currentMinute:narrativeMinute(eventTime)??-1
    } as Parameters<typeof resolveConfirmedOrarioExchange>[1]).next;
+  case "activate_skill":
+   return activateConfirmedPlayerSkill(current,{
+    ...q,sourceRef,startMinute:narrativeMinute(eventTime)??-1,
+    playerConfirmed:a.playerApproved===true
+   } as Parameters<typeof activateConfirmedPlayerSkill>[1]);
   case "daily_start":
    if(narrativeMinute(eventTime)===null||
      Math.floor(narrativeMinute(eventTime)!/1440)!==q.day)
