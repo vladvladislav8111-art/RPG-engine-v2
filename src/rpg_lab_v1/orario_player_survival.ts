@@ -73,6 +73,59 @@ export function applyConfirmedCombatDamage(s:JinwooState,e:{
  const n=copy(s);n.hp=Math.max(0,n.hp-e.damage);
  n.appliedRewardRefs.push(e.sourceRef);return n;
 }
+/** Physical rest is slower than daily quest Recovery and does not heal
+ * severe wounds. Passage of world time is verified by the event adapter.
+ */
+export function completeConfirmedRest(s:JinwooState,e:{
+ sourceRef:string;minutes:number;safeRestLocation:true;
+ playerConfirmed:true;
+}):JinwooState{
+ source(s,e.sourceRef);
+ if(!e.playerConfirmed||!e.safeRestLocation||s.activeEncounter||
+  s.hp<=0||!Number.isSafeInteger(e.minutes)||
+  e.minutes<60||e.minutes>2880)
+  throw Error("PLAYER_REST_NOT_AVAILABLE");
+ const n=copy(s);
+ n.hp=Math.min(effectiveJinwooMaxHp(n),n.hp+
+  Math.floor(effectiveJinwooMaxHp(n)*e.minutes/7200));
+ n.mp=Math.min(effectiveJinwooMaxMp(n),n.mp+
+  Math.floor(effectiveJinwooMaxMp(n)*e.minutes/960));
+ n.fatigue=Math.max(0,n.fatigue-Math.floor(e.minutes/8));
+ for(const wound of n.injuries??[]){
+  if(wound.active&&wound.treated&&wound.kind==="bruise"&&
+   wound.severity===1&&e.minutes>=480)wound.active=false;
+ }
+ n.appliedRewardRefs.push(e.sourceRef);return n;
+}
+/** A witnessed rescue/clinic visit ends unconscious combat only if medical
+ * help and arrival at the ward were attested by the actual Lab event.
+ * Severe injuries persist for later follow-up.
+ */
+export function receiveConfirmedMedicalCare(s:JinwooState,e:{
+ sourceRef:string;confirmedHealer:true;atOrarioWard:true;
+ minutes:number;confirmedRescue?:boolean;costValis:number;
+}):JinwooState{
+ source(s,e.sourceRef);
+ if(!e.confirmedHealer||!e.atOrarioWard||
+  !Number.isSafeInteger(e.minutes)||e.minutes<30||
+  e.minutes>10080||!Number.isSafeInteger(e.costValis)||
+  e.costValis<0||e.costValis>1e7||e.costValis>s.valis||
+  (s.hp<=0&&e.confirmedRescue!==true)||
+  (s.activeEncounter&&s.hp>0))
+  throw Error("PLAYER_MEDICAL_CARE_NOT_VERIFIED");
+ const n=copy(s);
+ n.activeEncounter=undefined;
+ n.valis-=e.costValis;
+ n.hp=Math.max(n.hp,Math.ceil(effectiveJinwooMaxHp(n)*.12));
+ for(const wound of n.injuries??[]){
+  if(!wound.active)continue;
+  wound.treated=true;
+  if(wound.severity===1&&e.minutes>=60)wound.active=false;
+  if(wound.severity===2&&e.minutes>=2880)wound.active=false;
+  if(wound.severity===3&&e.minutes>=7200)wound.active=false;
+ }
+ n.appliedRewardRefs.push(e.sourceRef);return n;
+}
 const restorative:Readonly<Record<string,{hp?:number;mp?:number;fatigue?:number;
  heal?:InjuryKind;stabilize?:boolean}>>={
  potion_hp_small:{hp:.2},potion_hp_medium:{hp:.45},
@@ -88,6 +141,7 @@ export function consumeConfirmedSystemItem(s:JinwooState,e:{
 }):JinwooState{
  source(s,e.sourceRef);
  const ability=restorative[e.itemId];
+ if(s.hp<=0)throw Error("PLAYER_UNCONSCIOUS_CANNOT_SELF_MEDICATE");
  if(!ability||(s.inventory[e.itemId]??0)<=0||!e.confirmedUse)
   throw Error("PLAYER_CONSUMABLE_NOT_OWNED");
  const n=copy(s);
