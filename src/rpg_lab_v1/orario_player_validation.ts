@@ -9,7 +9,7 @@ const id=(x:unknown)=>typeof x==="string"&&
 const finite=(x:unknown)=>typeof x==="number"&&
  Number.isFinite(x)&&x>=0&&x<=1e10;
 const nat=(x:unknown)=>finite(x)&&Number.isSafeInteger(x);
-const record=(x:unknown)=>x!==null&&typeof x==="object"&&!Array.isArray(x);
+const record=(x:unknown):x is Record<string,unknown>=>x!==null&&typeof x==="object"&&!Array.isArray(x);
 const keys=(x:unknown,limit:number)=>record(x)&&Object.keys(x).length<=limit;
 const phase=["player_system","shadow_class","true_monarch"];
 export function validateOrarioPlayerState(s:JinwooState):JinwooState{
