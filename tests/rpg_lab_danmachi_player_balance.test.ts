@@ -112,11 +112,18 @@ test("magic is not free simply because the System player invests in Intelligence
  const s=newJinwooPreparation();s.stats.intelligence=100;s.mp=1000;
  assert.throws(()=>previewCombatExchange(s,{
   monsterId:"war_shadow",floor:5,move:"magic",
-  weaponPower:0,armorPower:0,spellMpCost:20}),/MAGIC_NOT_AVAILABLE/);
+  weaponPower:0,armorPower:0,spellMpCost:20,spellId:"firebolt"}),/MAGIC_NOT_AVAILABLE/);
  const withSkill=grantJinwooStoryUnlock(s,{sourceRef:"evt.skill.rulers",
   confirmed:true,type:"skill",id:"rulers_authority"});
  const spell=previewCombatExchange(withSkill,{monsterId:"war_shadow",floor:5,
-  move:"magic",weaponPower:0,armorPower:0,spellMpCost:20});
+  move:"magic",weaponPower:0,armorPower:0,spellMpCost:20,spellId:"rulers_authority"});
+ assert.throws(()=>previewCombatExchange(withSkill,{
+  monsterId:"war_shadow",floor:5,move:"magic",
+  weaponPower:0,armorPower:0,spellMpCost:20,
+  spellId:"firebolt"}),/MAGIC_NOT_AVAILABLE/);
+ assert.throws(()=>previewCombatExchange(withSkill,{
+  monsterId:"war_shadow",floor:5,move:"magic",
+  weaponPower:0,armorPower:0,spellMpCost:20}),/MAGIC_NOT_AVAILABLE/);
  assert.equal(spell.attackerResourceCost.mp,20);
  assert.ok(spell.damageIfHit>0);
 });
