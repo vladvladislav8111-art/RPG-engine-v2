@@ -14,7 +14,7 @@ import {
  startConfirmedDailyTraining,recordConfirmedTraining,
  claimConfirmedDailyTraining,failConfirmedDailyTraining,
  consumeConfirmedSystemItem,openConfirmedDailyBox,
- applyConfirmedInjury
+ applyConfirmedInjury,completeConfirmedRest,receiveConfirmedMedicalCare
 } from "./orario_player_survival.ts";
 import {
  startConfirmedOrarioBattle,resolveConfirmedOrarioExchange
@@ -42,7 +42,7 @@ const playable=new Set([
  "stone_collect","stone_sell","stone_extract","monster_drop",
  "unlock","change_class","plot_key","dungeon_key","dungeon_enter",
  "dungeon_clear","first_knight","shadow_deploy","shadow_victory",
- "shadow_revive","daily_box","injury"
+ "shadow_revive","daily_box","injury","rest","medical_care"
 ]);
 export type OrarioPlayerAction={
  kind:string;
@@ -52,7 +52,7 @@ export type OrarioPlayerAction={
 };
 const obj=(x:unknown):x is Record<string,unknown>=>!!x&&
  typeof x==="object"&&!Array.isArray(x);
-const expectedKinds=new Set(["injury","daily_fail"]);
+const expectedKinds=new Set(["injury","daily_fail","medical_care"]);
 export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
  sourceRef:string,eventTime:string):JinwooState{
  if(!a||!playable.has(a.kind)||!obj(a.args))
@@ -201,6 +201,29 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
     ...q,sourceRef,confirmedOpen:a.playerApproved===true,
     playerApproved:a.playerApproved===true
    } as Parameters<typeof openConfirmedDailyBox>[1]).next;
+  case "rest":{
+   const previous=narrativeMinute(s.gameClock),next=narrativeMinute(eventTime);
+   if(previous===null||next===null||next<previous)
+    throw Error("ORARIO_PLAYER_REST_TIME_INVALID");
+   return completeConfirmedRest(current,{
+    sourceRef,minutes:next-previous,
+    safeRestLocation:q.safeRestLocation===true,
+    playerConfirmed:a.playerApproved===true
+   });
+  }
+  case "medical_care":{
+   const previous=narrativeMinute(s.gameClock),next=narrativeMinute(eventTime);
+   if(previous===null||next===null||next<previous||
+    (current.hp>0&&a.playerApproved!==true))
+    throw Error("ORARIO_PLAYER_MEDICAL_EVENT_INVALID");
+   return receiveConfirmedMedicalCare(current,{
+    sourceRef,minutes:next-previous,
+    confirmedHealer:q.confirmedHealer===true,
+    atOrarioWard:q.atOrarioWard===true,
+    confirmedRescue:q.confirmedRescue===true,
+    costValis:q.costValis as number
+   });
+  }
   case "injury":
    return applyConfirmedInjury(current,{
     ...q,sourceRef,confirmedCause:q.confirmedCause===true
