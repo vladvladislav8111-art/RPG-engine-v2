@@ -66,7 +66,7 @@ export function previewVerifiedLoadout(s:JinwooState,e:Loadout){
 export function previewOwnedEquipmentEncounter(s:JinwooState,e:{
  monsterId:string;floor:number;loadout:Loadout;
  move:CombatMove;positionBonus?:number;proficiencyBonus?:number;
- spellMpCost?:number;confirmedIrregularRef?:string;
+ spellMpCost?:number;spellId?:string;confirmedIrregularRef?:string;
 }){
  const gear=previewVerifiedLoadout(s,e.loadout);
  const mob=ORARIO_MONSTER_BY_ID[e.monsterId];
@@ -80,7 +80,8 @@ export function previewOwnedEquipmentEncounter(s:JinwooState,e:{
   armorPower:gear.armor,
   positionBonus:(e.positionBonus??0)-gear.speedPenalty,
   proficiencyBonus:e.proficiencyBonus,
-  spellMpCost:e.spellMpCost,confirmedIrregularRef:e.confirmedIrregularRef
+  spellMpCost:e.spellMpCost,spellId:e.spellId,
+  confirmedIrregularRef:e.confirmedIrregularRef
  });
  return {gear,exchange,readOnly:true,requiresPlayerConfirmedEquipAction:true,
   noFreeWeaponAndNoAutoBattleOutcome:true};
