@@ -157,7 +157,29 @@ export async function createLabCampaign(args:{
     typeof gameClock!=="string"||gameClock.length<1||gameClock.length>100)
   throw Error("LAB_NEW_CAMPAIGN_INVALID");
  if(!["none","linos","orario_player"].includes(characterProfile))throw Error("LAB_CHARACTER_PROFILE_INVALID");
- const {pack}=await loadLabProjectFromKv(projectId);
+ // For an explicitly new Chroma campaign at the Orario gate, install the
+ // isolated DanMachi starter pack if (and only if) its project ID is unused.
+ // Existing worlds and sessions are never migrated, replaced or touched.
+ let pack:LabPack;
+ try{
+  ({pack}=await loadLabProjectFromKv(projectId));
+ }catch(err){
+  if(!(err instanceof Error) || err.message!=="LAB_PROJECT_NOT_FOUND" ||
+     characterProfile!=="none" || locationId!=="orario.gate" ||
+     !/^chroma_[A-Za-z0-9_-]{1,57}$/.test(projectId))
+   throw err;
+  try{
+   await installFreshDanmachiWorld(projectId);
+  }catch(installError){
+   // Concurrent callers may have installed the same new world already.
+   if(!(installError instanceof Error) ||
+      !["LAB_NEW_WORLD_ID_ALREADY_EXISTS","LAB_REVISION_CONFLICT"].includes(installError.message))
+     throw installError;
+  }
+  ({pack}=await loadLabProjectFromKv(projectId));
+  if(pack.worldId!=="danmachi.orario")
+   throw Error("LAB_CHROMA_WRONG_WORLD");
+ }
  if(characterProfile==="linos"&&pack.worldId!=="danmachi.orario")throw Error("LAB_LINOS_WRONG_WORLD");
  if(characterProfile==="orario_player"&&pack.worldId!=="danmachi.orario")
   throw Error("ORARIO_PLAYER_WRONG_WORLD");
