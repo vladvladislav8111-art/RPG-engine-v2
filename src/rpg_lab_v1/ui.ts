@@ -169,7 +169,7 @@ function renderOrarioAnchors(payload){
   return;
  }
  const lines=[a.hero.name+" | "+a.scene.gameClock+" | "+a.scene.location];
- lines.push(orarioBar("HP",a.vitals.hp.current,a.vitals.hp.max));
+ if(a.vitals.hp)lines.push(orarioBar("HP",a.vitals.hp.current,a.vitals.hp.max));
  if(!a.systemActivated){
   lines.push("Система: первое пробуждение ещё не подтверждено");
  }else{
