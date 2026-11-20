@@ -256,6 +256,8 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
 export function readOrarioPlayerHud(s:LabSession){
  const p=s.player.jinwoo;
  if(!p)return {available:false,readOnly:true};
+ if(p.awaitingActivation)return {available:true,awaitingActivation:true,
+  privateSystemNumbersHidden:true,readOnly:true};
  return {available:true,systemLevel:p.systemLevel,xp:p.xp,
   freeStatPoints:p.freeStatPoints,stats:{...p.stats},
   hp:p.hp,mp:p.mp,fatigue:p.fatigue,
