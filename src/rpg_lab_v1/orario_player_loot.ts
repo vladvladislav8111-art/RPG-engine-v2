@@ -14,7 +14,16 @@ export const SYSTEM_MONSTER_DROPS={
  silverback:[{id:"potion_hp_medium",weight:15},{id:"reinforced_hide",weight:6}],
  infant_dragon:[{id:"dragon_fang",weight:10},{id:"potion_fire_resistance",weight:10}],
  minotaur:[{id:"minotaur_horn",weight:12},{id:"potion_hp_large",weight:12}],
- goliath_17:[{id:"goliath_shard",weight:25},{id:"potion_hp_supreme",weight:20}]
+ goliath_17:[{id:"goliath_shard",weight:25},{id:"potion_hp_supreme",weight:20}],
+ // Boss keepsakes are earned only after a confirmed System-instance victory.
+ // Exact item stats remain GM-only adaptation, not a promised canon drop.
+ "system.dungeon_wolf":[{id:"wolf_fang",weight:15}],
+ "system.kasaka":[{id:"kasaka_fang",weight:100}],
+ "system.knight_guard":[{id:"knight_shard",weight:15}],
+ "system.igris":[{id:"igris_crest",weight:100}],
+ "system.demon_guard":[{id:"demon_ember",weight:20}],
+ "system.demon_king":[{id:"demon_king_heart",weight:100}],
+ "system.architect_trial":[{id:"architect_remnant",weight:100}]
 } as const;
 const valid=(s:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(s);
 function draw(seed:string){let h=2166136261>>>0;
