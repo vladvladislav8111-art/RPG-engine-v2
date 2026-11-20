@@ -82,6 +82,24 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
   ...(e.spellMpCost!==undefined?{spellMpCost:e.spellMpCost}:{}),
   ...(battle.irregularRef?{confirmedIrregularRef:battle.irregularRef}:{})
  });
+ // Fired projectiles are consumed on each attack, even when they miss.
+ // A purchased arrow bundle holds 20 arrows; a throwing set holds 5 knives.
+ if(e.move==="strike"){
+  const ammoId=e.loadout.weaponId==="shortbow"?"arrow_bundle":
+   e.loadout.weaponId==="daggers_throwing"?"daggers_throwing":null;
+  if(ammoId){
+   let remaining=next.ammoRemaining?.[ammoId]??0;
+   if(remaining===0){
+    if((next.inventory[ammoId]??0)<1)
+     throw Error("PLAYER_BATTLE_OUT_OF_AMMUNITION");
+    next.inventory[ammoId]--;
+    if(next.inventory[ammoId]===0)delete next.inventory[ammoId];
+    remaining=ammoId==="arrow_bundle"?20:5;
+   }
+   next.ammoRemaining={...(next.ammoRemaining??{}),
+    [ammoId]:remaining-1};
+  }
+ }
  const chance=wear.exchange.hitChancePercent;
  let dealt=0,taken=0,injuryRef:undefined|string;
  if(e.move==="retreat"){
