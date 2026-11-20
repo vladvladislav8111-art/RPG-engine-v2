@@ -20,6 +20,7 @@ test("original Player's first dungeon key is never handed out before awakening a
  assert.deepEqual(previewSystemDungeonKeyOffers(daily).candidates,[]);
  const gifted=structuredClone(daily);
  gifted.storyFlags.push("quest.reward.instant_key_from_box");
+ gifted.inventory.system_instant_dungeon_key=1;
  assert.ok(previewSystemDungeonKeyOffers(gifted).candidates.some(x=>x.id==="instant.first"));
  const issued=issueSystemDungeonKey(gifted,{
   sourceRef:"evt.random_box.grant.key",dungeonId:"instant.first",confirmedReward:true});
@@ -31,6 +32,7 @@ test("key is one-time item with required scene entrance and confirmed clear",()=
  let s=newJinwooPreparation();
  s.completedDailyDays.push("0");
  s.storyFlags.push("quest.reward.instant_key_from_box");
+ s.inventory.system_instant_dungeon_key=1;
  s=issueSystemDungeonKey(s,{sourceRef:"evt.key.1",
   dungeonId:"instant.first",confirmedReward:true});
  assert.throws(()=>completeSystemDungeon(s,{sourceRef:"evt.finish.cheat",
