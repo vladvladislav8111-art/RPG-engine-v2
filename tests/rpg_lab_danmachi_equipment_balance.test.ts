@@ -64,10 +64,14 @@ test("bow requires arrows and a melee sword cannot amplify a verified magic skil
  s.falna.blessed=true;s.falna.godId="npc.hestia";
  s.falna.skills.push("firebolt");
  const bare=previewOwnedEquipmentEncounter(s,{monsterId:"goblin",floor:1,
-  move:"magic",loadout:{},spellMpCost:15});
+  move:"magic",loadout:{},spellMpCost:15,spellId:"firebolt"});
  const sword=previewOwnedEquipmentEncounter(s,{monsterId:"goblin",floor:1,
-  move:"magic",loadout:{weaponId:"sword_iron"},spellMpCost:15});
+  move:"magic",loadout:{weaponId:"sword_iron"},spellMpCost:15,spellId:"firebolt"});
  assert.equal(bare.exchange.damageIfHit,sword.exchange.damageIfHit);
+ assert.throws(()=>previewOwnedEquipmentEncounter(s,{
+  monsterId:"goblin",floor:1,move:"magic",loadout:{},
+  spellMpCost:15,spellId:"nonexistent_spell"
+ }),/MAGIC_NOT_AVAILABLE/);
 });
 test("Knight Killer's effect only helps against armor, never universal armor negation",()=>{
  let s=purse();s.systemLevel=40;
