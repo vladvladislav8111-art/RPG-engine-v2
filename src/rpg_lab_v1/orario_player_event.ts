@@ -84,8 +84,7 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
   case "combat_exchange":
    return resolveConfirmedOrarioExchange(current,{
     ...q,sourceRef,playerCommitted:a.playerApproved===true,
-    currentMinute:narrativeMinute(eventTime)??-1
-   } as Parameters<typeof resolveConfirmedOrarioExchange>[1]).next;
+   } as unknown as Parameters<typeof resolveConfirmedOrarioExchange>[1]).next;
   case "activate_skill":
    return activateConfirmedPlayerSkill(current,{
     ...q,sourceRef,startMinute:narrativeMinute(eventTime)??-1,
