@@ -54,7 +54,7 @@ export function readOrarioPlayerAnchors(s:LabSession,pack?:LabPack){
    locationId:s.player.locationId??null,
    guard:s.roleplayGuard??"legacy"},
   /** Physical wellbeing is visible even before the first System window. */
-  vitals:{hp:{current:p.hp,max:effectiveJinwooMaxHp(p)},
+  vitals:{hp:hidden?null:{current:p.hp,max:effectiveJinwooMaxHp(p)},
    mp:hidden?null:{current:p.mp,max:effectiveJinwooMaxMp(p)},
    stamina:hidden?null:{current:nonneg(100-p.fatigue),max:100,
     derivedFromFatigue:true},
