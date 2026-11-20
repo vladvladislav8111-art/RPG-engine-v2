@@ -12,7 +12,9 @@ export const DANMACHI_STARTER_VERSION="DANMACHI_FRESH_WORLD_V1";
 export function buildFreshDanmachiLabPack(projectId:string):LabPack{
  const locations={
   "orario.gate":loc("Ворота Орарио","public",{"orario.guild":12}),
-  "orario.guild":loc("Гильдия","guild",{"orario.gate":12,"orario.plaza":8}),
+  "orario.guild":loc("Гильдия","guild",{"orario.gate":12,"orario.plaza":8,
+   "orario.medical_ward":6}),
+  "orario.medical_ward":loc("Лазарет Орарио","healing",{"orario.guild":6}),
   "orario.plaza":loc("Центральная площадь","public",{"orario.guild":8,"orario.tavern":10}),
   "orario.tavern":loc("Хозяйка изобилия","tavern",{"orario.plaza":10}),
   "orario.daedalus":loc("Улица Дедала","street",{"orario.plaza":15}),

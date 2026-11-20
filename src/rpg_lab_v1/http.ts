@@ -14,6 +14,7 @@ import {reviewLabSessionMemory} from "./memory_view.ts";
 import {newLinosState} from "./linos.ts";
 import {planLabEventArchive} from "./event_archive.ts";
 import {buildFreshDanmachiLabPack} from "./danmachi_starter.ts";
+import {readOrarioPlayerHud} from "./orario_player_event.ts";
 import {promoteOriginalNpcInKv,type LabPromoteOriginalNpcArgs} from "./original_npc_promotion_kv.ts";
 import {archivedLabKey,validateLabArchiveRequest,validateLabArchiveMarker,
  type LabArchiveTarget,type LabArchiveMarker} from "./campaign_lifecycle.ts";
@@ -316,6 +317,14 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
      archived:Boolean(marker.value)});
    }
    return reply({schema:"RPG_LAB_SESSION_INDEX_V1",projectId,sessions});
+  }
+  const playerHudPath=/^\/rpg-lab\/v1\/projects\/([A-Za-z0-9_-]{3,64})\/sessions\/([A-Za-z0-9_-]{3,64})\/player-hud$/.exec(path);
+  if(playerHudPath&&req.method==="GET"){
+   const loaded=await loadLabSessionFromKv(playerHudPath[1],playerHudPath[2]);
+   return reply({schema:"RPG_LAB_ORARIO_PLAYER_HUD_V1",
+    projectId:playerHudPath[1],sessionId:playerHudPath[2],
+    revision:loaded.sessionRevision,
+    player:readOrarioPlayerHud(loaded.session),readOnly:true});
   }
   const memoryPath=/^\/rpg-lab\/v1\/projects\/([A-Za-z0-9_-]{3,64})\/sessions\/([A-Za-z0-9_-]{3,64})\/memory$/.exec(path);
   if(memoryPath&&req.method==="GET"){

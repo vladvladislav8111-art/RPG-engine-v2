@@ -5,6 +5,8 @@
 import {validateLabSession,type LabSession,type LabMemory,type LabNpcState,
  type LabWorkOrder,type LabPlayerFeature} from "./session.ts";
 import type {LabPack} from "./engine.ts";
+import {applyOrarioPlayerAction,type OrarioPlayerAction} from "./orario_player_event.ts";
+import {applyNpcSuspicionChanges,type NpcSuspicionChange} from "./danmachi_suspicion.ts";
 import {applyLabAmbientRumorChanges,type LabAmbientRumorChange} from "./ambient_rumors.ts";
 import {evolveLabNpcAdaptation,type LabNpcAdaptationChange} from "./npc_adaptation.ts";
 import {noteNpcFeature,type NpcFeatureObservation} from "./npc_perception.ts";
@@ -80,6 +82,8 @@ export type LabConfirmedEvent={
  sourceRef:string;time:string;summary:string;kind:string;locationId?:string;
  knownBy:string[];observations?:LabNpcObservation[];
  features?:NpcFeatureObservation[];linos?:LabLinosTurn;
+ playerSystem?:OrarioPlayerAction;
+ npcSuspicionChanges?:NpcSuspicionChange[];
  worldActions?:LabIndependentAction[];
  npcInteractions?:LabNpcInteraction[];
  npcPositions?:LabNpcPositionChange[];
@@ -145,6 +149,29 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
  if(session.events.length>=256)throw Error("LAB_EVENT_JOURNAL_FULL");
  if(new Set(event.knownBy).size!==event.knownBy.length||event.knownBy.some(k=>!pack.npcProfiles[k]))
   throw Error("LAB_EVENT_WITNESS_INVALID");
+ if(event.playerSystem!==undefined){
+  if(pack.worldId!=="danmachi.orario"||event.linos!==undefined||
+    event.effects!==undefined||event.playerSystem?.args===undefined)
+   throw Error("ORARIO_PLAYER_EVENT_CONFLICT");
+  if(event.playerSystem.kind==="init"&&event.kind!=="character_setup")
+   throw Error("ORARIO_PLAYER_INIT_KIND_REQUIRED");
+  if(["falna_bless","falna_update"].includes(event.playerSystem.kind)){
+   const godId=event.playerSystem.args.godId;
+   if(typeof godId!=="string"||!pack.npcProfiles[godId]||
+      !event.knownBy.includes(godId))
+    throw Error("ORARIO_PLAYER_FALNA_GOD_NOT_PRESENT");
+  }
+  if(event.playerSystem.kind==="medical_care"){
+   const healerId=event.playerSystem.args.healerNpcId;
+   if(event.kind!=="medical_care"||
+     event.playerLocationId!=="orario.medical_ward"||
+     typeof healerId!=="string"||!pack.npcProfiles[healerId]||
+     !event.knownBy.includes(healerId)||
+     !(event.observations??[]).some(o=>o.npcId===healerId&&
+       o.channel==="experienced"))
+    throw Error("ORARIO_PLAYER_MEDICAL_HEALER_NOT_CONFIRMED");
+  }
+ }
  if(event.linos!==undefined){
   if(pack.worldId!=="danmachi.orario"||!nextTimeValid(event.time,session.gameClock))
    throw Error("LAB_LINOS_TIME_INVALID");
@@ -727,6 +754,17 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
  }
  const localRumors=applyLabAmbientRumorChanges(session,pack,event);
  if(localRumors!==undefined)next.ambientRumors=localRumors;
+ const suspicion=applyNpcSuspicionChanges(session,pack,event);
+ if(suspicion!==null)
+  for(const [npcId,state] of Object.entries(suspicion))
+   if(state.suspicion!==undefined){
+    const actor=next.npcs[npcId]??{knownFacts:[],memories:[]};
+    actor.suspicion=state.suspicion;next.npcs[npcId]=actor;
+   }
+ if(event.playerSystem!==undefined){
+  next.player.jinwoo=applyOrarioPlayerAction(session,event.playerSystem,
+    event.sourceRef,event.time);
+ }
  next.events.push({sourceRef:event.sourceRef,kind:event.kind,summary:event.summary,
   time:event.time,knownBy:[...event.knownBy],
   ...(event.locationId?{locationId:event.locationId}:{})});
