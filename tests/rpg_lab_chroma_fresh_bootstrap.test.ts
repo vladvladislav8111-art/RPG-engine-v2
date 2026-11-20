@@ -2,8 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {buildFreshDanmachiLabPack} from "../src/rpg_lab_v1/danmachi_starter.ts";
 import {validateLabSession} from "../src/rpg_lab_v1/session.ts";
-import {applyConfirmedLabEvent} from "../src/rpg_lab_v1/events.ts";
-import {newOrarioPlayerAwakening} from "../src/rpg_lab_v1/shadow_monarch_rules.ts";
+import {applyConfirmedLabEvent,type LabConfirmedEvent} from "../src/rpg_lab_v1/events.ts";
 
 test("fresh, isolated Chroma world has Orario gate and all seventy canonical NPC cores",()=>{
  const pack=buildFreshDanmachiLabPack("chroma_orario_main_20261120");
@@ -22,7 +21,7 @@ test("Chroma starts at gate with no stale Player identity, Falna or memory",()=>
   discovered:["orario.gate"],npcs:{},events:[],worldEvents:[]
  };
  assert.equal(validateLabSession(session,pack),session);
- const event={
+ const event:LabConfirmedEvent={
   sourceRef:"chroma.genesis.001",time:"D0 09:00",kind:"character_setup",
   summary:"Хрома прибывает к воротам Орарио",
   knownBy:[],locationId:"orario.gate",playerLocationId:"orario.gate",
