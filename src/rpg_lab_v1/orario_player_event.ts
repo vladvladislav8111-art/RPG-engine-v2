@@ -256,6 +256,8 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
 export function readOrarioPlayerHud(s:LabSession){
  const p=s.player.jinwoo;
  if(!p)return {available:false,readOnly:true};
+ if(p.awaitingActivation)return {available:true,awaitingActivation:true,
+  privateSystemNumbersHidden:true,encounter:null,readOnly:true};
  return {available:true,systemLevel:p.systemLevel,xp:p.xp,
   freeStatPoints:p.freeStatPoints,stats:{...p.stats},
   hp:p.hp,mp:p.mp,fatigue:p.fatigue,
@@ -269,9 +271,8 @@ export function readOrarioPlayerHud(s:LabSession){
   falna:{blessed:p.falna.blessed,divineLevel:p.falna.blessed?
    p.falna.divineLevel:null},
   encounter:p.activeEncounter?{
-   enemyRef:p.activeEncounter.enemyRef,
-   enemyHp:p.activeEncounter.enemyHp,
-   monsterId:p.activeEncounter.monsterId,
-   round:p.activeEncounter.round
+   active:true,enemyLabel:"Противник",
+   round:p.activeEncounter.round,
+   enemyStatisticsHidden:true
   }:null,readOnly:true};
 }

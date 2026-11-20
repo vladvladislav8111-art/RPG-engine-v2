@@ -12,6 +12,9 @@ import {encodeLabSession,type LabSessionStored} from "./session_storage.ts";
 import {prepareLabSessionHead,decodeLabSessionFromKv} from "./session_kv.ts";
 import {reviewLabSessionMemory} from "./memory_view.ts";
 import {newLinosState} from "./linos.ts";
+import {newOrarioPlayerAwakening} from "./shadow_monarch_rules.ts";
+import {newOrarioHeroProfile,originalHeroVisibleFeatures} from "./orario_player_hero.ts";
+import {readOrarioPlayerAnchors} from "./orario_player_anchors.ts";
 import {planLabEventArchive} from "./event_archive.ts";
 import {buildFreshDanmachiLabPack} from "./danmachi_starter.ts";
 import {readOrarioPlayerHud} from "./orario_player_event.ts";
@@ -147,23 +150,35 @@ export async function loadLabSessionFromKv(projectId:string,sessionId:string):
  * Each RPG Lab session is independently versioned with CAS.
  */
 export async function createLabCampaign(args:{
- projectId:string;sessionId:string;gameClock:string;locationId?:string;characterProfile?:"none"|"linos";
+ projectId:string;sessionId:string;gameClock:string;locationId?:string;characterProfile?:"none"|"linos"|"orario_player";
 }):Promise<{ok:true;revision:number;projectId:string;sessionId:string;legacySaveTouched:false}>{
  const {projectId,sessionId,gameClock,locationId,characterProfile="none"}=args;
  if(!projectRe.test(projectId)||!projectRe.test(sessionId)||
     typeof gameClock!=="string"||gameClock.length<1||gameClock.length>100)
   throw Error("LAB_NEW_CAMPAIGN_INVALID");
- if(!["none","linos"].includes(characterProfile))throw Error("LAB_CHARACTER_PROFILE_INVALID");
+ if(!["none","linos","orario_player"].includes(characterProfile))throw Error("LAB_CHARACTER_PROFILE_INVALID");
  const {pack}=await loadLabProjectFromKv(projectId);
  if(characterProfile==="linos"&&pack.worldId!=="danmachi.orario")throw Error("LAB_LINOS_WRONG_WORLD");
+ if(characterProfile==="orario_player"&&pack.worldId!=="danmachi.orario")
+  throw Error("ORARIO_PLAYER_WRONG_WORLD");
+ if(characterProfile==="orario_player"&&locationId!==undefined&&
+    locationId!=="orario.medical_ward")
+  throw Error("ORARIO_PLAYER_MUST_START_AT_MEDICAL_WARD");
+ const startingLocation=characterProfile==="orario_player"?
+  "orario.medical_ward":locationId;
  if(locationId!==undefined&&(!pack.locations[locationId]||!projectRe.test(locationId.replace(/[.:-]/g,"_"))))
   throw Error("LAB_NEW_CAMPAIGN_LOCATION_INVALID");
  const session:LabSession={schema:"RPG_LAB_SESSION_V1",projectId,sessionId,gameClock,
   roleplayGuard:"strict",player:{resources:{},stats:{},inventory:{},
-   ...(locationId?{locationId}:{}),
+   ...(startingLocation?{locationId:startingLocation}:{}),
    ...(characterProfile==="linos"?{linos:newLinosState()}:{}),
+   ...(characterProfile==="orario_player"?{
+    jinwoo:newOrarioPlayerAwakening(),
+    hero:newOrarioHeroProfile(),
+    visibleFeatures:originalHeroVisibleFeatures()
+   }:{}),
   },
-  discovered:locationId?[locationId]:[],npcs:{},events:[],worldEvents:[]};
+  discovered:startingLocation?[startingLocation]:[],npcs:{},events:[],worldEvents:[]};
  validateLabSession(session,pack);
  const kv=await storage(),key=[ROOT,"sessions",projectId,sessionId];
  const existing=await kv.get<LabSessionStored>(key);
@@ -257,6 +272,18 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
     throw Error("LAB_ARCHIVE_EXPLICIT_CONFIRMATION_REQUIRED");
    return reply(await archiveLabCampaigns(body.targets as LabArchiveTarget[],body.reason));
   }
+  if(path==="/rpg-lab/v1/danmachi/player-session"&&req.method==="POST"){
+   const body=await limited(req);
+   if(!obj(body)||body.confirm!=="CREATE_NEW_ORARIO_PLAYER"||
+      typeof body.projectId!=="string"||
+      typeof body.sessionId!=="string")
+    throw Error("ORARIO_PLAYER_LAUNCH_CONFIRMATION_REQUIRED");
+   return reply(await createLabCampaign({
+    projectId:body.projectId,sessionId:body.sessionId,
+    gameClock:"D0 09:00",locationId:"orario.medical_ward",
+    characterProfile:"orario_player"
+   }));
+  }
   if(path==="/rpg-lab/v1/danmachi/starter"&&req.method==="POST"){
    const body=await limited(req);
    if(!obj(body)||body.confirm!=="INSTALL_NEW_DANMACHI_WORLD"||
@@ -324,7 +351,9 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    return reply({schema:"RPG_LAB_ORARIO_PLAYER_HUD_V1",
     projectId:playerHudPath[1],sessionId:playerHudPath[2],
     revision:loaded.sessionRevision,
-    player:readOrarioPlayerHud(loaded.session),readOnly:true});
+    player:readOrarioPlayerHud(loaded.session),
+    anchors:readOrarioPlayerAnchors(loaded.session,loaded.pack),
+    readOnly:true});
   }
   const memoryPath=/^\/rpg-lab\/v1\/projects\/([A-Za-z0-9_-]{3,64})\/sessions\/([A-Za-z0-9_-]{3,64})\/memory$/.exec(path);
   if(memoryPath&&req.method==="GET"){

@@ -15,6 +15,7 @@ import {readDanmachiEraNpcContext} from "./danmachi_era_cores_v2.ts";
 import {proposeDanmachiNpcIntentCycle,type DanmachiActorSignal} from "./danmachi_intentions_v2.ts";
 import {auditDanmachiEraScene,type DanmachiNarrativeBeat} from "./danmachi_scene_audit_v2.ts";
 import {readOrarioPlayerHud} from "./orario_player_event.ts";
+import {readOrarioPlayerAnchors,readOrarioGmAnchors} from "./orario_player_anchors.ts";
 import {previewArmyBalance} from "./danmachi_shadow_balance.ts";
 import {readPrivateNpcSuspicion} from "./danmachi_suspicion.ts";
 import {RPG_LAB_SCENE_REMINDER,RPG_BRIDGE_GM_GUIDE_VERSION} from "./gm_guide.ts";
@@ -95,6 +96,8 @@ export async function readLabRoleplayScene(load:LabRoleplayLoader,
   }:{}),
   ...(s.session.player.jinwoo?{
    orarioPlayerSystem:readOrarioPlayerHud(s.session),
+   orarioPlayerAnchors:readOrarioPlayerAnchors(s.session,s.pack),
+   orarioPrivateSceneAnchors:readOrarioGmAnchors(s.session,npcIds),
    orarioPlayerArmy:previewArmyBalance(s.session.player.jinwoo),
    playerOnlySystemMenus:true
   }:{}),
@@ -120,7 +123,10 @@ export async function readLabPlayerFog(load:LabRoleplayLoader,
  projectId:string,sessionId:string){
  const s=await loadExact(load,projectId,sessionId);
  return {...readLabPublicFog(s.session),
-   ...(s.session.player.jinwoo?{orarioPlayer:readOrarioPlayerHud(s.session)}:{}),
+   ...(s.session.player.jinwoo?{
+    orarioPlayer:readOrarioPlayerHud(s.session),
+    orarioPlayerAnchors:readOrarioPlayerAnchors(s.session,s.pack)
+   }:{}),
    sessionRevision:s.sessionRevision};
 }
 export type LabRoleplayWorldCycleRequest={
