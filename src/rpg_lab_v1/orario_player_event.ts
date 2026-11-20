@@ -72,6 +72,9 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
     sourceRef,confirmedAwakening:q.confirmedAwakening===true
    });
   case "start_battle":
+   if(!s.player.locationId?.startsWith("orario.dungeon")&&
+     !Object.values(current.dungeonKeys).some(k=>k.state==="entered"))
+    throw Error("ORARIO_PLAYER_BATTLE_LOCATION_NOT_VERIFIED");
    return startConfirmedOrarioBattle(current,{
     ...q,sourceRef,playerCommitted:a.playerApproved===true,
     confirmedHostile:q.confirmedHostile===true
@@ -81,14 +84,23 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
     ...q,sourceRef,playerCommitted:a.playerApproved===true
    } as Parameters<typeof resolveConfirmedOrarioExchange>[1]).next;
   case "daily_start":
+   if(narrativeMinute(eventTime)===null||
+     Math.floor(narrativeMinute(eventTime)!/1440)!==q.day)
+    throw Error("ORARIO_PLAYER_DAILY_WRONG_DAY");
    return startConfirmedDailyTraining(current,{
     ...q,sourceRef,confirmedOffer:q.confirmedOffer===true
    } as Parameters<typeof startConfirmedDailyTraining>[1]);
   case "daily_progress":
+   if(narrativeMinute(eventTime)===null||
+     narrativeMinute(eventTime)!>=current.dailyTraining?.deadlineMinute!)
+    throw Error("ORARIO_PLAYER_DAILY_DEADLINE_REACHED");
    return recordConfirmedTraining(current,{
     ...q,sourceRef,playerConfirmed:a.playerApproved===true
    } as Parameters<typeof recordConfirmedTraining>[1]);
   case "daily_claim":
+   if(narrativeMinute(eventTime)===null||
+     narrativeMinute(eventTime)!>=current.dailyTraining?.deadlineMinute!)
+    throw Error("ORARIO_PLAYER_DAILY_DEADLINE_REACHED");
    return claimConfirmedDailyTraining(current,{
     ...q,sourceRef,playerClaimed:a.playerApproved===true
    } as Parameters<typeof claimConfirmedDailyTraining>[1]);
