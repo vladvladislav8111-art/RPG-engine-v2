@@ -266,6 +266,8 @@ function requireReward(s:JinwooState,ref:string){
 }
 const clone=(s:JinwooState)=>structuredClone(s);
 const max=(s:JinwooState)=>s.phase!=="player_system";
+export const CHROMA_BALANCE_FLAG="chroma_falna_v2";
+const hasChromaBalance=(s:JinwooState)=>s.storyFlags.includes(CHROMA_BALANCE_FLAG);
 export const SYSTEM_XP_FORMULA="100 * level^1.5; CROSSOVER, NOT NOVEL CANON";
 export function xpToNextLevel(level:number):number{
  if(!Number.isSafeInteger(level)||level<1||level>10000)
@@ -312,6 +314,7 @@ export function awardJinwooEncounter(s:JinwooState,e:{
   // In the System-era, level-up heals HP/MP; scripted trials can disable
   // it at the GM scene layer and therefore must not use this generic grant.
   n.hp=effectiveJinwooMaxHp(n);n.mp=effectiveJinwooMaxMp(n);
+  n.fatigue=0; // Level up fully clears fatigue, separate from healing amputations.
  }
  return n;
 }
@@ -504,9 +507,11 @@ export type FalnaProjection={
 export function projectJinwooFalna(s:JinwooState):FalnaProjection{
  const blessed=s.falna.blessed;
  const r=blessed?s.falna.status:null;
+ const chroma=hasChromaBalance(s);
  const levelBonus=blessed?Math.max(0,s.falna.divineLevel-1)*
-  FALNA_BONUS_PER_DIVINE_LEVEL:0;
- const val=(v:number)=>Math.floor(v/FALNA_BONUS_POINTS_PER_STAT)+levelBonus;
+  (chroma?40:FALNA_BONUS_PER_DIVINE_LEVEL):0;
+ const val=(v:number)=>(chroma?12+Math.round(v*0.06):
+  Math.floor(v/FALNA_BONUS_POINTS_PER_STAT))+levelBonus;
  const bonus:JinwooStats={
   strength:r?val(r.strength):0,
   stamina:r?val(r.endurance):0,
@@ -560,9 +565,25 @@ export function updateJinwooFalna(s:JinwooState,e:{
  n.falna.lastUpdatedRef=e.sourceRef;
  n.appliedRewardRefs.push(e.sourceRef);return n;
 }
+/** Chroma-only balanced HP approximation. Solo Leveling shows HP100 at END10 Lv1,
+ * HP766 at END16 Lv7, HP2220 at END27 Lv18, HP11035 at END91 Lv51,
+ * HP65230 at END281 Lv122; no exact canonical universal formula is supplied. */
 export function effectiveJinwooMaxHp(s:JinwooState){
- return playerMaxHp(projectJinwooFalna(s).total);
+ const t=projectJinwooFalna(s).total;
+ if(!hasChromaBalance(s))return playerMaxHp(t);
+ const d=Math.max(0,s.systemLevel-1),e=Math.max(10,t.stamina);
+ return Math.round(100+100*(e-10)+10*d+d*d+
+  1.14*Math.max(0,s.systemLevel-50)*(e-10));
 }
 export function effectiveJinwooMaxMp(s:JinwooState){
- return playerMaxMp(projectJinwooFalna(s).total);
+ const t=projectJinwooFalna(s).total;
+ if(!hasChromaBalance(s))return playerMaxMp(t);
+ return Math.max(10,Math.round(10+10*(t.intelligence-10)+8*(s.systemLevel-1)));
+}
+/** Physical reserve is custom and not the canonical fixed fatigue display.
+ * Canon fatigue remains a 0..100 percentage; displayed reserve scales with END. */
+export function effectiveJinwooStaminaReserve(s:JinwooState){
+ const end=projectJinwooFalna(s).total.stamina;
+ const max=Math.round(100*Math.max(10,end)/10);
+ return {current:Math.round(max*(1-s.fatigue/100)),max,fatiguePercent:s.fatigue};
 }
