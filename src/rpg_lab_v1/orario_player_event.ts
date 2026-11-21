@@ -8,7 +8,9 @@ import {
  newOrarioPlayerAwakening,activateOrarioPlayerSystem,
  allocateJinwooPoints,purchaseJinwooItem,grantJinwooFalna,
  updateJinwooFalna,grantJinwooStoryUnlock,changeJinwooPhase,
- recruitFirstKnightFromClassTrial,JINWOO_SKILL_GRAPH,type JinwooState
+ recruitFirstKnightFromClassTrial,JINWOO_SKILL_GRAPH,
+ CHROMA_BALANCE_FLAG,projectJinwooFalna,effectiveJinwooMaxHp,
+ effectiveJinwooMaxMp,effectiveJinwooStaminaReserve,type JinwooState
 } from "./shadow_monarch_rules.ts";
 import {
  startConfirmedDailyTraining,recordConfirmedTraining,
@@ -43,7 +45,8 @@ const playable=new Set([
  "stone_collect","stone_sell","stone_extract","monster_drop",
  "unlock","change_class","plot_key","dungeon_key","dungeon_enter",
  "dungeon_clear","first_knight","shadow_deploy","shadow_victory",
- "shadow_revive","daily_box","injury","rest","medical_care"
+ "shadow_revive","daily_box","injury","rest","medical_care",
+ "reconcile_chroma_d1"
 ]);
 export type OrarioPlayerAction={
  kind:string;
@@ -70,6 +73,46 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
  if(!current)throw Error("ORARIO_PLAYER_NOT_INITIALIZED");
  const q={...a.args,sourceRef} as Record<string,unknown>;
  switch(a.kind){
+  case "reconcile_chroma_d1":{
+   // One-time, player-approved recovery of the already-played first Orario day.
+   // Evidence is in this very RPG Lab session, never another campaign.
+   const required=[
+    "chroma.d1.final_goblin_dagger_dance_without_locked_sprint.237",
+    "chroma.d1.return_babel_guild_exchange_fourteen_stones.239",
+    "chroma.rules.falna_stronger_conversion_npc_source_chroma.243",
+    "chroma.rules.stamina_mp_recovery_and_npc_auto_memory_audit.247"
+   ];
+   if(s.projectId!=="chroma_orario_main_20261120"||
+      s.sessionId!=="chroma_day0_20261120"||
+      s.player.hero?.id!=="hero.chroma"||
+      sourceRef!=="chroma.repair.d1_authoritative_player_snapshot.261"||
+      eventTime!=="D1 17:02"||a.playerApproved!==true||
+      q.confirmSourceCheck!==true||
+      required.some(ref=>!s.events.some(ev=>ev.sourceRef===ref))||
+      !current.falna.blessed||current.falna.godId!=="npc.loki"||
+      current.systemLevel!==1||current.xp!==0||
+      current.storyFlags.includes(CHROMA_BALANCE_FLAG))
+    throw Error("CHROMA_RECONCILE_EVIDENCE_OR_STATE_INVALID");
+   const n=structuredClone(current);
+   n.awaitingActivation=false;
+   n.systemLevel=2;n.xp=75;n.freeStatPoints=0;
+   n.stats={strength:13,stamina:13,agility:15,perception:11,intelligence:11};
+   n.storyFlags=[...n.storyFlags,CHROMA_BALANCE_FLAG];
+   n.unlockedSkills=n.unlockedSkills.includes("sprint")?
+    n.unlockedSkills:[...n.unlockedSkills,"sprint"];
+   n.completedDailyDays=n.completedDailyDays.includes("1")?
+    n.completedDailyDays:[...n.completedDailyDays,"1"];
+   // The 14 stones were sold in the witnessed Guild visit; do not recreate loot.
+   n.valis+=1030;
+   n.inventory.potion_mp_small=(n.inventory.potion_mp_small??0)+1;
+   n.inventory.daily_status_recovery_charge=
+    (n.inventory.daily_status_recovery_charge??0)+1;
+   n.hp=effectiveJinwooMaxHp(n);
+   n.mp=effectiveJinwooMaxMp(n);
+   n.fatigue=22; // 78% current stamina fraction, after the first descent.
+   n.appliedRewardRefs=[...n.appliedRewardRefs,sourceRef];
+   return n;
+  }
   case "activate":
    return activateOrarioPlayerSystem(current,{
     sourceRef,confirmedAwakening:q.confirmedAwakening===true
@@ -260,7 +303,10 @@ export function readOrarioPlayerHud(s:LabSession){
   privateSystemNumbersHidden:true,encounter:null,readOnly:true};
  return {available:true,systemLevel:p.systemLevel,xp:p.xp,
   freeStatPoints:p.freeStatPoints,stats:{...p.stats},
-  hp:p.hp,mp:p.mp,fatigue:p.fatigue,
+  hp:p.hp,hpMax:effectiveJinwooMaxHp(p),
+  mp:p.mp,mpMax:effectiveJinwooMaxMp(p),
+  fatigue:p.fatigue,stamina:effectiveJinwooStaminaReserve(p),
+  effectiveStats:projectJinwooFalna(p).total,
   phase:p.phase,awaitingActivation:p.awaitingActivation??false,
   gold:p.gold,valis:p.valis,
   inventory:{...p.inventory},
