@@ -282,7 +282,7 @@ export async function readLabConfirmedEvent(projectId:string,sessionId:string,so
   const npcIds=Object.keys(loaded.pack.npcProfiles);
   const chosen=Object.fromEntries(
    Object.entries(loaded.session.npcs)
-    .filter(([id])=>/aki|finn|loki/i.test(id))
+    .filter(([id])=>/aki|finn|loki|raul/i.test(id))
     .map(([id,state])=>[id,{
       count:state.memories.length,
       memories:state.memories.slice(-18).map(m=>({
