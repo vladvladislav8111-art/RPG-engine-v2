@@ -147,6 +147,7 @@ export const JINWOO_SPECIAL_REWARDS={
 } as const;
 export const JINWOO_SKILL_GRAPH=[
  {id:"stealth",phase:"player_system",gate:"Подтверждённый навык / руна / задание"},
+ {id:"sprint",phase:"player_system",gate:"Получен ранее, +30% скорости за 5 MP и 1 MP/мин; растёт практикой"},
  {id:"quicksilver",phase:"player_system",gate:"Подтверждённая награда или приобретение навыка"},
  {id:"rulers_authority",phase:"player_system",gate:"Специальная руна или событие"},
  {id:"shadow_extraction",phase:"shadow_class",gate:"Завершённый квест изменения класса"},
