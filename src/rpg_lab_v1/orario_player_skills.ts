@@ -3,10 +3,10 @@
  * Combat effects require explicit activation and can expire without reward.
  * Numerical mana costs and buff strengths are house rules.
  */
-import type {JinwooState,JinwooStats} from "./shadow_monarch_rules.ts";
+import {projectJinwooFalna,type JinwooState,type JinwooStats} from "./shadow_monarch_rules.ts";
 import {previewMonarchDomain} from "./danmachi_shadow_balance.ts";
 export type ActivePlayerSkill={
- id:"stealth"|"quicksilver"|"monarch_domain";
+ id:"stealth"|"sprint"|"quicksilver"|"monarch_domain";
  startedRef:string;expiresMinute:number;
  agilityBonus:number;positionBonus:number;mpSpent:number;
 };
@@ -25,6 +25,11 @@ export function activateConfirmedPlayerSkill(s:JinwooState,e:{
  if(now.some(x=>x.id===e.skillId))throw Error("PLAYER_SKILL_ALREADY_ACTIVE");
  let mpCost=0,agilityBonus=0,positionBonus=0;
  switch(e.skillId){
+  case "sprint":
+   if(e.durationMinutes>10)throw Error("PLAYER_SKILL_DURATION_INVALID");
+   mpCost=5+e.durationMinutes; // Activation 5 MP; 1 MP/min sustain.
+   agilityBonus=Math.round(projectJinwooFalna(s).total.agility*0.30);
+   break;
   case "stealth":
    if(e.durationMinutes>5)throw Error("PLAYER_SKILL_DURATION_INVALID");
    mpCost=6*e.durationMinutes;positionBonus=14;break;
@@ -49,5 +54,6 @@ export function getPlayerSkillBattleModifiers(s:JinwooState,minute:number){
  return {agilityBonus:effects.reduce((a,x)=>a+x.agilityBonus,0),
   positionBonus:effects.reduce((a,x)=>a+x.positionBonus,0),
   domainBonus:effects.some(x=>x.id==="monarch_domain")?1.5:1,
+  speedMultiplier:effects.some(x=>x.id==="sprint")?1.30:1,
   currentlyActive:effects.map(x=>x.id),readOnly:true};
 }
