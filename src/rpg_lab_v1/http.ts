@@ -296,7 +296,7 @@ export async function readLabConfirmedEvent(projectId:string,sessionId:string,so
    packRevision:loaded.packRevision,gameClock:loaded.session.gameClock,
    npcIds,npcs:chosen,player:{
     ...(n?{systemLevel:n.systemLevel,xp:n.xp,freeStatPoints:n.freeStatPoints,
-     stats:n.stats,hp:n.hp,mp:n.mp,fatigue:n.fatigue,falna:n.falna}:{}),
+     stats:n.stats,hp:n.hp,mp:n.mp,fatigue:n.fatigue,falna:n.falna,phase:n.phase,awaitingActivation:n.awaitingActivation,gold:n.gold,valis:n.valis,unlockedSkills:n.unlockedSkills,inventory:n.inventory,completedDailyDays:n.completedDailyDays,dailyTraining:n.dailyTraining,activeSkills:n.activeSkills,appliedRewardRefs:n.appliedRewardRefs?.slice(-20)}:{}),
     resources:loaded.session.player.resources,
     stats:loaded.session.player.stats
    },recentEvents:loaded.session.events.slice(-12),
