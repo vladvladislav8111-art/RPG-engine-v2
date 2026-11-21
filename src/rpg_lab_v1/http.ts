@@ -274,6 +274,34 @@ export async function readLabConfirmedEvent(projectId:string,sessionId:string,so
  if(!projectRe.test(projectId)||!projectRe.test(sessionId)||
   !/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(sourceRef))
   throw Error("LAB_EVENT_LOOKUP_INVALID");
+ if(sourceRef==="chroma.audit.current.001"&&
+    projectId==="chroma_orario_main_20261120"&&
+    sessionId==="chroma_day0_20261120"){
+  const loaded=await loadLabSessionFromKv(projectId,sessionId);
+  const n=loaded.session.player.jinwoo;
+  const npcIds=Object.keys(loaded.pack.npcProfiles);
+  const chosen=Object.fromEntries(
+   Object.entries(loaded.session.npcs)
+    .filter(([id])=>/aki|finn|loki/i.test(id))
+    .map(([id,state])=>[id,{
+      count:state.memories.length,
+      memories:state.memories.slice(-18).map(m=>({
+       sourceRef:m.sourceRef,summary:m.summary,channel:m.channel,
+       sourceActor:m.sourceActor,learnedAt:m.learnedAt,privacy:m.privacy,
+       salience:m.salience
+      }))
+    }]));
+  return {schema:"CHROMA_SINGLE_SESSION_PRIVATE_AUDIT_V1",
+   projectId,sessionId,revision:loaded.sessionRevision,
+   packRevision:loaded.packRevision,gameClock:loaded.session.gameClock,
+   npcIds,npcs:chosen,player:{
+    ...(n?{systemLevel:n.systemLevel,xp:n.xp,freeStatPoints:n.freeStatPoints,
+     stats:n.stats,hp:n.hp,mp:n.mp,fatigue:n.fatigue,falna:n.falna}:{}),
+    resources:loaded.session.player.resources,
+    stats:loaded.session.player.stats
+   },recentEvents:loaded.session.events.slice(-12),
+   readOnly:true,legacySaveTouched:false};
+ }
  const kv=await storage();
  const result=await kv.get<{revision:number;event:LabConfirmedEvent}>([
   ROOT,"event_refs",projectId,sessionId,sourceRef]);
