@@ -294,7 +294,17 @@ export async function readLabConfirmedEvent(projectId:string,sessionId:string,so
   return {schema:"CHROMA_SINGLE_SESSION_PRIVATE_AUDIT_V1",
    projectId,sessionId,revision:loaded.sessionRevision,
    packRevision:loaded.packRevision,gameClock:loaded.session.gameClock,
-   npcIds,npcMemoryCounts:Object.fromEntries(Object.entries(loaded.session.npcs).map(([id,state])=>[id,state.memories.length])),npcs:chosen,player:{
+   npcIds,npcMemoryCounts:Object.fromEntries(Object.entries(loaded.session.npcs).map(([id,state])=>[id,state.memories.length])),npcs:chosen,
+   sceneAnchors:{
+    playerLocationId:loaded.session.player.locationId??null,
+    hero:loaded.session.player.hero??null,
+    chromaPalette:loaded.session.player.chromaPalette??null,
+    visibleFeatures:loaded.session.player.visibleFeatures??{},
+    lokiCore:loaded.pack.npcProfiles["npc.loki"]??null,
+    lokiCurrentGoal:loaded.session.npcs["npc.loki"]?.currentGoal??null,
+    lokiRelationships:loaded.session.npcs["npc.loki"]?.relationships??{},
+    lokiFeaturePerceptions:loaded.session.npcs["npc.loki"]?.perceptions??{}
+   },player:{
     ...(n?{systemLevel:n.systemLevel,xp:n.xp,freeStatPoints:n.freeStatPoints,
      systemStats:n.stats,hp:n.hp,mp:n.mp,fatigue:n.fatigue,falna:n.falna,phase:n.phase,awaitingActivation:n.awaitingActivation,gold:n.gold,valis:n.valis,unlockedSkills:n.unlockedSkills,inventory:n.inventory,completedDailyDays:n.completedDailyDays,dailyTraining:n.dailyTraining,activeSkills:n.activeSkills,appliedRewardRefs:n.appliedRewardRefs?.slice(-20)}:{}),
     resources:loaded.session.player.resources,
@@ -450,11 +460,30 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    const data=await limited(req);
    if(!obj(data)||!Number.isSafeInteger(data.expectedRevision))
     throw Error("LAB_REVISION_CONFLICT");
-   return reply(await commitLabCampaignEvent({
-    projectId,sessionId,expectedRevision:data.expectedRevision as number,
-    expectedPackRevision:data.expectedPackRevision as number|undefined,
-    event:data.event as LabConfirmedEvent,
-   }));
+   try{
+    return reply(await commitLabCampaignEvent({
+     projectId,sessionId,expectedRevision:data.expectedRevision as number,
+     expectedPackRevision:data.expectedPackRevision as number|undefined,
+     event:data.event as LabConfirmedEvent,
+    }));
+   }catch(e){
+    // Do not weaken CAS or the monotonic game clock. Give a fresh read-only
+    // head to an authenticated caller so a different chat can reconcile.
+    const error=unexpected(e);
+    if(["LAB_REVISION_CONFLICT","LAB_EVENT_CLOCK_REGRESSION",
+        "LAB_EVENT_ALREADY_APPLIED"].includes(error)){
+     const loaded=await loadLabSessionFromKv(projectId,sessionId);
+     return reply({ok:false,error,projectId,sessionId,
+      requestedRevision:data.expectedRevision,
+      currentRevision:loaded.sessionRevision,
+      gameClock:loaded.session.gameClock,
+      sourceRef:obj(data.event)&&typeof data.event.sourceRef==="string"?
+       data.event.sourceRef:null,
+      recovery:"READ_LATEST_SESSION_AND_EVENT_REF_BEFORE_RETRY; NEVER_BACKDATE_OR_DUPLICATE",
+      legacySaveTouched:false},409);
+    }
+    throw e;
+   }
   }
   const sessionPath=/^\/rpg-lab\/v1\/projects\/([A-Za-z0-9_-]{3,64})\/sessions\/([A-Za-z0-9_-]{3,64})$/.exec(path);
   if(sessionPath){
