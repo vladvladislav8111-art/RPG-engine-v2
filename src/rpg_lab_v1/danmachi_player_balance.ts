@@ -11,7 +11,7 @@ import {SYSTEM_ENCOUNTER_BY_ID} from "./orario_system_encounters.ts";
 type Tier="ordinary"|"elite"|"rare"|"monster_rex";
 export type DanmachiMonsterBalance={
  id:string;name:string;floorMin:number;floorMax:number;
- approximateDanmachiLevel:number;kind:Tier;
+ approximateDanmachiLevel:number;systemThreatLevel:number;kind:Tier;
  combat:JinwooStats;
  hp:number;armor:number;weaponForce:number;
  baseXp:number;baseSystemGold:number;magicStoneValis:number;
@@ -24,47 +24,47 @@ export type DanmachiMonsterBalance={
  */
 export const ORARIO_MONSTER_BALANCE:readonly DanmachiMonsterBalance[]=[
  {id:"goblin",name:"Гоблин",floorMin:1,floorMax:4,
-  approximateDanmachiLevel:1,kind:"ordinary",
+  approximateDanmachiLevel:1,systemThreatLevel:1,kind:"ordinary",
   combat:{strength:9,stamina:8,agility:8,perception:7,intelligence:1},
   hp:80,armor:1,weaponForce:3,baseXp:13,baseSystemGold:25,magicStoneValis:28,
   features:["группа","короткое оружие"],loreNote:"Начальные этажи, слабый монстр"},
  {id:"kobold",name:"Кобольд",floorMin:1,floorMax:4,
-  approximateDanmachiLevel:1,kind:"ordinary",
+  approximateDanmachiLevel:1,systemThreatLevel:2,kind:"ordinary",
   combat:{strength:11,stamina:10,agility:11,perception:8,intelligence:1},
   hp:95,armor:1,weaponForce:4,baseXp:17,baseSystemGold:32,magicStoneValis:36,
   features:["рывок","когти"],loreNote:"Начальные этажи, опаснее гоблина в ближнем бою"},
  {id:"dungeon_lizard",name:"Подземная ящерица",floorMin:2,floorMax:4,
-  approximateDanmachiLevel:1,kind:"ordinary",
+  approximateDanmachiLevel:1,systemThreatLevel:3,kind:"ordinary",
   combat:{strength:12,stamina:14,agility:8,perception:8,intelligence:1},
   hp:125,armor:4,weaponForce:4,baseXp:23,baseSystemGold:42,magicStoneValis:52,
   features:["чешуя","низкая посадка"],loreNote:"Местная ящерица; сильнее защищена"},
  {id:"war_shadow",name:"Военная тень",floorMin:5,floorMax:7,
-  approximateDanmachiLevel:1,kind:"elite",
+  approximateDanmachiLevel:1,systemThreatLevel:7,kind:"elite",
   combat:{strength:18,stamina:15,agility:23,perception:19,intelligence:2},
-  hp:175,armor:2,weaponForce:7,baseXp:48,baseSystemGold:72,magicStoneValis:100,
+  hp:175,armor:2,weaponForce:7,baseXp:96,baseSystemGold:72,magicStoneValis:100,
   features:["скрытность","засада"],loreNote:"Один из опасных для новичков монстров 5–7 этажей"},
  {id:"killer_ant",name:"Муравей-убийца",floorMin:5,floorMax:9,
-  approximateDanmachiLevel:1,kind:"elite",
+  approximateDanmachiLevel:1,systemThreatLevel:8,kind:"elite",
   combat:{strength:20,stamina:30,agility:15,perception:12,intelligence:1},
-  hp:260,armor:9,weaponForce:8,baseXp:58,baseSystemGold:84,magicStoneValis:130,
+  hp:260,armor:9,weaponForce:8,baseXp:116,baseSystemGold:84,magicStoneValis:130,
   features:["панцирь","зов сородичей"],loreNote:"Угроза толпой даже подготовленным новичкам"},
  {id:"silverback",name:"Сильвербек",floorMin:11,floorMax:12,
-  approximateDanmachiLevel:1,kind:"rare",
+  approximateDanmachiLevel:1,systemThreatLevel:12,kind:"rare",
   combat:{strength:34,stamina:39,agility:22,perception:16,intelligence:2},
   hp:430,armor:7,weaponForce:11,baseXp:115,baseSystemGold:145,magicStoneValis:240,
   features:["мощный удар","бросок"],loreNote:"Крайне опасен для неготового 1-го уровня"},
  {id:"infant_dragon",name:"Молодой дракон",floorMin:11,floorMax:12,
-  approximateDanmachiLevel:2,kind:"rare",
+  approximateDanmachiLevel:2,systemThreatLevel:20,kind:"rare",
   combat:{strength:48,stamina:57,agility:21,perception:22,intelligence:17},
   hp:700,armor:13,weaponForce:19,baseXp:245,baseSystemGold:285,magicStoneValis:550,
   features:["огонь","чешуя"],loreNote:"Редкий монстр, опасность примерно второго уровня"},
  {id:"minotaur",name:"Минотавр",floorMin:15,floorMax:17,
-  approximateDanmachiLevel:2,kind:"rare",
+  approximateDanmachiLevel:2,systemThreatLevel:25,kind:"rare",
   combat:{strength:68,stamina:59,agility:29,perception:22,intelligence:1},
   hp:930,armor:8,weaponForce:20,baseXp:360,baseSystemGold:430,magicStoneValis:780,
   features:["мощь","страх","натиск"],loreNote:"Минотавр гораздо сильнее начинающего; на 5-м этаже возможен только как отдельная подтверждённая аномалия"},
  {id:"goliath_17",name:"Голиаф семнадцатого этажа",
-  floorMin:17,floorMax:17,approximateDanmachiLevel:4,kind:"monster_rex",
+  floorMin:17,floorMax:17,approximateDanmachiLevel:4,systemThreatLevel:50,kind:"monster_rex",
   combat:{strength:260,stamina:330,agility:77,perception:60,intelligence:8},
   hp:9400,armor:35,weaponForce:65,
   baseXp:2450,baseSystemGold:2100,magicStoneValis:7500,
@@ -109,6 +109,7 @@ export function comparePlayerToOrarioMonster(s:JinwooState,params:{
  return {
   player:{...total},monsterId:mob.id,monsterName:mob.name,monsterCount:count,
   scenarioFloor:params.floor,monsterCanonicalLevelApprox:mob.approximateDanmachiLevel,
+  monsterSystemThreatLevel:mob.systemThreatLevel,monsterThreatClass:mob.kind,
   offenseRatio:+offenseRatio.toFixed(3),defenseRatio:+defenseRatio.toFixed(3),
   estimatedEngagementRatio:+score.toFixed(3),outlook:outcome,
   warnsAboutBoss:mob.kind==="monster_rex",
@@ -194,16 +195,19 @@ export function previewCombatExchange(s:JinwooState,params:{
   (params.move==="magic"?p.intelligence*1.7:
    p.strength*1.4)+params.weaponPower-
   mob.combat.stamina*.35-mob.armor*1.6));
- const enemyChance=clamp(Math.round(72+
+ // Player advantage and reach must matter in each short exchange.
+ const enemyChance=clamp(Math.round(35+
   18*Math.log(Math.max(.01,(mob.combat.agility+mob.combat.perception)/
    (p.agility+p.perception)))-
-  pos-(guard?18:0)),8,98);
+  pos-(guard?18:0)+s.fatigue*.08),2,95);
  const enemyDamage=Math.max(1,Math.round(mob.combat.strength*1.3+
   mob.weaponForce-p.stamina*.35-params.armorPower*1.6));
  return {hitChancePercent:guard?0:chance,
   damageIfHit:damage,expectedDamage:+(chance*damage/100).toFixed(1),
   attackerResourceCost:{mp:params.move==="magic"?params.spellMpCost!:0,
-   fatigue:params.move==="magic"?5:guard?2:3},
+   // Seconds-long exchanges, scaled by the effective endurance attribute.
+   fatigue:+((params.move==="magic"?2:guard?.7:1.2)*
+    (10/Math.max(10,p.stamina))).toFixed(2)},
   counterHitChancePercent:enemyChance,
   counterDamageIfHit:guard?Math.max(1,Math.ceil(enemyDamage*.35)):enemyDamage,
   opponentFeatures:mob.features,noCommittedAttack:true};
@@ -224,17 +228,19 @@ export function previewBalancedMonsterReward(s:JinwooState,params:{
  const pOff=weighted(r.player,"attack"),pGuard=weighted(r.player,"guard");
  const mOff=weighted(mob.combat,"attack"),mGuard=weighted(mob.combat,"guard");
  const relative=(mOff*.6+mGuard*.4)/(pOff*.6+pGuard*.4);
- // Most work against far weaker targets earns no meaningful System XP.
- const factor=relative<.20?0:clamp(Math.pow(relative,.72),.18,2.1);
+ // A stronger hero still gets the monster's established base XP; increased
+  // leveling thresholds already slow progression. Preserve old gold scaling.
+ const goldFactor=relative<.20?0:clamp(Math.pow(relative,.72),.18,2.1);
  const cooperation=(con/100)/(1+.32*(party-1));
- const xp=Math.max(0,Math.round(mob.baseXp*factor*cooperation));
+ const xp=Math.max(0,Math.round(mob.baseXp*cooperation));
  const systemGold=Math.max(0,Math.round(
-  mob.baseSystemGold*Math.sqrt(Math.max(.04,factor))*
+  mob.baseSystemGold*Math.sqrt(Math.max(.04,goldFactor))*
   cooperation));
  return {
   monsterId:mob.id,monsterRef:params.monsterRef,
   earnedOnlyAfterConfirmedDefeat:true,
   xp,systemGold,potentialMagicStoneValis:mob.magicStoneValis,
+   monsterSystemThreatLevel:mob.systemThreatLevel,monsterThreatClass:mob.kind,
   lootIsSeparateFromXP:true,notAutoAwarded:true,
   playerAlreadyReceivedXp:s.defeatedTargetRefs.includes(params.monsterRef),
   threatRelativeToPlayer:+relative.toFixed(3),
