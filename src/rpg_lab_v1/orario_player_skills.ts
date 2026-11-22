@@ -5,6 +5,34 @@
  */
 import {projectJinwooFalna,type JinwooState,type JinwooStats} from "./shadow_monarch_rules.ts";
 import {previewMonarchDomain} from "./danmachi_shadow_balance.ts";
+/** Per-skill source-backed growth: one award per effective encounter. */
+export type SkillMasteryProgress={
+ level:number;xp:number;uses:number;trainedEnemyRefs:string[];lastPracticeRef:string;
+};
+export function skillMasteryLevel(s:JinwooState,skillId:string):number{
+ return s.skillMastery?.[skillId]?.level??1;
+}
+export function recordConfirmedSkillPractice(s:JinwooState,e:{
+ skillId:"sprint";enemyRef:string;sourceRef:string;
+ threatLevel:number;confirmedEffective:true;
+}):JinwooState{
+ if(!e.confirmedEffective||!valid(e.enemyRef)||!valid(e.sourceRef)||
+  !s.unlockedSkills.includes(e.skillId)||!Number.isSafeInteger(e.threatLevel)||
+  e.threatLevel<1||e.threatLevel>10000)
+  throw Error("SKILL_PRACTICE_EVIDENCE_INVALID");
+ const old=s.skillMastery?.[e.skillId]??{
+  level:1,xp:0,uses:0,trainedEnemyRefs:[],lastPracticeRef:e.sourceRef};
+ if(old.trainedEnemyRefs.includes(e.enemyRef))return s;
+ const next=structuredClone(s);
+ const gain=Math.min(36,8+e.threatLevel*3);
+ let level=old.level,xp=old.xp+gain;
+ while(level<5&&xp>=level*60){xp-=level*60;level++;}
+ next.skillMastery={...(next.skillMastery??{}),[e.skillId]:{
+  level,xp:level>=5?0:xp,uses:old.uses+1,
+  trainedEnemyRefs:[...old.trainedEnemyRefs.slice(-126),e.enemyRef],
+  lastPracticeRef:e.sourceRef}};
+ return next;
+}
 export type ActivePlayerSkill={
  id:"stealth"|"sprint"|"quicksilver"|"monarch_domain";
  startedRef:string;expiresMinute:number;
@@ -28,7 +56,8 @@ export function activateConfirmedPlayerSkill(s:JinwooState,e:{
   case "sprint":
    if(e.durationMinutes>10)throw Error("PLAYER_SKILL_DURATION_INVALID");
    mpCost=5+e.durationMinutes; // Activation 5 MP; 1 MP/min sustain.
-   agilityBonus=Math.round(projectJinwooFalna(s).total.agility*0.30);
+   agilityBonus=Math.round(projectJinwooFalna(s).total.agility*
+     Math.min(.70,.30+.10*(skillMasteryLevel(s,"sprint")-1)));
    break;
   case "stealth":
    if(e.durationMinutes>5)throw Error("PLAYER_SKILL_DURATION_INVALID");
@@ -54,6 +83,7 @@ export function getPlayerSkillBattleModifiers(s:JinwooState,minute:number){
  return {agilityBonus:effects.reduce((a,x)=>a+x.agilityBonus,0),
   positionBonus:effects.reduce((a,x)=>a+x.positionBonus,0),
   domainBonus:effects.some(x=>x.id==="monarch_domain")?1.5:1,
-  speedMultiplier:effects.some(x=>x.id==="sprint")?1.30:1,
+  speedMultiplier:effects.some(x=>x.id==="sprint")?
+   Math.min(1.70,1.30+.10*(skillMasteryLevel(s,"sprint")-1)):1,
   currentlyActive:effects.map(x=>x.id),readOnly:true};
 }
