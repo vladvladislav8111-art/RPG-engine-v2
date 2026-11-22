@@ -10,6 +10,7 @@ import {startConfirmedOrarioBattle,
 import {buildFreshDanmachiLabPack} from "../src/rpg_lab_v1/danmachi_starter.ts";
 import {applyConfirmedLabEvent} from "../src/rpg_lab_v1/events.ts";
 import {validateLabSession,type LabSession} from "../src/rpg_lab_v1/session.ts";
+import {readLabRoleplayScene} from "../src/rpg_lab_v1/roleplay_adapter.ts";
 import {CHROMA_GM_WELCOME_CARD,CHROMA_GM_FIVE_POST_CHECK}
  from "../src/rpg_lab_v1/gm_guide.ts";
 
@@ -140,4 +141,22 @@ test("128-source NPC memory can grow without loss or leaking to a different NPC"
  assert.equal(next.npcs["npc.loki"].memories.at(-1)?.sourceRef,"evt.new.loki.joke");
  assert.equal(next.npcs["npc.tiona"].memories.length,0,
   "one Familia member does not inherit another member's jokes");
+});
+
+test("GM welcome card and post reminder can load during a Chroma solo scene",async()=>{
+ const pack=buildFreshDanmachiLabPack("chroma_solo_scene_card_test");
+ const session:LabSession={schema:"RPG_LAB_SESSION_V1",
+  projectId:pack.projectId,sessionId:"chroma_solo_scene",gameClock:"D3 10:37",
+  player:{resources:{},stats:{},inventory:{},locationId:"orario.gate",
+   hero:{id:"hero.chroma",name:"Хрома",race:"ирид"} as never},
+  discovered:["orario.gate"],npcs:{},events:[],
+  gmPostCadence:{count:5,lastPostRef:"gm.post.005",
+   recentPostRefs:["gm.post.001","gm.post.002","gm.post.003","gm.post.004","gm.post.005"]}};
+ const loader=async()=>({pack,session,packRevision:1,sessionRevision:6});
+ const scene=await readLabRoleplayScene(loader,{
+  projectId:pack.projectId,sessionId:session.sessionId,npcIds:[]});
+ assert.equal(scene.gmWelcomeCard?.title,CHROMA_GM_WELCOME_CARD.title);
+ assert.equal(scene.gmPostCadence?.reminderDue,true);
+ assert.equal(scene.gmPostCadence?.reminderWhenDue.length,6);
+ assert.deepEqual(scene.npcPersonalRecallCues,[]);
 });
