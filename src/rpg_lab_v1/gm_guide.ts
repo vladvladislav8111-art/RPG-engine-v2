@@ -3,7 +3,30 @@
  * replacement for source-attested tool results.
  * This module and its new MCP route are development-branch features until deployed.
  */
-export const RPG_BRIDGE_GM_GUIDE_VERSION="RPG_BRIDGE_GM_GUIDE_V1_2026-11-19";
+export const RPG_BRIDGE_GM_GUIDE_VERSION="RPG_BRIDGE_GM_GUIDE_V2_2026-11-23";
+/** A compact, read-only first-screen card for Chroma's GM. */
+export const CHROMA_GM_WELCOME_CARD={
+ schema:"CHROMA_GM_WELCOME_CARD_V1",title:"🎨 Хрома | приветственная карточка мастера",
+ audience:"GM_ONLY",
+ narrativeFormat:[
+  "Шапка поста: Хрома, день/время, подтверждённое место.",
+  "Полноценная сцена: среда, движение, разноплановые реакции и живые реплики NPC.",
+  "Бой: реальные секунды, геометрия ударов, тактика, возможность контратаки; никакой произвольной травмы.",
+  "Интерфейс: HP/MP/Stamina и XP только из этой RPG Lab сессии; сведения врага скрыты до изучения.",
+  "Остановись перед решением Хромы: мысли, эмоции, слова и действия задаёт только игрок.",
+ ],
+ memoryRule:"Для отсылки, шутки, обещания или обиды NPC извлекай ЕГО собственную запись с sourceRef и каналом знания. Мастерский лор и память соседнего NPC не становятся знанием автоматически.",
+ postRule:"Один gmPostRef на один видимый игровой пост. Все события/боевые обмены внутри поста используют тот же ref. Каждые пять постов перечитать память, ядра и ресурсы.",
+ guard:"Проверяй персональную память, причинность, NPC инициативу, пятна краски, сохранённое время и подтверждённый CAS.",
+} as const;
+export const CHROMA_GM_FIVE_POST_CHECK=[
+ "Сверь текущие revision/clock/location, 5 последних игровых постов и успешно сохранённые события.",
+ "Подними отдельные ядра каждого важного NPC и лично принадлежащие ему воспоминания (sourceRef, channel, learnedAt); не объединяй их.",
+ "Подбери уместные личные шутки/отсылки лишь из собственных пережитых или реально услышанных событий NPC.",
+ "Проверь живую палитру Хромы, реальные следы краски, травмы, инвентарь, камни, системное и навыковое XP.",
+ "Проверь минуты переходов и секунды схваток, дистанцию, видимость, угрозу, контратаку и выносливость.",
+ "Заверши проверкой CAS: неподтверждённый результат не становился фактом.",
+] as const;
 export const RPG_LAB_SCENE_REMINDER=[
  "RPG Lab / GM-only: Read saved actor context BEFORE consequential NPC narration.",
  "If player dialogue names an NPC, use rpg_lab_mention_context or scene_context.dialogueText for the correct deep core and this NPC's own memories; a name does NOT mean witnessing, physical presence or automatic knowledge.",
@@ -22,6 +45,9 @@ export const RPG_LAB_SCENE_REMINDER=[
  "Chroma individual NPC familiarity: first sighting and habituation are feature-specific. Familiarity with turquoise hair does not imply recognizing an unusual violet tear reaction, its meaning, or the irreversible black iris shard.",
  "Before first awakening, the Player HUD must not reveal System numbers, future skills or private boss data.",
  "In every new Orario combat show Player HP, MP and derived stamina (100 minus fatigue), but not unstudied enemy HP or NPC system statistics.",
+ "Chroma: use the player's specific RPG Lab save, System monster threat levels, bounded per-encounter skill mastery and causal short-exchange calculations. Never override code with manual XP or random wounds.",
+ "For game posts supply gmPostRef (same ID across multiple commits in one visible reply). Every fifth DISTINCT post the GM scene context flags a full memory, canon, resources and storytelling check.",
+ "NPC humor is strongest when personally grounded: load each NPC's own memory sourceRef and relationship history; never merge siblings, friends or squadmates into a shared mind.",
  "Player-visible anchors come from orarioPlayerAnchors; the NPC's private suspicion and memories belong only to orarioPrivateSceneAnchors, GM-only.",
  "Use rpg_lab_player_fog / session player-hud for current Player anchors; render_current_hud belongs to LEGACY Shura and must not be confused with the new campaign.",
  "Refresh the authoritative anchor display after the saved turn; do not claim an automatic save without an accepted commit.",
