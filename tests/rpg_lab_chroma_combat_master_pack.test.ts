@@ -65,7 +65,7 @@ test("one effective skill practice per encounter and later activation uses highe
 });
 
 test("high-speed hit and run removes a reachable counter, paint requires evidence",()=>{
- const s=newJinwooPreparation();s.stats.agility=40;
+ const s=newJinwooPreparation();s.stats.agility=40;s.stats.stamina=27;
  const b=startConfirmedOrarioBattle(s,{sourceRef:"evt.battle.started",
   monsterId:"goblin",monsterRef:"mob.tactic.01",floor:1,
   playerCommitted:true,confirmedHostile:true});
