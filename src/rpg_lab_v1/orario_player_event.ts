@@ -46,7 +46,8 @@ const playable=new Set([
  "unlock","change_class","plot_key","dungeon_key","dungeon_enter",
  "dungeon_clear","first_knight","shadow_deploy","shadow_victory",
  "shadow_revive","daily_box","injury","rest","medical_care",
- "reconcile_chroma_d1","reconcile_chroma_starting_valis"
+ "reconcile_chroma_d1","reconcile_chroma_starting_valis",
+ "local_purchase"
 ]);
 export type OrarioPlayerAction={
  kind:string;
@@ -181,6 +182,27 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
     ...q,sourceRef,currentMinute:narrativeMinute(eventTime)??-1,
     confirmedDeadline:q.confirmedDeadline===true
    } as Parameters<typeof failConfirmedDailyTraining>[1]);
+  case "local_purchase":{
+   // Confirmed real-world Orario goods use valis, never System shop gold.
+   // Itemized purchases are CAS-protected, source-unique and Player-approved.
+   const itemId=q.itemId,quantity=q.quantity,unitPriceValis=q.unitPriceValis;
+   const total=Number(quantity)*Number(unitPriceValis);
+   if(a.playerApproved!==true||q.confirmedMerchantTransaction!==true||
+      typeof itemId!=="string"||
+      !/^[a-z][a-z0-9_]{2,70}$/.test(itemId)||
+      !Number.isSafeInteger(quantity)||Number(quantity)<1||Number(quantity)>25||
+      !Number.isSafeInteger(unitPriceValis)||Number(unitPriceValis)<1||
+      Number(unitPriceValis)>10000000||
+      !Number.isSafeInteger(total)||total>current.valis||
+      current.appliedRewardRefs.includes(sourceRef)||
+      s.player.locationId?.startsWith("orario.dungeon"))
+     throw Error("ORARIO_LOCAL_PURCHASE_NOT_CONFIRMED");
+   const n=structuredClone(current);
+   n.valis-=total;
+   n.inventory[itemId]=(n.inventory[itemId]??0)+Number(quantity);
+   n.appliedRewardRefs.push(sourceRef);
+   return n;
+  }
   case "purchase":
    return purchaseJinwooItem(current,{
     ...q,sourceRef
