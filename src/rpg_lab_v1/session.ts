@@ -165,7 +165,7 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
  if(!map(s.npcs,128))throw Error("LAB_SESSION_NPCS_INVALID");
  for(const [npcId,raw] of Object.entries(s.npcs)){
   const state=raw as LabNpcState;
-  if(!pack.npcProfiles[npcId]||!state||!list(state.knownFacts,128)||!Array.isArray(state.memories)||state.memories.length>128)
+  if(!pack.npcProfiles[npcId]||!state||!list(state.knownFacts,512)||!Array.isArray(state.memories)||state.memories.length>512)
    throw Error("LAB_SESSION_NPC_INVALID");
   if(state.suspicion!==undefined)validateNpcSuspicion(state.suspicion);
   if(state.perceptions!==undefined){
