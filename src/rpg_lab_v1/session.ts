@@ -51,7 +51,9 @@ export type LabSession={
  discovered:string[];npcs:Record<string,LabNpcState>;worldProjects?:Record<string,LabWorldProject>;worldEvidence?:Record<string,LabWorldEvidence>;
  playerFog?:LabPlayerFog;storyState?:LabStoryState;
  ambientRumors?:Record<string,LabAmbientRumor>;
- events:{sourceRef:string;summary:string;time:string;knownBy:string[];locationId?:string;kind?:string}[];
+ events:{sourceRef:string;summary:string;time:string;knownBy:string[];locationId?:string;kind?:string;gmPostRef?:string}[];
+  /** Count of DISTINCT narrated posts, independent of event/attack count. */
+  gmPostCadence?:{count:number;lastPostRef:string;recentPostRefs:string[]};
  worldEvents?:{sourceRef:string;time:string;npcId:string;targetNpcId?:string;action:string;outcome:string;locationId?:string;privacy:"public"|"hidden"}[];
  archivedEventCount?:number;
 };
@@ -163,7 +165,7 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
  if(!map(s.npcs,128))throw Error("LAB_SESSION_NPCS_INVALID");
  for(const [npcId,raw] of Object.entries(s.npcs)){
   const state=raw as LabNpcState;
-  if(!pack.npcProfiles[npcId]||!state||!list(state.knownFacts,128)||!Array.isArray(state.memories)||state.memories.length>128)
+  if(!pack.npcProfiles[npcId]||!state||!list(state.knownFacts,512)||!Array.isArray(state.memories)||state.memories.length>512)
    throw Error("LAB_SESSION_NPC_INVALID");
   if(state.suspicion!==undefined)validateNpcSuspicion(state.suspicion);
   if(state.perceptions!==undefined){
@@ -219,11 +221,20 @@ export function validateLabSession(s:LabSession,pack:LabPack):LabSession{
   }
   if(new Set(state.memories.map(m=>m.sourceRef)).size!==state.memories.length)throw Error("LAB_SESSION_DUPLICATE_MEMORY");
  }
+ if(s.gmPostCadence!==undefined){
+  const c=s.gmPostCadence;
+  if(!Number.isSafeInteger(c.count)||c.count<1||c.count>100000000||
+    !id(c.lastPostRef)||!list(c.recentPostRefs,64)||
+    c.recentPostRefs.length===0||c.recentPostRefs.at(-1)!==c.lastPostRef||
+    new Set(c.recentPostRefs).size!==c.recentPostRefs.length)
+   throw Error("LAB_GM_POST_CADENCE_INVALID");
+ }
  if(s.archivedEventCount!==undefined&&(!Number.isSafeInteger(s.archivedEventCount)||s.archivedEventCount<0||s.archivedEventCount>10000000))throw Error("LAB_SESSION_ARCHIVE_COUNT_INVALID");
  if(!Array.isArray(s.events)||s.events.length>256)throw Error("LAB_SESSION_EVENTS_INVALID");
  for(const ev of s.events){
   if(!id(ev.sourceRef)||!txt(ev.summary,600)||!txt(ev.time,100)||!list(ev.knownBy,128)||
-     (ev.locationId!==undefined&&!id(ev.locationId))||(ev.kind!==undefined&&!id(ev.kind)))
+     (ev.locationId!==undefined&&!id(ev.locationId))||(ev.kind!==undefined&&!id(ev.kind))||
+     (ev.gmPostRef!==undefined&&!id(ev.gmPostRef)))
    throw Error("LAB_SESSION_EVENT_INVALID");
  }
  if(new Set(s.events.map(e=>e.sourceRef)).size!==s.events.length)throw Error("LAB_SESSION_DUPLICATE_EVENT");

@@ -188,6 +188,7 @@ export interface PlayerCombatEncounter{
  enemyRef:string;monsterId:string;floor:number;
  enemyHp:number;round:number;startedRef:string;
  irregularRef?:string;lastCombatRef?:string;
+ blindedUntilRound?:number;
 }
 export interface JinwooState{
  schema:"DANMACHI_JINWOO_PREP_V1";
@@ -200,6 +201,7 @@ export interface JinwooState{
  /** Remaining projectiles in the currently loaded bow or throwing-knife set. */
  ammoRemaining?:{arrow_bundle?:number;daggers_throwing?:number};
  activeSkills?:import("./orario_player_skills.ts").ActivePlayerSkill[];
+ skillMastery?:Record<string,import("./orario_player_skills.ts").SkillMasteryProgress>;
  activeEncounter?:PlayerCombatEncounter;
 
  phase:JinwooPhase;postAscensionInterface:PostAscensionInterface;

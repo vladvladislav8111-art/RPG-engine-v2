@@ -8,7 +8,8 @@
 import type {LabSession} from "./session.ts";
 import type {LabPack} from "./engine.ts";
 import {readChromaPaletteAnchor} from "./chroma_palette.ts";
-import {effectiveJinwooMaxHp,effectiveJinwooMaxMp,shadowCapacity,
+import {effectiveJinwooMaxHp,effectiveJinwooMaxMp,effectiveJinwooStaminaReserve,
+ shadowCapacity,
  xpToNextLevel} from "./shadow_monarch_rules.ts";
 import {previewInjuryPenalties} from "./orario_player_survival.ts";
 export const ORARIO_ANCHOR_POLICY={
@@ -71,7 +72,7 @@ export function readOrarioPlayerAnchors(s:LabSession,pack?:LabPack){
   /** Physical wellbeing is visible even before the first System window. */
   vitals:{hp:hidden?null:{current:p.hp,max:effectiveJinwooMaxHp(p)},
    mp:hidden?null:{current:p.mp,max:effectiveJinwooMaxMp(p)},
-   stamina:hidden?null:{current:nonneg(100-p.fatigue),max:100,
+   stamina:hidden?null:{...effectiveJinwooStaminaReserve(p),
     derivedFromFatigue:true},
    injuries:(p.injuries??[]).filter(x=>x.active).map(x=>({
     location:x.location,kind:x.kind,severity:x.severity,
@@ -81,6 +82,7 @@ export function readOrarioPlayerAnchors(s:LabSession,pack?:LabPack){
    system:{level:p.systemLevel,xp:p.xp,
     xpRequired:xpToNextLevel(p.systemLevel),
     unspentPoints:p.freeStatPoints,
+    skillMastery:structuredClone(p.skillMastery??{}),
     attributes:{...p.stats},phase:p.phase},
    falna:{present:p.falna.blessed,divineLevel:p.falna.blessed?
     p.falna.divineLevel:null,godNameNotAutoRevealed:true},

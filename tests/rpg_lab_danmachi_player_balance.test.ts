@@ -156,7 +156,7 @@ test("monster XP scales with danger and does not inflate from trivial farming",(
   agility:300,perception:300,intelligence:300};
  const weak=previewBalancedMonsterReward(veteran,{monsterId:"goblin",
   floor:1,monsterRef:"mob.goblin.02"});
- assert.equal(weak.xp,0);
+ assert.equal(weak.xp,13);
  const party=previewBalancedMonsterReward(s,{monsterId:"goblin",floor:1,
   monsterRef:"mob.goblin.03",partySize:4,contributionPercent:50});
  assert.ok(party.xp<goblin.xp);

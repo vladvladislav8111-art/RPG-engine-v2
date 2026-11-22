@@ -47,6 +47,7 @@ const playable=new Set([
  "dungeon_clear","first_knight","shadow_deploy","shadow_victory",
  "shadow_revive","daily_box","injury","rest","medical_care",
  "reconcile_chroma_d1","reconcile_chroma_starting_valis",
+ "reconcile_chroma_d3_xp",
  "local_purchase"
 ]);
 export type OrarioPlayerAction={
@@ -132,6 +133,25 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
    const n=structuredClone(current);
    n.valis+=30000;
    n.appliedRewardRefs=[...n.appliedRewardRefs,sourceRef];
+   return n;
+  }
+  case "reconcile_chroma_d3_xp":{
+   // Source-attested one-off XP repair of six ALREADY committed victories.
+   // This never rerolls or reissues monster stones, System gold or a kill.
+   const proof="chroma.d3_f5_shadow06_stone_collect.489";
+   if(s.projectId!=="chroma_orario_main_20261120"||
+      s.sessionId!=="chroma_day0_20261120"||
+      s.player.hero?.id!=="hero.chroma"||
+      sourceRef!=="chroma.repair.d3_xp_rebalance_490"||
+      eventTime!=="D3 10:37"||a.playerApproved!==true||
+      q.confirmReviewedBase199!==true||
+      !s.events.some(ev=>ev.sourceRef===proof)||
+      current.systemLevel!==2||current.xp!==150||
+      current.appliedRewardRefs.includes(sourceRef))
+     throw Error("CHROMA_D3_XP_RECONCILE_EVIDENCE_OR_STATE_INVALID");
+   const n=structuredClone(current);
+   n.xp+=124; // 199 total for six kills instead of the previous 75.
+   n.appliedRewardRefs.push(sourceRef);
    return n;
   }
   case "activate":
@@ -353,6 +373,7 @@ export function readOrarioPlayerHud(s:LabSession){
   gold:p.gold,valis:p.valis,
   inventory:{...p.inventory},
   dailyTraining:p.dailyTraining?structuredClone(p.dailyTraining):null,
+  skillMastery:structuredClone(p.skillMastery??{}),
   injuries:structuredClone(p.injuries??[]),
   shadowCount:p.shadowRoster.length,
   availableMagicStones:Object.values(p.magicStones).filter(x=>x.state==="held").length,

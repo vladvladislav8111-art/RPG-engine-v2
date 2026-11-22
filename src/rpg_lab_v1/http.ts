@@ -18,6 +18,7 @@ import {readOrarioPlayerAnchors} from "./orario_player_anchors.ts";
 import {planLabEventArchive} from "./event_archive.ts";
 import {buildFreshDanmachiLabPack} from "./danmachi_starter.ts";
 import {readOrarioPlayerHud} from "./orario_player_event.ts";
+import {CHROMA_GM_WELCOME_CARD,CHROMA_GM_FIVE_POST_CHECK} from "./gm_guide.ts";
 import {promoteOriginalNpcInKv,type LabPromoteOriginalNpcArgs} from "./original_npc_promotion_kv.ts";
 import {archivedLabKey,validateLabArchiveRequest,validateLabArchiveMarker,
  type LabArchiveTarget,type LabArchiveMarker} from "./campaign_lifecycle.ts";
@@ -291,7 +292,17 @@ export async function readLabConfirmedEvent(projectId:string,sessionId:string,so
        salience:m.salience
       }))
     }]));
+  const posts=loaded.session.gmPostCadence?.count??0;
   return {schema:"CHROMA_SINGLE_SESSION_PRIVATE_AUDIT_V1",
+   gmWelcomeCard:CHROMA_GM_WELCOME_CARD,
+   gmPostCadence:{confirmedPosts:posts,
+    exactTrackingStarted:loaded.session.gmPostCadence!==undefined,
+    reminderDue:posts>0&&posts%5===0,
+    nextReminderAt:5*(Math.floor(posts/5)+1),
+    reminderWhenDue:posts>0&&posts%5===0?CHROMA_GM_FIVE_POST_CHECK:[],
+    lastPostRef:loaded.session.gmPostCadence?.lastPostRef??null},
+   npcMemorySourceRule:"Only the owner's personally saved sourceRef permits a specific memory, joke, promise or private inference; no shared Familia memories.",
+
    projectId,sessionId,revision:loaded.sessionRevision,
    packRevision:loaded.packRevision,gameClock:loaded.session.gameClock,
    npcIds,npcMemoryCounts:Object.fromEntries(Object.entries(loaded.session.npcs).map(([id,state])=>[id,state.memories.length])),npcs:chosen,
@@ -306,7 +317,7 @@ export async function readLabConfirmedEvent(projectId:string,sessionId:string,so
     lokiFeaturePerceptions:loaded.session.npcs["npc.loki"]?.perceptions??{}
    },player:{
     ...(n?{systemLevel:n.systemLevel,xp:n.xp,freeStatPoints:n.freeStatPoints,
-     systemStats:n.stats,hp:n.hp,mp:n.mp,fatigue:n.fatigue,falna:n.falna,phase:n.phase,awaitingActivation:n.awaitingActivation,gold:n.gold,valis:n.valis,unlockedSkills:n.unlockedSkills,inventory:n.inventory,completedDailyDays:n.completedDailyDays,dailyTraining:n.dailyTraining,activeSkills:n.activeSkills,appliedRewardRefs:n.appliedRewardRefs?.slice(-20)}:{}),
+     systemStats:n.stats,hp:n.hp,mp:n.mp,fatigue:n.fatigue,falna:n.falna,phase:n.phase,awaitingActivation:n.awaitingActivation,gold:n.gold,valis:n.valis,unlockedSkills:n.unlockedSkills,skillMastery:n.skillMastery??{},inventory:n.inventory,completedDailyDays:n.completedDailyDays,dailyTraining:n.dailyTraining,activeSkills:n.activeSkills,appliedRewardRefs:n.appliedRewardRefs?.slice(-20)}:{}),
     resources:loaded.session.player.resources,
     genericPlayerStats:loaded.session.player.stats
    },recentEvents:loaded.session.events.slice(-12),

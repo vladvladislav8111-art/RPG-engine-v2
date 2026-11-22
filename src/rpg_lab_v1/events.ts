@@ -83,6 +83,8 @@ export type LabNpcMoodChange={
 export type LabWorldProjectChange={projectId:string;expectedRevision:number;record:LabWorldProject};
 export type LabConfirmedEvent={
  sourceRef:string;time:string;summary:string;kind:string;locationId?:string;
+ /** Reuse this across machine events of ONE visible GM reply. */
+ gmPostRef?:string;
  knownBy:string[];observations?:LabNpcObservation[];
  features?:NpcFeatureObservation[];linos?:LabLinosTurn;
  playerSystem?:OrarioPlayerAction;
@@ -133,6 +135,13 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
  if(!record(event)||event.gmConfirmed!==true||!good(event.sourceRef)||!good(event.kind)||
     !phrase(event.time,100)||!phrase(event.summary,600)||!bounded(event.knownBy,60))
   throw Error("LAB_EVENT_CONFIRMATION_REQUIRED");
+ if(event.gmPostRef!==undefined&&!good(event.gmPostRef))
+  throw Error("LAB_GM_POST_REF_INVALID");
+ // Once this campaign begins exact five-post tracking, no further gameplay
+ // event may silently evade it. Legacy saves without the counter remain valid.
+ if(session.player.hero?.id==="hero.chroma"&&session.gmPostCadence&&
+   event.kind==="player_turn"&&event.gmPostRef===undefined)
+  throw Error("CHROMA_GM_POST_REF_REQUIRED");
  if(event.locationId!==undefined&&(!good(event.locationId)||!pack.locations[event.locationId]))
   throw Error("LAB_EVENT_LOCATION_INVALID");
  if(event.playerLocationId!==undefined&&(!good(event.playerLocationId)||!pack.locations[event.playerLocationId]))
@@ -360,7 +369,7 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
    if(!witnessNow&&!remembered)throw Error("LAB_EVENT_RELAY_SOURCE_UNVERIFIED");
   }
   const state:LabNpcState=next.npcs[observation.npcId]??{knownFacts:[],memories:[]};
-  if(state.memories.length>=128)throw Error("LAB_EVENT_NPC_MEMORY_FULL");
+  if(state.memories.length>=512)throw Error("LAB_EVENT_NPC_MEMORY_FULL");
   const memory:LabMemory={
    sourceRef:event.sourceRef,summary:observation.perceivedFact,
    perceivedFact:observation.perceivedFact,learnedAt:observation.learnedAt,
@@ -373,7 +382,7 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
   };
   state.memories.push(memory);
   if(!state.knownFacts.includes(event.sourceRef))state.knownFacts.push(event.sourceRef);
-  if(state.knownFacts.length>128)throw Error("LAB_EVENT_NPC_KNOWLEDGE_FULL");
+  if(state.knownFacts.length>512)throw Error("LAB_EVENT_NPC_KNOWLEDGE_FULL");
   next.npcs[observation.npcId]=state;
  }
  // Confirmed NPC-to-NPC contact is an independent world event, not flavor
@@ -400,7 +409,7 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
     ...(interaction.witnessNpcIds??[])]);
   for(const npcId of listeners){
    const state:LabNpcState=next.npcs[npcId]??{knownFacts:[],memories:[]};
-   if(state.memories.length>=128||state.knownFacts.length>=128)
+   if(state.memories.length>=512||state.knownFacts.length>=512)
     throw Error("LAB_NPC_INTERACTION_MEMORY_FULL");
    const participant=npcId===interaction.initiatorNpcId||
     npcId===interaction.recipientNpcId;
@@ -788,7 +797,17 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
   next.player.jinwoo=applyOrarioPlayerAction(session,event.playerSystem,
     event.sourceRef,event.time);
  }
+ if(event.gmPostRef!==undefined){
+  const cadence=next.gmPostCadence??{count:0,lastPostRef:"",recentPostRefs:[]};
+  if(cadence.recentPostRefs.includes(event.gmPostRef)&&
+     cadence.lastPostRef!==event.gmPostRef)
+   throw Error("LAB_GM_POST_REF_REUSE_INVALID");
+  if(event.gmPostRef!==cadence.lastPostRef)
+   next.gmPostCadence={count:cadence.count+1,lastPostRef:event.gmPostRef,
+    recentPostRefs:[...cadence.recentPostRefs.slice(-63),event.gmPostRef]};
+ }
  next.events.push({sourceRef:event.sourceRef,kind:event.kind,summary:event.summary,
+  ...(event.gmPostRef?{gmPostRef:event.gmPostRef}:{}),
   time:event.time,knownBy:[...event.knownBy],
   ...(event.locationId?{locationId:event.locationId}:{})});
  next.gameClock=event.time;

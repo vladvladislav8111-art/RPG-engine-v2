@@ -18,7 +18,8 @@ import {readOrarioPlayerHud} from "./orario_player_event.ts";
 import {readOrarioPlayerAnchors,readOrarioGmAnchors} from "./orario_player_anchors.ts";
 import {previewArmyBalance} from "./danmachi_shadow_balance.ts";
 import {readPrivateNpcSuspicion} from "./danmachi_suspicion.ts";
-import {RPG_LAB_SCENE_REMINDER,RPG_BRIDGE_GM_GUIDE_VERSION} from "./gm_guide.ts";
+import {RPG_LAB_SCENE_REMINDER,RPG_BRIDGE_GM_GUIDE_VERSION,
+ CHROMA_GM_WELCOME_CARD,CHROMA_GM_FIVE_POST_CHECK} from "./gm_guide.ts";
 import type {LabSession} from "./session.ts";
 
 type Loaded={
@@ -49,7 +50,9 @@ export async function readLabRoleplayScene(load:LabRoleplayLoader,
   findLabNpcMentions(s.pack,request.dialogueText,8);
  const npcIds=[...new Set([...(request.npcIds??[]),
    ...(mentionLookup?.npcIds??[])])];
- if(npcIds.length===0||npcIds.length>8)
+ // A Chroma solo Dungeon scene needs the GM card and cadence too.
+ if(npcIds.length>8||(npcIds.length===0&&
+   s.session.player.hero?.id!=="hero.chroma"))
   throw Error("LAB_ROLEPLAY_SCENE_NPC_SELECTION_INVALID");
  const brief=buildLabSceneBrief(s.pack,s.session,{
   npcIds,eventRef:request.eventRef,
@@ -75,6 +78,30 @@ export async function readLabRoleplayScene(load:LabRoleplayLoader,
   sourceAttestedBySave:true,
   gmReminderVersion:RPG_BRIDGE_GM_GUIDE_VERSION,
   gmReminder:RPG_LAB_SCENE_REMINDER,
+   ...(s.session.player.hero?.id==="hero.chroma"?{
+    gmWelcomeCard:CHROMA_GM_WELCOME_CARD,
+    gmPostCadence:{
+     confirmedPosts:s.session.gmPostCadence?.count??0,
+     exactTrackingStarted:s.session.gmPostCadence!==undefined,
+     reminderDue:(s.session.gmPostCadence?.count??0)>0&&
+      (s.session.gmPostCadence!.count%5===0),
+     nextReminderAt:5*(Math.floor((s.session.gmPostCadence?.count??0)/5)+1),
+     reminderWhenDue:(s.session.gmPostCadence?.count??0)>0&&
+      (s.session.gmPostCadence!.count%5===0)?CHROMA_GM_FIVE_POST_CHECK:[],
+     instruction:"One gmPostRef per visible game reply; reuse it for every server event inside that reply.",
+    },
+    npcPersonalRecallCues:npcIds.map(npcId=>({
+     npcId,name:s.pack.npcProfiles[npcId].name,
+     sources:(s.session.npcs[npcId]?.memories??[]).slice(-3).map(m=>({
+      sourceRef:m.sourceRef,channel:m.channel??"unspecified",
+      learnedAt:m.learnedAt,sourceActor:m.sourceActor??null,
+      relayedSourceRef:m.relayedSourceRef??null,
+      perceivedFact:(m.perceivedFact??m.summary).slice(0,160),
+     })),
+     mentionedDoesNotMeanPresent:true,
+     memoriesCannotTransferBetweenNpc:true,
+    })),
+   }:{}),
   roleplayGuard:s.session.roleplayGuard??"legacy",
   currentInworldMinute:from,
   ...(to!==undefined?{reviewThroughMinute:to}:{}),
