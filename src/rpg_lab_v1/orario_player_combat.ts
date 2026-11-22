@@ -12,7 +12,8 @@ import {previewOwnedEquipmentEncounter,type Loadout} from
  "./danmachi_player_equipment.ts";
 import {previewInjuryPenalties,applyConfirmedInjury} from
  "./orario_player_survival.ts";
-import {getPlayerSkillBattleModifiers} from "./orario_player_skills.ts";
+import {getPlayerSkillBattleModifiers,recordConfirmedSkillPractice} from "./orario_player_skills.ts";
+import {effectiveJinwooMaxHp} from "./shadow_monarch_rules.ts";
 import {isSystemEncounterId,systemEncounterEntryAllowed} from "./orario_system_encounters.ts";
 const safeRef=(x:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(x);
 function hash(ref:string,salt:string):number{
@@ -56,11 +57,18 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  move:CombatMove|"retreat";loadout:Loadout;
  proficiencyBonus?:number;positionBonus?:number;spellMpCost?:number;
  spellId?:string;currentMinute?:number;
+ tacticalApproach?:"standard"|"paint_blind"|"hit_and_run";
+ confirmedPaintAvailable?:boolean;
 }):BattleResolution{
  const battle=s.activeEncounter,mob=battle&&ORARIO_MONSTER_BY_ID[battle.monsterId];
  if(!battle||!mob||!e.playerCommitted||!safeRef(e.sourceRef)||
   s.appliedRewardRefs.includes(e.sourceRef)||s.hp<=0||s.awaitingActivation)
   throw Error("PLAYER_EXCHANGE_NOT_AUTHORIZED");
+ if(e.tacticalApproach!==undefined&&
+   !["standard","paint_blind","hit_and_run"].includes(e.tacticalApproach))
+  throw Error("PLAYER_TACTIC_INVALID");
+ if(e.tacticalApproach==="paint_blind"&&e.confirmedPaintAvailable!==true)
+  throw Error("PLAYER_PAINT_NOT_CONFIRMED");
  const rolls={player:hash(e.sourceRef,"player"),enemy:hash(e.sourceRef,"enemy")};
  const next=structuredClone(s);
  const active=next.activeEncounter!;
@@ -123,6 +131,17 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  next.mp-=cost.mp;next.fatigue=Math.min(100,next.fatigue+cost.fatigue);
  active.round++;
  active.lastCombatRef=e.sourceRef;
+ // Credit one source-attested success per enemy, not every hit or activation.
+ if(dealt>0&&e.move==="strike"&&modifiers.currentlyActive.includes("sprint")){
+  next.skillMastery=recordConfirmedSkillPractice(next,{
+   skillId:"sprint",enemyRef:battle.enemyRef,sourceRef:e.sourceRef,
+   threatLevel:mob.systemThreatLevel,confirmedEffective:true}).skillMastery;
+ }
+ // Physical pigment is an attempt, not a guaranteed blind: separate roll.
+ if(e.tacticalApproach==="paint_blind"&&e.move==="strike"&&dealt>0&&
+    hash(e.sourceRef,"paint")<=Math.min(90,Math.max(12,
+      chance-10-Math.floor(mob.combat.perception/4))))
+  active.blindedUntilRound=active.round+2;
  if(active.enemyHp<=0){
   // No automatic loot. A separate confirmed recovery event may collect
   // the intact magic stone. XP & gold committed on the same battle event.
@@ -139,11 +158,18 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
     0,
    systemGoldGranted:raised.gold-oldGold};
  }
- if(rolls.enemy<=wear.exchange.counterHitChancePercent){
+ // Real distance and visibility decide whether a counterattack is possible.
+ const outOfReach=e.tacticalApproach==="hit_and_run"&&dealt>0&&
+  battleStats.stats.agility>=mob.combat.agility*1.2;
+ const blinded=active.blindedUntilRound!==undefined&&
+  active.round<=active.blindedUntilRound;
+ const counterChance=outOfReach?0:Math.max(0,
+  wear.exchange.counterHitChancePercent-(blinded?45:0));
+ if(rolls.enemy<=counterChance){
   taken=Math.max(0,wear.exchange.counterDamageIfHit+
     injury.defensePenalty);
   next.hp=Math.max(0,next.hp-taken);
-  const maxHp=100+next.stats.stamina*20;
+  const maxHp=effectiveJinwooMaxHp(next);
   // Severe strikes, not every scratch, can create a lasting injury.
   if(taken>=Math.ceil(maxHp*.16)&&next.hp>0){
    const place=["torso","left_arm","right_arm","left_leg","right_leg","head"] as const;
