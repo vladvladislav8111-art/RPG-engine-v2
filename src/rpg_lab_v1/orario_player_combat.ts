@@ -138,7 +138,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
    threatLevel:mob.systemThreatLevel,confirmedEffective:true}).skillMastery;
  }
  // Physical pigment is an attempt, not a guaranteed blind: separate roll.
- if(e.tacticalApproach==="paint_blind"&&e.move==="strike"&&dealt>0&&
+ if(e.tacticalApproach==="paint_blind"&&e.move==="strike"&&
     hash(e.sourceRef,"paint")<=Math.min(90,Math.max(12,
       chance-10-Math.floor(mob.combat.perception/4))))
   active.blindedUntilRound=active.round+2;
