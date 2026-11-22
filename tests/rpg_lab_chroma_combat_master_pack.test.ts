@@ -112,3 +112,32 @@ test("five GM posts, not five mechanical subevents, trigger the reminder",()=>{
  assert.throws(()=>step("gm.post.001"),/LAB_GM_POST_REF_REUSE_INVALID/);
  validateLabSession(s,pack);
 });
+
+test("128-source NPC memory can grow without loss or leaking to a different NPC",()=>{
+ const pack=buildFreshDanmachiLabPack("chroma_personal_memory_growth_test");
+ const sourceRefs=Array.from({length:128},(_,i)=>"evt.old.memory."+String(i).padStart(3,"0"));
+ const memories=sourceRefs.map(sourceRef=>({
+  sourceRef,summary:"Личный опыт Локи",learnedAt:"D0 09:00",
+  knownBy:["npc.loki"],channel:"seen",privacy:"private",salience:"ordinary"
+ }));
+ const session:LabSession={schema:"RPG_LAB_SESSION_V1",
+  projectId:pack.projectId,sessionId:"chroma_memory_test",gameClock:"D0 09:00",
+  player:{resources:{},stats:{},inventory:{},locationId:"orario.gate"},
+  discovered:["orario.gate"],
+  npcs:{"npc.loki":{knownFacts:[...sourceRefs],memories},
+   "npc.tiona":{knownFacts:[],memories:[]}},events:[],worldEvents:[]};
+ validateLabSession(session,pack);
+ const next=applyConfirmedLabEvent(session,pack,{
+  sourceRef:"evt.new.loki.joke",kind:"player_turn",time:"D0 09:01",
+  summary:"Локи лично заметила новую забавную сцену",gmConfirmed:true,
+  knownBy:["npc.loki"],observations:[{
+   npcId:"npc.loki",channel:"seen",perceivedFact:"Хрома нарисовал торт",
+   learnedAt:"D0 09:01",confidence:"certain",salience:"important",
+   privacy:"private"}]});
+ assert.equal(next.npcs["npc.loki"].memories.length,129);
+ assert.equal(next.npcs["npc.loki"].memories[0].sourceRef,sourceRefs[0],
+  "old personally owned memory is preserved");
+ assert.equal(next.npcs["npc.loki"].memories.at(-1)?.sourceRef,"evt.new.loki.joke");
+ assert.equal(next.npcs["npc.tiona"].memories.length,0,
+  "one Familia member does not inherit another member's jokes");
+});
