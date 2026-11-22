@@ -137,6 +137,11 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
   throw Error("LAB_EVENT_CONFIRMATION_REQUIRED");
  if(event.gmPostRef!==undefined&&!good(event.gmPostRef))
   throw Error("LAB_GM_POST_REF_INVALID");
+ // Once this campaign begins exact five-post tracking, no further gameplay
+ // event may silently evade it. Legacy saves without the counter remain valid.
+ if(session.player.hero?.id==="hero.chroma"&&session.gmPostCadence&&
+   event.kind==="player_turn"&&event.gmPostRef===undefined)
+  throw Error("CHROMA_GM_POST_REF_REQUIRED");
  if(event.locationId!==undefined&&(!good(event.locationId)||!pack.locations[event.locationId]))
   throw Error("LAB_EVENT_LOCATION_INVALID");
  if(event.playerLocationId!==undefined&&(!good(event.playerLocationId)||!pack.locations[event.playerLocationId]))
