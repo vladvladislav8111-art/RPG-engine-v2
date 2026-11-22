@@ -8,7 +8,8 @@
 import type {LabSession} from "./session.ts";
 import type {LabPack} from "./engine.ts";
 import {readChromaPaletteAnchor} from "./chroma_palette.ts";
-import {effectiveJinwooMaxHp,effectiveJinwooMaxMp,shadowCapacity,
+import {effectiveJinwooMaxHp,effectiveJinwooMaxMp,effectiveJinwooStaminaReserve,
+ projectJinwooFalna,shadowCapacity,
  xpToNextLevel} from "./shadow_monarch_rules.ts";
 import {previewInjuryPenalties} from "./orario_player_survival.ts";
 export const ORARIO_ANCHOR_POLICY={
@@ -71,8 +72,9 @@ export function readOrarioPlayerAnchors(s:LabSession,pack?:LabPack){
   /** Physical wellbeing is visible even before the first System window. */
   vitals:{hp:hidden?null:{current:p.hp,max:effectiveJinwooMaxHp(p)},
    mp:hidden?null:{current:p.mp,max:effectiveJinwooMaxMp(p)},
-   stamina:hidden?null:{current:nonneg(100-p.fatigue),max:100,
-    derivedFromFatigue:true},
+   stamina:hidden?null:{current:effectiveJinwooStaminaReserve(p),
+    max:nonneg(projectJinwooFalna(p).total.stamina*10),
+    fatiguePercent:p.fatigue,derivedFromFatigue:true},
    injuries:(p.injuries??[]).filter(x=>x.active).map(x=>({
     location:x.location,kind:x.kind,severity:x.severity,
     treated:x.treated}))},
