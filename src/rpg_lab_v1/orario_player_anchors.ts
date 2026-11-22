@@ -81,6 +81,7 @@ export function readOrarioPlayerAnchors(s:LabSession,pack?:LabPack){
    system:{level:p.systemLevel,xp:p.xp,
     xpRequired:xpToNextLevel(p.systemLevel),
     unspentPoints:p.freeStatPoints,
+    skillMastery:structuredClone(p.skillMastery??{}),
     attributes:{...p.stats},phase:p.phase},
    falna:{present:p.falna.blessed,divineLevel:p.falna.blessed?
     p.falna.divineLevel:null,godNameNotAutoRevealed:true},
