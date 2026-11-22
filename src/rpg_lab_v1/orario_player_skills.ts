@@ -37,6 +37,8 @@ export type ActivePlayerSkill={
  id:"stealth"|"sprint"|"quicksilver"|"monarch_domain";
  startedRef:string;expiresMinute:number;
  agilityBonus:number;positionBonus:number;mpSpent:number;
+ /** Snapshot at activation; gaining mastery mid-buff cannot reprice or reboost it. */
+ speedMultiplier?:number;
 };
 const valid=(s:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(s);
 export function activateConfirmedPlayerSkill(s:JinwooState,e:{
@@ -51,13 +53,15 @@ export function activateConfirmedPlayerSkill(s:JinwooState,e:{
   throw Error("PLAYER_SKILL_NOT_UNLOCKED_OR_CONFIRMED");
  const now=(s.activeSkills??[]).filter(x=>x.expiresMinute>e.startMinute);
  if(now.some(x=>x.id===e.skillId))throw Error("PLAYER_SKILL_ALREADY_ACTIVE");
- let mpCost=0,agilityBonus=0,positionBonus=0;
+ let mpCost=0,agilityBonus=0,positionBonus=0,speedMultiplier=1;
  switch(e.skillId){
   case "sprint":
    if(e.durationMinutes>10)throw Error("PLAYER_SKILL_DURATION_INVALID");
    mpCost=5+e.durationMinutes; // Activation 5 MP; 1 MP/min sustain.
-   agilityBonus=Math.round(projectJinwooFalna(s).total.agility*
-     Math.min(.70,.30+.10*(skillMasteryLevel(s,"sprint")-1)));
+   speedMultiplier=Number(Math.min(1.70,1.30+
+     .10*(skillMasteryLevel(s,"sprint")-1)).toFixed(2));
+    agilityBonus=Math.round(projectJinwooFalna(s).total.agility*
+     (speedMultiplier-1));
    break;
   case "stealth":
    if(e.durationMinutes>5)throw Error("PLAYER_SKILL_DURATION_INVALID");
@@ -75,7 +79,7 @@ export function activateConfirmedPlayerSkill(s:JinwooState,e:{
  const n=structuredClone(s);n.mp-=mpCost;
  n.activeSkills=[...now,{id:e.skillId,startedRef:e.sourceRef,
   expiresMinute:e.startMinute+e.durationMinutes,agilityBonus,positionBonus,
-  mpSpent:mpCost}];
+  mpSpent:mpCost,speedMultiplier}];
  n.appliedRewardRefs.push(e.sourceRef);return n;
 }
 export function getPlayerSkillBattleModifiers(s:JinwooState,minute:number){
@@ -83,7 +87,7 @@ export function getPlayerSkillBattleModifiers(s:JinwooState,minute:number){
  return {agilityBonus:effects.reduce((a,x)=>a+x.agilityBonus,0),
   positionBonus:effects.reduce((a,x)=>a+x.positionBonus,0),
   domainBonus:effects.some(x=>x.id==="monarch_domain")?1.5:1,
-  speedMultiplier:effects.some(x=>x.id==="sprint")?
-   Number(Math.min(1.70,1.30+.10*(skillMasteryLevel(s,"sprint")-1)).toFixed(2)):1,
+  speedMultiplier:effects.find(x=>x.id==="sprint")?.speedMultiplier??
+   (effects.some(x=>x.id==="sprint")?1.30:1),
   currentlyActive:effects.map(x=>x.id),readOnly:true};
 }
