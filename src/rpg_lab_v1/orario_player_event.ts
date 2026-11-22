@@ -46,7 +46,7 @@ const playable=new Set([
  "unlock","change_class","plot_key","dungeon_key","dungeon_enter",
  "dungeon_clear","first_knight","shadow_deploy","shadow_victory",
  "shadow_revive","daily_box","injury","rest","medical_care",
- "reconcile_chroma_d1"
+ "reconcile_chroma_d1","reconcile_chroma_starting_valis"
 ]);
 export type OrarioPlayerAction={
  kind:string;
@@ -110,6 +110,26 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
    n.hp=effectiveJinwooMaxHp(n);
    n.mp=effectiveJinwooMaxMp(n);
    n.fatigue=22; // 78% current stamina fraction, after the first descent.
+   n.appliedRewardRefs=[...n.appliedRewardRefs,sourceRef];
+   return n;
+  }
+  case "reconcile_chroma_starting_valis":{
+   // User-confirmed starting purse was omitted from the initial Orario snapshot.
+   // The existing 1,030 valis are Guild income, not the entire wallet.
+   const correctionRef="chroma.repair.d1_starting_valis_30000_user_confirmed.317";
+   if(s.projectId!=="chroma_orario_main_20261120"||
+      s.sessionId!=="chroma_day0_20261120"||
+      s.player.hero?.id!=="hero.chroma"||
+      sourceRef!=="chroma.repair.d1_starting_valis_30000_applied.318"||
+      eventTime!=="D1 18:16"||a.playerApproved!==true||
+      q.confirmStartingPurseValis!==30000||
+      q.correctionEvidenceRef!==correctionRef||
+      !s.events.some(ev=>ev.sourceRef===correctionRef)||
+      current.valis!==1030||
+      current.appliedRewardRefs.includes(sourceRef))
+    throw Error("CHROMA_STARTING_VALIS_RECONCILE_INVALID");
+   const n=structuredClone(current);
+   n.valis+=30000;
    n.appliedRewardRefs=[...n.appliedRewardRefs,sourceRef];
    return n;
   }
