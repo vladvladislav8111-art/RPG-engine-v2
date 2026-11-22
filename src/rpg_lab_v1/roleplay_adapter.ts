@@ -50,7 +50,9 @@ export async function readLabRoleplayScene(load:LabRoleplayLoader,
   findLabNpcMentions(s.pack,request.dialogueText,8);
  const npcIds=[...new Set([...(request.npcIds??[]),
    ...(mentionLookup?.npcIds??[])])];
- if(npcIds.length===0||npcIds.length>8)
+ // A Chroma solo Dungeon scene needs the GM card and cadence too.
+ if(npcIds.length>8||(npcIds.length===0&&
+   s.session.player.hero?.id!=="hero.chroma"))
   throw Error("LAB_ROLEPLAY_SCENE_NPC_SELECTION_INVALID");
  const brief=buildLabSceneBrief(s.pack,s.session,{
   npcIds,eventRef:request.eventRef,
