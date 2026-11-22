@@ -84,6 +84,6 @@ export function getPlayerSkillBattleModifiers(s:JinwooState,minute:number){
   positionBonus:effects.reduce((a,x)=>a+x.positionBonus,0),
   domainBonus:effects.some(x=>x.id==="monarch_domain")?1.5:1,
   speedMultiplier:effects.some(x=>x.id==="sprint")?
-   Math.min(1.70,1.30+.10*(skillMasteryLevel(s,"sprint")-1)):1,
+   Number(Math.min(1.70,1.30+.10*(skillMasteryLevel(s,"sprint")-1)).toFixed(2)):1,
   currentlyActive:effects.map(x=>x.id),readOnly:true};
 }
