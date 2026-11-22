@@ -44,6 +44,20 @@ export function validateOrarioPlayerState(s:JinwooState):JinwooState{
    !nat(st.guildValueValis)||!nat(st.powerRating))
    throw Error("ORARIO_PLAYER_MAGIC_STONE_INVALID");
  }
+ if(s.skillMastery!==undefined){
+  if(!keys(s.skillMastery,32))throw Error("ORARIO_SKILL_MASTERY_MAP_INVALID");
+  for(const [skillId,progress] of Object.entries(s.skillMastery)){
+   if(!id(skillId)||!s.unlockedSkills.includes(skillId)||!progress||
+    !Number.isSafeInteger(progress.level)||progress.level<1||progress.level>5||
+    !nat(progress.xp)||progress.xp>progress.level*60||
+    !nat(progress.uses)||progress.uses>10000000||
+    !id(progress.lastPracticeRef)||!Array.isArray(progress.trainedEnemyRefs)||
+    progress.trainedEnemyRefs.length>127||
+    progress.trainedEnemyRefs.some(x=>!id(x))||
+    new Set(progress.trainedEnemyRefs).size!==progress.trainedEnemyRefs.length)
+    throw Error("ORARIO_SKILL_MASTERY_INVALID");
+  }
+ }
  if(s.ammoRemaining!==undefined){
   if(!keys(s.ammoRemaining,2))
    throw Error("ORARIO_PLAYER_AMMO_INVALID");
@@ -119,7 +133,9 @@ export function validateOrarioPlayerState(s:JinwooState):JinwooState{
   const e=s.activeEncounter;
   if(!id(e.enemyRef)||!id(e.monsterId)||!id(e.startedRef)||
    !nat(e.floor)||!nat(e.enemyHp)||!nat(e.round)||e.floor>100||
-   e.round>10000)throw Error("ORARIO_PLAYER_ENCOUNTER_INVALID");
+   e.round>10000||
+   (e.blindedUntilRound!==undefined&&(!nat(e.blindedUntilRound)||
+    e.blindedUntilRound>10000)))throw Error("ORARIO_PLAYER_ENCOUNTER_INVALID");
  }
  if(s.hp>playerMaxHp({
   strength:s.stats.strength,stamina:s.stats.stamina+1e5,
