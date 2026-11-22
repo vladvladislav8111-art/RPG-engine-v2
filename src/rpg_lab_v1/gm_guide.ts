@@ -44,7 +44,7 @@ export const RPG_LAB_SCENE_REMINDER=[
  "Chroma pigment and stain continuity: a triggered palette persists across turns until it naturally subsides, and stains on skin/clothes/NPC hands persist until removed by a justified action or sufficient elapsed time. Track source, witnesses, surface and duration in committed narrative events.",
  "Chroma individual NPC familiarity: first sighting and habituation are feature-specific. Familiarity with turquoise hair does not imply recognizing an unusual violet tear reaction, its meaning, or the irreversible black iris shard.",
  "Before first awakening, the Player HUD must not reveal System numbers, future skills or private boss data.",
- "In every new Orario combat show Player HP, MP and derived stamina (100 minus fatigue), but not unstudied enemy HP or NPC system statistics.",
+ "In every new Orario combat show Player HP, MP and effective stamina reserve scaled to endurance and fatigue, but not unstudied enemy HP or NPC system statistics.",
  "Chroma: use the player's specific RPG Lab save, System monster threat levels, bounded per-encounter skill mastery and causal short-exchange calculations. Never override code with manual XP or random wounds.",
  "For game posts supply gmPostRef (same ID across multiple commits in one visible reply). Every fifth DISTINCT post the GM scene context flags a full memory, canon, resources and storytelling check.",
  "NPC humor is strongest when personally grounded: load each NPC's own memory sourceRef and relationship history; never merge siblings, friends or squadmates into a shared mind.",
