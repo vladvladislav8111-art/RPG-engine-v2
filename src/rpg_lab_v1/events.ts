@@ -83,6 +83,8 @@ export type LabNpcMoodChange={
 export type LabWorldProjectChange={projectId:string;expectedRevision:number;record:LabWorldProject};
 export type LabConfirmedEvent={
  sourceRef:string;time:string;summary:string;kind:string;locationId?:string;
+ /** Reuse this across machine events of ONE visible GM reply. */
+ gmPostRef?:string;
  knownBy:string[];observations?:LabNpcObservation[];
  features?:NpcFeatureObservation[];linos?:LabLinosTurn;
  playerSystem?:OrarioPlayerAction;
@@ -133,6 +135,8 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
  if(!record(event)||event.gmConfirmed!==true||!good(event.sourceRef)||!good(event.kind)||
     !phrase(event.time,100)||!phrase(event.summary,600)||!bounded(event.knownBy,60))
   throw Error("LAB_EVENT_CONFIRMATION_REQUIRED");
+ if(event.gmPostRef!==undefined&&!good(event.gmPostRef))
+  throw Error("LAB_GM_POST_REF_INVALID");
  if(event.locationId!==undefined&&(!good(event.locationId)||!pack.locations[event.locationId]))
   throw Error("LAB_EVENT_LOCATION_INVALID");
  if(event.playerLocationId!==undefined&&(!good(event.playerLocationId)||!pack.locations[event.playerLocationId]))
@@ -788,7 +792,17 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
   next.player.jinwoo=applyOrarioPlayerAction(session,event.playerSystem,
     event.sourceRef,event.time);
  }
+ if(event.gmPostRef!==undefined){
+  const cadence=next.gmPostCadence??{count:0,lastPostRef:"",recentPostRefs:[]};
+  if(cadence.recentPostRefs.includes(event.gmPostRef)&&
+     cadence.lastPostRef!==event.gmPostRef)
+   throw Error("LAB_GM_POST_REF_REUSE_INVALID");
+  if(event.gmPostRef!==cadence.lastPostRef)
+   next.gmPostCadence={count:cadence.count+1,lastPostRef:event.gmPostRef,
+    recentPostRefs:[...cadence.recentPostRefs.slice(-63),event.gmPostRef]};
+ }
  next.events.push({sourceRef:event.sourceRef,kind:event.kind,summary:event.summary,
+  ...(event.gmPostRef?{gmPostRef:event.gmPostRef}:{}),
   time:event.time,knownBy:[...event.knownBy],
   ...(event.locationId?{locationId:event.locationId}:{})});
  next.gameClock=event.time;
