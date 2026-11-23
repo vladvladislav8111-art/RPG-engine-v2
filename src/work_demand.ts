@@ -23,6 +23,45 @@ const str = (x: unknown) => String(x ?? "").trim();
 const num = (x: unknown) => Number(str(x).replace(",", "."));
 const timeRegex = /^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/;
 
+/**
+ * One real employer / source process / concrete packet of work constitutes
+ * one funded demand, not an unlimited number of job board cards.
+ *
+ * Only semantic-generated records have this exact source marker. Earlier
+ * historical opportunities have different provenance and are not mistaken
+ * for active new demand.
+ */
+function sameLiveDemand(
+  event: MaterializeWorkDemand,
+  offer: DemandRecord,
+  now: number,
+): boolean {
+  if (str(offer["Employer"]) !== event.employerId) return false;
+  const provenance = str(offer["Source/opportunity"]);
+  const parsed = /^template=[^;]+;\s*process=([^;]+);\s*specific demand=([\s\S]+)$/i.exec(provenance);
+  if (!parsed || str(parsed[1]) !== event.sourceProcessId) return false;
+
+  const normal = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+  if (normal(parsed[2]) !== normal(event.materializedDemand)) return false;
+
+  const state = str(offer["State"]).toUpperCase();
+  const lifecycle = str(offer["Lifecycle State"]).toUpperCase();
+  if (["CLOSED", "COMPLETED", "RESOLVED", "EXPIRED", "FILLED", "CANCELLED"].some(
+    (terminal) => lifecycle.startsWith(terminal) || state.startsWith(terminal)
+  )) return false;
+
+  // Expired offers cannot occupy a slot forever if lifecycle update has
+  // not yet run. Do not mutate their historical rows in this validator.
+  const expiresDay = Number(str(offer["Expires Day"]));
+  const expiresTime = str(offer["Expires Time"]);
+  if (Number.isSafeInteger(expiresDay) && timeRegex.test(expiresTime)) {
+    const expiration = parseInworldMoment("Day" + expiresDay + " " + expiresTime);
+    if (expiration !== null && expiration <= now) return false;
+  }
+  return true;
+}
+
+
 function moment(day: number, time: string): number {
   const stamp = parseInworldMoment("Day" + day + " " + time);
   if (stamp == null) throw new Error("invalid materialized demand moment: Day" + day + " " + time);
@@ -81,6 +120,9 @@ export function validateWorkDemand(
     throw new Error("work demand requires explicit valid available/expiry moments");
   }
   const now = moment(currentDay, currentTime);
+  if (existingOffers.some((r) => sameLiveDemand(event, r, now))) {
+    throw new Error("work demand already has a live offer for this employer, source process and physical work packet");
+  }
   const openAt = moment(event.availableDay, event.availableTime);
   const closesAt = moment(event.expiresDay, event.expiresTime);
   if (openAt > closesAt || closesAt <= now || closesAt > now + 7 * 1440) {
