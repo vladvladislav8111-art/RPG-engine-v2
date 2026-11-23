@@ -49,6 +49,34 @@ export const ORARIO_MONSTER_BALANCE:readonly DanmachiMonsterBalance[]=[
   combat:{strength:20,stamina:30,agility:15,perception:12,intelligence:1},
   hp:260,armor:9,weaponForce:8,baseXp:116,baseSystemGold:84,magicStoneValis:130,
   features:["панцирь","зов сородичей"],loreNote:"Угроза толпой даже подготовленным новичкам"},
+ /** Upper floors, 7–10: canon species; numerical values are crossover house rules.
+  * Their magic stone appraisal is provided by CHROMA_LINOS_STONE_BASE_VALIS.
+  */
+ {id:"purple_moth",name:"Фиолетовый мотылёк",floorMin:7,floorMax:7,
+  approximateDanmachiLevel:1,systemThreatLevel:6,kind:"ordinary",
+  combat:{strength:12,stamina:10,agility:27,perception:20,intelligence:1},
+  hp:105,armor:0,weaponForce:5,baseXp:58,baseSystemGold:55,magicStoneValis:675,
+  features:["полёт","ядовитая пыльца","уклонение от ударов"],
+  loreNote:"Хрупкий противник 7-го этажа: опасен в группе и при долгом воздействии пыльцы"},
+ {id:"needle_rabbit",name:"Игольчатый кролик",floorMin:7,floorMax:10,
+  approximateDanmachiLevel:1,systemThreatLevel:9,kind:"ordinary",
+  combat:{strength:21,stamina:16,agility:34,perception:23,intelligence:1},
+  hp:165,armor:2,weaponForce:10,baseXp:96,baseSystemGold:85,magicStoneValis:1000,
+  features:["быстрый прыжок","колющий рог","резкая смена траектории"],
+  loreNote:"Зверь 7–10-го этажей: опаснее начальных гоблинов и кобольдов, но хрупче муравья"},
+ /** Upper floors, 10–12: groups of imps and especially dangerous heavy orcs. */
+ {id:"imp",name:"Имп",floorMin:10,floorMax:12,
+  approximateDanmachiLevel:1,systemThreatLevel:12,kind:"ordinary",
+  combat:{strength:24,stamina:20,agility:36,perception:29,intelligence:4},
+  hp:195,armor:3,weaponForce:10,baseXp:155,baseSystemGold:110,magicStoneValis:1750,
+  features:["маневренность","атаки группой","хитрость","засада в тумане"],
+  loreNote:"Подвижный бес 10-го этажа, опасен численностью и атаками с разных сторон"},
+ {id:"orc",name:"Орк",floorMin:10,floorMax:12,
+  approximateDanmachiLevel:1,systemThreatLevel:16,kind:"elite",
+  combat:{strength:47,stamina:53,agility:20,perception:17,intelligence:2},
+  hp:660,armor:13,weaponForce:19,baseXp:340,baseSystemGold:210,magicStoneValis:5500,
+  features:["тяжёлый удар","толстая шкура","длинные руки","высокая масса"],
+  loreNote:"Крупный и крайне опасный противник 10–12-го этажей: прямой удар может вывести из боя даже сильного авантюриста"},
  {id:"silverback",name:"Сильвербек",floorMin:11,floorMax:12,
   approximateDanmachiLevel:1,systemThreatLevel:12,kind:"rare",
   combat:{strength:34,stamina:39,agility:22,perception:16,intelligence:2},
@@ -101,7 +129,7 @@ export function comparePlayerToOrarioMonster(s:JinwooState,params:{
  // Original Wolf Slayer title: +40% combat stats against beast-type mobs.
  // This projection does NOT mutate System points or permanently refill HP/MP.
  const beasts=new Set(["system.dungeon_wolf","system.razan",
-  "system.briga","system.kasaka","kobold","dungeon_lizard",
+  "system.briga","system.kasaka","kobold","dungeon_lizard","needle_rabbit",
   "silverback","infant_dragon","minotaur"]);
  if(s.storyFlags.includes("title.wolf_slayer")&&beasts.has(mob.id))
   for(const key of ["strength","stamina","agility","perception","intelligence"] as const)
