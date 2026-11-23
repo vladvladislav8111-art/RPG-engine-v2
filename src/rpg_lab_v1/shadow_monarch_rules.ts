@@ -148,7 +148,10 @@ export const JINWOO_SPECIAL_REWARDS={
 export const JINWOO_SKILL_GRAPH=[
  {id:"stealth",phase:"player_system",gate:"Подтверждённый навык / руна / задание"},
  {id:"sprint",phase:"player_system",gate:"Получен ранее, +30% скорости за 5 MP и 1 MP/мин; растёт практикой"},
- {id:"quicksilver",phase:"player_system",gate:"Подтверждённая награда или приобретение навыка"},
+ {id:"quicksilver",phase:"player_system",gate:"Эволюция освоенного Sprint Lv5 после дальнейшей практики"},
+ {id:"dagger_mastery",phase:"player_system",gate:"12 подтверждённых столкновений с кинжалом"},
+ {id:"weakpoint_precision",phase:"player_system",gate:"15 подтверждённых поражений слабых мест"},
+ {id:"combat_evasion",phase:"player_system",gate:"12 подтверждённых уклонений при реальной угрозе"},
  {id:"rulers_authority",phase:"player_system",gate:"Специальная руна или событие"},
  {id:"shadow_extraction",phase:"shadow_class",gate:"Завершённый квест изменения класса"},
  {id:"shadow_storage",phase:"shadow_class",gate:"Завершённый квест изменения класса"},
@@ -202,6 +205,7 @@ export interface JinwooState{
  ammoRemaining?:{arrow_bundle?:number;daggers_throwing?:number};
  activeSkills?:import("./orario_player_skills.ts").ActivePlayerSkill[];
  skillMastery?:Record<string,import("./orario_player_skills.ts").SkillMasteryProgress>;
+ combatTraining?:Record<string,{uses:number;enemyRefs:string[];lastPracticeRef:string}>;
  activeEncounter?:PlayerCombatEncounter;
 
  phase:JinwooPhase;postAscensionInterface:PostAscensionInterface;

@@ -13,7 +13,7 @@ export function skillMasteryLevel(s:JinwooState,skillId:string):number{
  return s.skillMastery?.[skillId]?.level??1;
 }
 export function recordConfirmedSkillPractice(s:JinwooState,e:{
- skillId:"sprint";enemyRef:string;sourceRef:string;
+ skillId:"sprint"|"quicksilver";enemyRef:string;sourceRef:string;
  threatLevel:number;confirmedEffective:true;
 }):JinwooState{
  if(!e.confirmedEffective||!valid(e.enemyRef)||!valid(e.sourceRef)||
@@ -26,9 +26,10 @@ export function recordConfirmedSkillPractice(s:JinwooState,e:{
  const next=structuredClone(s);
  const gain=Math.min(36,8+e.threatLevel*3);
  let level=old.level,xp=old.xp+gain;
- while(level<5&&xp>=level*60){xp-=level*60;level++;}
+ const maxLevel=e.skillId==="quicksilver"?10:5;
+ while(level<maxLevel&&xp>=level*60){xp-=level*60;level++;}
  next.skillMastery={...(next.skillMastery??{}),[e.skillId]:{
-  level,xp:level>=5?0:xp,uses:old.uses+1,
+  level,xp:level>=maxLevel?0:xp,uses:old.uses+1,
   trainedEnemyRefs:[...old.trainedEnemyRefs.slice(-126),e.enemyRef],
   lastPracticeRef:e.sourceRef}};
  return next;
@@ -39,6 +40,7 @@ export type ActivePlayerSkill={
  agilityBonus:number;positionBonus:number;mpSpent:number;
  /** Snapshot at activation; gaining mastery mid-buff cannot reprice or reboost it. */
  speedMultiplier?:number;
+ reactionMultiplier?:number;
 };
 const valid=(s:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(s);
 export function activateConfirmedPlayerSkill(s:JinwooState,e:{
@@ -53,9 +55,14 @@ export function activateConfirmedPlayerSkill(s:JinwooState,e:{
   throw Error("PLAYER_SKILL_NOT_UNLOCKED_OR_CONFIRMED");
  const now=(s.activeSkills??[]).filter(x=>x.expiresMinute>e.startMinute);
  if(now.some(x=>x.id===e.skillId))throw Error("PLAYER_SKILL_ALREADY_ACTIVE");
- let mpCost=0,agilityBonus=0,positionBonus=0,speedMultiplier=1;
+ if(["sprint","quicksilver"].includes(e.skillId)&&
+    now.some(x=>["sprint","quicksilver"].includes(x.id)))
+  throw Error("PLAYER_SPEED_SKILLS_CANNOT_STACK");
+ let mpCost=0,agilityBonus=0,positionBonus=0,speedMultiplier=1,reactionMultiplier=1;
  switch(e.skillId){
   case "sprint":
+   if(s.unlockedSkills.includes("quicksilver"))
+    throw Error("SPRINT_EVOLVED_TO_QUICKSILVER");
    if(e.durationMinutes>10)throw Error("PLAYER_SKILL_DURATION_INVALID");
    mpCost=5+e.durationMinutes; // Activation 5 MP; 1 MP/min sustain.
    speedMultiplier=Number(Math.min(1.70,1.30+
@@ -68,7 +75,15 @@ export function activateConfirmedPlayerSkill(s:JinwooState,e:{
    mpCost=6*e.durationMinutes;positionBonus=14;break;
   case "quicksilver":
    if(e.durationMinutes>3)throw Error("PLAYER_SKILL_DURATION_INVALID");
-   mpCost=9*e.durationMinutes;agilityBonus=12;break;
+   // 7 MP at activation plus 2 for each additional full minute;
+   // prepaid because the engine does not have a periodic mana tick.
+   mpCost=7+2*(e.durationMinutes-1);
+   speedMultiplier=Number(Math.min(2.15,1.70+
+    .05*(skillMasteryLevel(s,"quicksilver")-1)).toFixed(2));
+   reactionMultiplier=Number(Math.min(1.47,1.20+
+    .03*(skillMasteryLevel(s,"quicksilver")-1)).toFixed(2));
+   agilityBonus=Math.round(projectJinwooFalna(s).total.agility*
+    (speedMultiplier-1));break;
   case "monarch_domain":{
    const domain=previewMonarchDomain(s,{confirmedActive:true,
     durationMinutes:e.durationMinutes});
@@ -79,7 +94,7 @@ export function activateConfirmedPlayerSkill(s:JinwooState,e:{
  const n=structuredClone(s);n.mp-=mpCost;
  n.activeSkills=[...now,{id:e.skillId,startedRef:e.sourceRef,
   expiresMinute:e.startMinute+e.durationMinutes,agilityBonus,positionBonus,
-  mpSpent:mpCost,speedMultiplier}];
+  mpSpent:mpCost,speedMultiplier,reactionMultiplier}];
  n.appliedRewardRefs.push(e.sourceRef);return n;
 }
 export function getPlayerSkillBattleModifiers(s:JinwooState,minute:number){
@@ -87,7 +102,55 @@ export function getPlayerSkillBattleModifiers(s:JinwooState,minute:number){
  return {agilityBonus:effects.reduce((a,x)=>a+x.agilityBonus,0),
   positionBonus:effects.reduce((a,x)=>a+x.positionBonus,0),
   domainBonus:effects.some(x=>x.id==="monarch_domain")?1.5:1,
-  speedMultiplier:effects.find(x=>x.id==="sprint")?.speedMultiplier??
+  speedMultiplier:effects.find(x=>x.id==="quicksilver")?.speedMultiplier??
+   effects.find(x=>x.id==="sprint")?.speedMultiplier??
    (effects.some(x=>x.id==="sprint")?1.30:1),
+  reactionMultiplier:effects.find(x=>x.id==="quicksilver")?.reactionMultiplier??1,
   currentlyActive:effects.map(x=>x.id),readOnly:true};
+}
+
+/** A speed skill evolves only after repeated source-backed effective fights. */
+export function evolveConfirmedSprint(s:JinwooState,e:{
+ sourceRef:string;confirmedEvolution:boolean;playerApproved:boolean;
+}):JinwooState{
+ if(!e.playerApproved||!e.confirmedEvolution||!valid(e.sourceRef)||
+    s.appliedRewardRefs.includes(e.sourceRef)||
+    !s.unlockedSkills.includes("sprint")||
+    s.unlockedSkills.includes("quicksilver")||
+    (s.skillMastery?.sprint?.level??0)<5||
+    (s.skillMastery?.sprint?.uses??0)<18)
+  throw Error("PLAYER_SPEED_EVOLUTION_NOT_EARNED");
+ const n=structuredClone(s);
+ n.unlockedSkills.push("quicksilver");
+ n.skillMastery={...(n.skillMastery??{}),
+  quicksilver:{level:1,xp:0,uses:0,trainedEnemyRefs:[],
+   lastPracticeRef:e.sourceRef}};
+ n.appliedRewardRefs.push(e.sourceRef);
+ return n;
+}
+type CombatKind="dagger"|"weakpoint"|"evasion";
+const combatThreshold:Record<CombatKind,{count:number;skill:string}>={
+ dagger:{count:12,skill:"dagger_mastery"},
+ weakpoint:{count:15,skill:"weakpoint_precision"},
+ evasion:{count:12,skill:"combat_evasion"}
+};
+/** Count independent proven encounters, not repeated attacks on one enemy. */
+export function recordConfirmedCombatTechnique(s:JinwooState,e:{
+ kind:CombatKind;enemyRef:string;sourceRef:string;confirmedEffective:true;
+}):JinwooState{
+ if(!e.confirmedEffective||!valid(e.enemyRef)||!valid(e.sourceRef)||
+    !Object.hasOwn(combatThreshold,e.kind))
+  throw Error("PLAYER_COMBAT_TECHNIQUE_EVIDENCE_INVALID");
+ const previous=s.combatTraining?.[e.kind]??{
+  uses:0,enemyRefs:[],lastPracticeRef:e.sourceRef};
+ if(previous.enemyRefs.includes(e.enemyRef))return s;
+ const next=structuredClone(s);
+ const uses=previous.uses+1;
+ next.combatTraining={...(next.combatTraining??{}),
+  [e.kind]:{uses,enemyRefs:[...previous.enemyRefs.slice(-126),e.enemyRef],
+   lastPracticeRef:e.sourceRef}};
+ const award=combatThreshold[e.kind];
+ if(uses>=award.count&&!next.unlockedSkills.includes(award.skill))
+  next.unlockedSkills.push(award.skill);
+ return next;
 }

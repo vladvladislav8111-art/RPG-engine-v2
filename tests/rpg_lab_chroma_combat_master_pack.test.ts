@@ -36,7 +36,10 @@ test("growing stronger does not tax base XP, but same kill cannot be paid twice"
  assert.equal(b.xp,13);
  assert.ok(b.systemGold>=0);
  assert.equal(previewBalancedMonsterReward(s,{
-  monsterId:"war_shadow",floor:5,monsterRef:"mob.test.shadow.01"}).xp,96);
+  monsterId:"war_shadow",floor:5,monsterRef:"mob.test.shadow.01"}).xp,120);
+ const equalLevel=structuredClone(s);equalLevel.systemLevel=7;
+ assert.equal(previewBalancedMonsterReward(equalLevel,{
+  monsterId:"war_shadow",floor:5,monsterRef:"mob.test.shadow.02"}).xp,96);
 });
 
 test("one effective skill practice per encounter and later activation uses higher level",()=>{

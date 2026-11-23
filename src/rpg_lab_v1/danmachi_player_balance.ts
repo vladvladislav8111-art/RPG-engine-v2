@@ -232,7 +232,9 @@ export function previewBalancedMonsterReward(s:JinwooState,params:{
   // leveling thresholds already slow progression. Preserve old gold scaling.
  const goldFactor=relative<.20?0:clamp(Math.pow(relative,.72),.18,2.1);
  const cooperation=(con/100)/(1+.32*(party-1));
- const xp=Math.max(0,Math.round(mob.baseXp*cooperation));
+ const higherThreat=Math.max(0,mob.systemThreatLevel-s.systemLevel);
+ const higherThreatBonus=1+Math.min(5,higherThreat)*.05;
+ const xp=Math.max(0,Math.round(mob.baseXp*cooperation*higherThreatBonus));
  const systemGold=Math.max(0,Math.round(
   mob.baseSystemGold*Math.sqrt(Math.max(.04,goldFactor))*
   cooperation));

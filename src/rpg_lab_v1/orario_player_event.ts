@@ -35,7 +35,8 @@ import {
 } from "./danmachi_shadow_balance.ts";
 import {recordConfirmedMonsterDrop} from "./orario_player_loot.ts";
 import {verifySystemDungeonBossEvidence} from "./orario_system_encounters.ts";
-import {activateConfirmedPlayerSkill} from "./orario_player_skills.ts";
+import {activateConfirmedPlayerSkill,evolveConfirmedSprint} from "./orario_player_skills.ts";
+import {reconcileChromaD3ThroughWolf02} from "./chroma_campaign_reconcile.ts";
 import {narrativeMinute} from "./events.ts";
 import type {LabSession} from "./session.ts";
 const playable=new Set([
@@ -47,7 +48,7 @@ const playable=new Set([
  "dungeon_clear","first_knight","shadow_deploy","shadow_victory",
  "shadow_revive","daily_box","injury","rest","medical_care",
  "reconcile_chroma_d1","reconcile_chroma_starting_valis",
- "reconcile_chroma_d3_xp",
+ "reconcile_chroma_d3_xp","reconcile_chroma_d3_full","evolve_skill",
  "local_purchase"
 ]);
 export type OrarioPlayerAction={
@@ -154,6 +155,16 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
    n.appliedRewardRefs.push(sourceRef);
    return n;
   }
+  case "reconcile_chroma_d3_full":
+   return reconcileChromaD3ThroughWolf02(s,{
+    sourceRef,eventTime,playerApproved:a.playerApproved===true,
+    confirmLedgerThrough510:q.confirmLedgerThrough510===true
+   });
+  case "evolve_skill":
+   return evolveConfirmedSprint(current,{
+    sourceRef,confirmedEvolution:q.confirmedEvolution===true,
+    playerApproved:a.playerApproved===true
+   });
   case "activate":
    return activateOrarioPlayerSystem(current,{
     sourceRef,confirmedAwakening:q.confirmedAwakening===true
@@ -374,6 +385,7 @@ export function readOrarioPlayerHud(s:LabSession){
   inventory:{...p.inventory},
   dailyTraining:p.dailyTraining?structuredClone(p.dailyTraining):null,
   skillMastery:structuredClone(p.skillMastery??{}),
+  unlockedSkills:[...p.unlockedSkills],
   injuries:structuredClone(p.injuries??[]),
   shadowCount:p.shadowRoster.length,
   availableMagicStones:Object.values(p.magicStones).filter(x=>x.state==="held").length,

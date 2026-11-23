@@ -12,7 +12,8 @@ import {previewOwnedEquipmentEncounter,type Loadout} from
  "./danmachi_player_equipment.ts";
 import {previewInjuryPenalties,applyConfirmedInjury} from
  "./orario_player_survival.ts";
-import {getPlayerSkillBattleModifiers,recordConfirmedSkillPractice} from "./orario_player_skills.ts";
+import {getPlayerSkillBattleModifiers,recordConfirmedSkillPractice,
+ recordConfirmedCombatTechnique} from "./orario_player_skills.ts";
 import {effectiveJinwooMaxHp} from "./shadow_monarch_rules.ts";
 import {isSystemEncounterId,systemEncounterEntryAllowed} from "./orario_system_encounters.ts";
 const safeRef=(x:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(x);
@@ -59,6 +60,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  spellId?:string;currentMinute?:number;
  tacticalApproach?:"standard"|"paint_blind"|"hit_and_run";
  confirmedPaintAvailable?:boolean;
+ confirmedWeakPointHit?:boolean;
 }):BattleResolution{
  const battle=s.activeEncounter,mob=battle&&ORARIO_MONSTER_BY_ID[battle.monsterId];
  if(!battle||!mob||!e.playerCommitted||!safeRef(e.sourceRef)||
@@ -82,10 +84,17 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  const modifiers=getPlayerSkillBattleModifiers(next,minute);
  const battleStats={...next,stats:{...next.stats,
   agility:next.stats.agility+modifiers.agilityBonus}};
+ const daggerFighting=e.loadout.weaponId?.includes("dagger")===true||
+  next.storyFlags.includes("chroma.dual_daggers.verified");
+ const trainedDaggers=daggerFighting&&next.unlockedSkills.includes("dagger_mastery");
+ const trainedWeakpoint=e.confirmedWeakPointHit===true&&
+  next.unlockedSkills.includes("weakpoint_precision");
+ const learnedBonus=(trainedDaggers?2:0)+(trainedWeakpoint?2:0);
  const wear=previewOwnedEquipmentEncounter(battleStats,{
   monsterId:battle.monsterId,floor:battle.floor,
   loadout:e.loadout,move:e.move==="retreat"?"guard":e.move,
-  ...(e.proficiencyBonus!==undefined?{proficiencyBonus:e.proficiencyBonus}:{}),
+  ...(e.proficiencyBonus!==undefined||learnedBonus>0?
+   {proficiencyBonus:Math.min(20,(e.proficiencyBonus??0)+learnedBonus)}:{}),
   positionBonus:(e.positionBonus??0)+modifiers.positionBonus-injury.speedPenalty,
   ...(e.spellMpCost!==undefined?{spellMpCost:e.spellMpCost}:{}),
   ...(e.spellId!==undefined?{spellId:e.spellId}:{}),
@@ -114,7 +123,8 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  if(e.move==="retreat"){
   const evade=Math.max(10,Math.min(92,Math.round(45+
    (battleStats.stats.agility-mob.combat.agility)*.6-injury.speedPenalty+
-   (e.positionBonus??0)+modifiers.positionBonus)));
+   (e.positionBonus??0)+modifiers.positionBonus+
+   Math.round((modifiers.reactionMultiplier-1)*50))));
   if(rolls.player<=evade){
    active.round++;
    next.activeEncounter=undefined;
@@ -132,10 +142,24 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  active.round++;
  active.lastCombatRef=e.sourceRef;
  // Credit one source-attested success per enemy, not every hit or activation.
- if(dealt>0&&e.move==="strike"&&modifiers.currentlyActive.includes("sprint")){
-  next.skillMastery=recordConfirmedSkillPractice(next,{
-   skillId:"sprint",enemyRef:battle.enemyRef,sourceRef:e.sourceRef,
+ if(dealt>0&&e.move==="strike"){
+  const speedSkill=modifiers.currentlyActive.includes("quicksilver")?"quicksilver":
+   modifiers.currentlyActive.includes("sprint")?"sprint":null;
+  if(speedSkill)next.skillMastery=recordConfirmedSkillPractice(next,{
+   skillId:speedSkill,enemyRef:battle.enemyRef,sourceRef:e.sourceRef,
    threatLevel:mob.systemThreatLevel,confirmedEffective:true}).skillMastery;
+  if(daggerFighting){
+   const trained=recordConfirmedCombatTechnique(next,{kind:"dagger",
+    enemyRef:battle.enemyRef,sourceRef:e.sourceRef,confirmedEffective:true});
+   next.combatTraining=trained.combatTraining;
+   next.unlockedSkills=trained.unlockedSkills;
+  }
+  if(e.confirmedWeakPointHit===true){
+   const trained=recordConfirmedCombatTechnique(next,{kind:"weakpoint",
+    enemyRef:battle.enemyRef,sourceRef:e.sourceRef,confirmedEffective:true});
+   next.combatTraining=trained.combatTraining;
+   next.unlockedSkills=trained.unlockedSkills;
+  }
  }
  // Physical pigment is an attempt, not a guaranteed blind: separate roll.
  if(e.tacticalApproach==="paint_blind"&&e.move==="strike"&&
@@ -164,7 +188,16 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  const blinded=active.blindedUntilRound!==undefined&&
   active.round<=active.blindedUntilRound;
  const counterChance=outOfReach?0:Math.max(0,
-  wear.exchange.counterHitChancePercent-(blinded?45:0));
+  wear.exchange.counterHitChancePercent-(blinded?45:0)-
+  Math.round((modifiers.reactionMultiplier-1)*50)-
+  (next.unlockedSkills.includes("combat_evasion")?4:0));
+ if(rolls.enemy>counterChance&&counterChance>0&&
+    !outOfReach&&e.move==="strike"){
+  const trained=recordConfirmedCombatTechnique(next,{kind:"evasion",
+   enemyRef:battle.enemyRef,sourceRef:e.sourceRef,confirmedEffective:true});
+  next.combatTraining=trained.combatTraining;
+  next.unlockedSkills=trained.unlockedSkills;
+ }
  if(rolls.enemy<=counterChance){
   taken=Math.max(0,wear.exchange.counterDamageIfHit+
     injury.defensePenalty);

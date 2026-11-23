@@ -16,8 +16,9 @@ test("paid Quicksilver improves an actual timed exchange, expires, and does not 
   skillId:"quicksilver",startMinute:600,durationMinutes:3,
   playerConfirmed:true});
  assert.equal(active.stats.agility,base.stats.agility);
- assert.equal(active.mp,base.mp-27);
- assert.equal(getPlayerSkillBattleModifiers(active,601).agilityBonus,12);
+ assert.equal(active.mp,base.mp-11);
+ assert.equal(getPlayerSkillBattleModifiers(active,601).agilityBonus,7);
+ assert.equal(getPlayerSkillBattleModifiers(active,601).reactionMultiplier,1.2);
  assert.equal(getPlayerSkillBattleModifiers(active,603).agilityBonus,0);
  let found=false;
  for(let i=0;i<500;i++){
