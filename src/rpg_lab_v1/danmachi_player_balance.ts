@@ -1,3 +1,4 @@
+import {chromaCatalogId} from "./chroma_catalog_ids.ts";
 /** Cross-universe battle calibration, revision 1.
  * Source-inspired lore anchors: DanMachi Falna ability rank and qualitative
  * level-up are not numerically interchangeable with Solo Leveling stats.
@@ -8,7 +9,11 @@
 import {awardJinwooEncounter,projectJinwooFalna,CHROMA_BALANCE_FLAG,
  type JinwooStats,type JinwooState} from "./shadow_monarch_rules.ts";
 import {CHROMA_LINOS_STONE_BASE_VALIS} from "./chroma_guild_economy.ts";
-import {SYSTEM_ENCOUNTER_BY_ID,FIRST_INSTANT_CANON_RULES} from "./orario_system_encounters.ts";
+import {adaptMonsterForV4,getV4MonsterCard} from "./live_monster_profile.ts";
+import {xpForDefeat} from "./crossover_core.ts";
+import {v4RuneReceipt} from "./v4_rune_drop.ts";
+import {SYSTEM_ENCOUNTER_BY_ID,FIRST_INSTANT_CANON_RULES,
+ systemEncounterEntryAllowed} from "./orario_system_encounters.ts";
 type Tier="ordinary"|"elite"|"rare"|"monster_rex";
 export type DanmachiMonsterBalance={
  id:string;name:string;floorMin:number;floorMax:number;
@@ -100,6 +105,31 @@ export const ORARIO_MONSTER_BALANCE:readonly DanmachiMonsterBalance[]=[
   features:["огромный размер","ударная волна","босс этажа"],
   loreNote:"Обычный Голиаф 17F, не чёрный аномальный Голиаф 18F"},
 ];
+export function monsterForPlayer(s:JinwooState,id:string,params:{
+ floor:number;monsterRef:string;irregularRef?:string;
+}):DanmachiMonsterBalance{
+ const known=ORARIO_MONSTER_BY_ID[id];
+ if(!s.storyFlags.includes("chroma_crossover_v4")){
+  if(!known)throw Error("V4_MONSTER_UNAVAILABLE");
+  return known;
+ }
+ const catalogId=chromaCatalogId(id);
+ const c=getV4MonsterCard(catalogId);
+ if(!c){
+  if(!known)throw Error("V4_MONSTER_UNAVAILABLE");
+  return known;
+ }
+ const scripted=!!params.irregularRef;
+ const mode=c.origin==="Solo Leveling"?"system_instance":
+  scripted||c.requiresStoryTrigger?"scripted":"natural";
+ // A user-supplied irregular string is not evidence: only durable flags count.
+ const confirmed=c.origin==="Solo Leveling"?
+  systemEncounterEntryAllowed(s,id):
+  !!params.irregularRef&&s.storyFlags.includes(params.irregularRef);
+ return {...adaptMonsterForV4({monsterId:catalogId,eventProofRef:params.monsterRef,
+  floor:params.floor,mode,confirmedStoryTrigger:confirmed}),id,
+  ...(c.origin==="Solo Leveling"?{floorMin:1,floorMax:100}:{})};
+}
 export const ORARIO_MONSTER_BY_ID:Readonly<Record<string,DanmachiMonsterBalance>>={
  ...Object.fromEntries(ORARIO_MONSTER_BALANCE.map(x=>[x.id,x])),
  ...SYSTEM_ENCOUNTER_BY_ID
@@ -115,7 +145,10 @@ export function comparePlayerToOrarioMonster(s:JinwooState,params:{
  monsterId:string;floor:number;monsterCount?:number;
  confirmedIrregularRef?:string;
 }){
- const mob=ORARIO_MONSTER_BY_ID[params.monsterId];
+ const mob=monsterForPlayer(s,params.monsterId,{floor:params.floor,
+  monsterRef:("monsterRef" in params?String(params.monsterRef):s.activeEncounter?.enemyRef??"preview."+String((params as {monsterId:string}).monsterId)),
+  irregularRef:("confirmedIrregularRef" in params &&
+    typeof params.confirmedIrregularRef==="string"?params.confirmedIrregularRef:undefined)});
  if(!mob)throw Error("BALANCE_MONSTER_UNKNOWN");
  if(!Number.isSafeInteger(params.floor)||params.floor<1||params.floor>100)
   throw Error("BALANCE_FLOOR_INVALID");
@@ -131,7 +164,8 @@ export function comparePlayerToOrarioMonster(s:JinwooState,params:{
  const beasts=new Set(["system.dungeon_wolf","system.razan",
   "system.briga","system.kasaka","kobold","dungeon_lizard","needle_rabbit",
   "silverback","infant_dragon","minotaur"]);
- if(s.storyFlags.includes("title.wolf_slayer")&&beasts.has(mob.id))
+ if(!s.storyFlags.includes("chroma_crossover_v4")&&
+    s.storyFlags.includes("title.wolf_slayer")&&beasts.has(mob.id))
   for(const key of ["strength","stamina","agility","perception","intelligence"] as const)
    total[key]=Math.round(total[key]*FIRST_INSTANT_CANON_RULES.wolfSlayerCombatStatsMultiplier);
  const attack=weighted(total,"attack"),guard=weighted(total,"guard");
@@ -201,7 +235,9 @@ export function previewCombatExchange(s:JinwooState,params:{
  confirmedIrregularRef?:string;
 }):ExchangePreview{
  const threat=comparePlayerToOrarioMonster(s,params);
- const mob=ORARIO_MONSTER_BY_ID[params.monsterId],p=threat.player;
+ const mob=monsterForPlayer(s,params.monsterId,{floor:params.floor,
+  monsterRef:s.activeEncounter?.enemyRef??"preview."+params.monsterId,
+  irregularRef:params.confirmedIrregularRef}),p=threat.player;
  if(!safeNum(params.weaponPower,0,200)||!safeNum(params.armorPower,0,200)||
   !safeNum(params.positionBonus??0,-25,25)||
   !safeNum(params.proficiencyBonus??0,-10,20))
@@ -254,7 +290,10 @@ export function previewBalancedMonsterReward(s:JinwooState,params:{
  partySize?:number;contributionPercent?:number;
  confirmedIrregularRef?:string;
 }){
- const mob=ORARIO_MONSTER_BY_ID[params.monsterId];
+ const mob=monsterForPlayer(s,params.monsterId,{floor:params.floor,
+  monsterRef:("monsterRef" in params?String(params.monsterRef):s.activeEncounter?.enemyRef??"preview."+String((params as {monsterId:string}).monsterId)),
+  irregularRef:("confirmedIrregularRef" in params &&
+    typeof params.confirmedIrregularRef==="string"?params.confirmedIrregularRef:undefined)});
  const r=comparePlayerToOrarioMonster(s,params);
  if(!/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(params.monsterRef))
   throw Error("BALANCE_REWARD_TARGET_INVALID");
@@ -271,14 +310,18 @@ export function previewBalancedMonsterReward(s:JinwooState,params:{
  const cooperation=(con/100)/(1+.32*(party-1));
  const higherThreat=Math.max(0,mob.systemThreatLevel-s.systemLevel);
  const higherThreatBonus=1+Math.min(5,higherThreat)*.05;
- const xp=Math.max(0,Math.round(mob.baseXp*cooperation*higherThreatBonus));
- const systemGold=Math.max(0,Math.round(
-  mob.baseSystemGold*Math.sqrt(Math.max(.04,goldFactor))*
+ const xp=s.storyFlags.includes("chroma_crossover_v4")?
+  Math.max(1,Math.round(xpForDefeat(mob.baseXp,mob.systemThreatLevel,s.systemLevel)*cooperation)):
+  Math.max(0,Math.round(mob.baseXp*cooperation*higherThreatBonus));
+ const systemGold=s.storyFlags.includes("chroma_crossover_v4")?
+  Math.max(0,Math.round(mob.baseSystemGold*cooperation)):
+  Math.max(0,Math.round(mob.baseSystemGold*Math.sqrt(Math.max(.04,goldFactor))*
   cooperation));
  return {
   monsterId:mob.id,monsterRef:params.monsterRef,
   earnedOnlyAfterConfirmedDefeat:true,
-  xp,systemGold,potentialMagicStoneValis:s.storyFlags.includes(CHROMA_BALANCE_FLAG)?
+  xp,systemGold,potentialMagicStoneValis:s.storyFlags.includes("chroma_crossover_v4")?
+    mob.magicStoneValis:s.storyFlags.includes(CHROMA_BALANCE_FLAG)?
     (CHROMA_LINOS_STONE_BASE_VALIS[mob.id]??mob.magicStoneValis):
     mob.magicStoneValis,
    monsterSystemThreatLevel:mob.systemThreatLevel,monsterThreatClass:mob.kind,
@@ -308,6 +351,24 @@ export function commitBalancedMonsterDefeat(s:JinwooState,e:{
   monsterId:e.monsterId,sourceRef:e.sourceRef,
   floor:e.floor
  }};
+ // The rune is a separate System reward. A fixed server event roll is
+ // audited by the target's unique proof ref, never by caller-supplied odds.
+ const runeCatalogId=chromaCatalogId(e.monsterId);
+ if(n.storyFlags.includes("chroma_crossover_v4")&&getV4MonsterCard(runeCatalogId)){
+  if(!n.chromaV4Meta)throw Error("CHROMA_V4_RUNE_META_MISSING");
+  const r=v4RuneReceipt({monsterId:runeCatalogId,targetRef:e.monsterRef,
+   sourceRef:e.sourceRef});
+  if(r){
+   const claims=n.chromaV4Meta.runeAwards??{};
+   if(claims[e.monsterRef])throw Error("CHROMA_V4_RUNE_ALREADY_ROLLED");
+   n.chromaV4Meta.runeAwards={...claims,[e.monsterRef]:{
+    monsterId:r.monsterId,sourceRef:r.sourceRef,
+    rollTenThousand:r.rollTenThousand,chanceBasisPoints:r.chanceBasisPoints,
+    runeSkillId:r.runeSkillId}};
+   if(r.runeSkillId)n.chromaV4Meta.runeStones[r.runeSkillId]=
+    (n.chromaV4Meta.runeStones[r.runeSkillId]??0)+1;
+  }
+ }
  // Source-backed canonical Wolf Slayer title: only actual unique defeated
  // System wolves count, never spawns, attacks, or narrative observations.
  if(e.killer==="player"&&e.monsterId==="system.dungeon_wolf"&&

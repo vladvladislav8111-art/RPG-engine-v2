@@ -2,7 +2,7 @@
  * Deno Deploy must serve this marker before a rollout is considered verified.
  */
 export const ORARIO_PLAYER_RELEASE={
- version:"danmachi-solo-chroma-rpg-lab-v3.6-2026-11-23",
+ version:"danmachi-solo-chroma-rpg-lab-v4.7-2026-11-24",
  branch:"main",
  features:["player_system","falna_buff","orario_combat","shadow_army",
   "system_instances","npc_suspicion","cas_save",

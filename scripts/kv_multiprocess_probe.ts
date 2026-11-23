@@ -13,7 +13,7 @@ const workerFile = new URL("./kv_multiprocess_worker.ts", import.meta.url).pathn
 const key = ["rpg-v2","semantic-writer-lock","TEST-LOCAL-OS-PROCESS-KV-EXCLUSION"] as const;
 const pause = (ms:number) => new Promise<void>(resolve => setTimeout(resolve,ms));
 const start = (role:string) => new Deno.Command(Deno.execPath(),{
-  args:["run","--unstable-kv","--allow-read","--allow-write",
+  args:["run","--no-config","--unstable-kv","--allow-read","--allow-write",
     workerFile,database,role,signal],
   stdout:"piped",stderr:"piped",
 });

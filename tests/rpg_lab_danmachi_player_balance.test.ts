@@ -9,8 +9,8 @@ import {ORARIO_MONSTER_BALANCE,ORARIO_MONSTER_BY_ID,
  previewCombatExchange,CROSSOVER_BALANCE_NOTES} from
  "../src/rpg_lab_v1/danmachi_player_balance.ts";
 test("floor references and template threat are verified before GM may use their numbers",()=>{
- assert.equal(ORARIO_MONSTER_BALANCE.length,9);
- assert.equal(new Set(ORARIO_MONSTER_BALANCE.map(m=>m.id)).size,9);
+ assert.equal(ORARIO_MONSTER_BALANCE.length,13);
+ assert.equal(new Set(ORARIO_MONSTER_BALANCE.map(m=>m.id)).size,13);
  assert.deepEqual([ORARIO_MONSTER_BY_ID.goblin.floorMin,
    ORARIO_MONSTER_BY_ID.goblin.floorMax],[1,4]);
  assert.equal(ORARIO_MONSTER_BY_ID.minotaur.approximateDanmachiLevel,2);

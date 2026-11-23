@@ -1,3 +1,4 @@
+import {requireMigrationReceipt,type MigrationBackupReceipt} from "./migration_receipt.ts";
 /** One event-stream adapter for the new Orario Player.
  * Every write is derived from an already confirmed Lab event sourceRef,
  * persisted through Lab's existing CAS revision and immutable event ledger.
@@ -26,6 +27,7 @@ import {
  sellConfirmedMagicStoneBatch,extractShadowFromMagicStone
 } from "./shadow_monarch_stones.ts";
 import {quoteChromaLinosMagicStone} from "./chroma_guild_economy.ts";
+import {quoteChromaV4Stone} from "./chroma_v4_stone_prices.ts";
 import {
  issueSystemDungeonKey,enterSystemDungeon,completeSystemDungeon,
  useConfirmedInstantReturnCrystal
@@ -42,8 +44,24 @@ import {activateConfirmedPlayerSkill,evolveConfirmedSprint,
 import {reconcileChromaD3ThroughWolf02} from "./chroma_campaign_reconcile.ts";
 import {narrativeMinute} from "./events.ts";
 import type {LabSession} from "./session.ts";
+import {stageChromaV4} from "./legacy_lab_adapter.ts";
+import {previewResourceRebase} from "./resource_rebase.ts";
+import {applyV4RuneStudy} from "./legacy_lab_adapter.ts";
+import {childRuneVictoryRef} from "./reward_child_refs_v46.ts";
+import {currentActionProofRef,confirmCurrentPlayerAction,confirmHistoricProof}
+ from "./v47_action_proofs.ts";
+import {scopedVitalProofRef} from "./v47_vital_hit_proof.ts";
+import {isSystemEncounterId} from "./orario_system_encounters.ts";
+import {monsterForPlayer,commitBalancedMonsterDefeat} from "./danmachi_player_balance.ts";
+import {applyVerifiedV46RuneCast,applyVerifiedV46EquipTitle,
+ applyVerifiedV46TitleGrant,applyVerifiedV46RuneChallenge,
+ applyVerifiedV46RulerEvolution,advanceVerifiedV46RuneTime,
+ type LiveV46Save,type RuneTitleEventHost} from "./rune_title_actions_v46.ts";
+import type {RuneSkillId} from "./rune_abilities_v45.ts";
+import type {TitleId} from "./title_rules_v45.ts";
+import type {RuneChallengeId} from "./rune_challenges_v45.ts";
 const playable=new Set([
- "init","activate","start_battle","combat_exchange","activate_skill",
+ "init","activate","chroma_v4_migrate","rune_study","rune_cast","rune_evolve","equip_title","title_grant","rune_challenge","start_battle","combat_exchange","activate_skill",
  "daily_start","daily_progress","daily_claim","daily_fail",
  "purchase","use_item","spend_points","falna_bless","falna_update",
  "stone_collect","stone_sell","stone_sell_batch","stone_extract","monster_drop",
@@ -67,7 +85,7 @@ const obj=(x:unknown):x is Record<string,unknown>=>!!x&&
  typeof x==="object"&&!Array.isArray(x);
 const expectedKinds=new Set(["injury","daily_fail","medical_care"]);
 export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
- sourceRef:string,eventTime:string):JinwooState{
+ sourceRef:string,eventTime:string,historicProof?:LabSession["events"][number],backupReceipt?:MigrationBackupReceipt):JinwooState{
  if(!a||!playable.has(a.kind)||!obj(a.args))
   throw Error("ORARIO_PLAYER_ACTION_UNKNOWN");
  if(!expectedKinds.has(a.kind)&&a.playerApproved!==true)
@@ -298,6 +316,128 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
    return activateOrarioPlayerSystem(current,{
     sourceRef,confirmedAwakening:q.confirmedAwakening===true
    });
+  case "chroma_v4_migrate":{
+   requireMigrationReceipt(backupReceipt,s.projectId,s.sessionId);
+   if(s.projectId!=="chroma_orario_main_20261120"||
+      s.sessionId!=="chroma_day0_20261120"||
+      s.player.hero?.id!=="hero.chroma"||a.playerApproved!==true||
+      current.activeEncounter||q.confirmedBackup!==true)
+    throw Error("CHROMA_V4_MIGRATION_GATES_NOT_MET");
+   const staged=stageChromaV4(current as unknown as LiveV46Save) as unknown as JinwooState;
+   const rebase=previewResourceRebase({
+    systemLevel:current.systemLevel,systemStats:current.stats,
+    falna:staged.layeredFalnaV4??null,
+    oldHp:current.hp,oldMaxHp:effectiveJinwooMaxHp(current),
+    oldMp:current.mp,oldMaxMp:effectiveJinwooMaxMp(current)});
+   staged.hp=rebase.proposed.hp;staged.mp=rebase.proposed.mp;
+   staged.appliedRewardRefs.push(sourceRef);
+   return staged;
+  }
+  case "rune_cast":case "rune_evolve":case "equip_title":case "title_grant":case "rune_challenge":{
+   // Sources and outcomes are read from the authenticated Lab session;
+   // no player-submitted HP, hit roll, monster power or proof is trusted.
+   if(s.projectId!=="chroma_orario_main_20261120"||
+      s.sessionId!=="chroma_day0_20261120"||
+      s.player.hero?.id!=="hero.chroma"||
+      !current.storyFlags.includes("chroma_crossover_v4"))
+    throw Error("CHROMA_V46_WRONG_CAMPAIGN_OR_NOT_MIGRATED");
+   // Ordinary casts and title equips are already authenticated CAS actions.
+   const currentProof=a.kind==="rune_cast"||a.kind==="equip_title";
+   const proofRef=currentProof?
+    currentActionProofRef(sourceRef,a.kind as "rune_cast"|"equip_title"):
+    String(q.proofRef??"");
+   if(currentProof&&q.proofRef!==undefined&&q.proofRef!==proofRef)
+    throw Error("V47_CLIENT_PROOF_OVERRIDE_REJECTED");
+   const proof=currentProof?undefined:
+    (historicProof?.sourceRef===proofRef?historicProof:s.events.find(x=>x.sourceRef===proofRef));
+   const verifiedKind=(kind:string)=>{
+    if(kind==="rune_cast"||kind==="equip_title")
+     return confirmCurrentPlayerAction({projectId:s.projectId,
+      sessionId:s.sessionId,heroId:s.player.hero?.id,
+      actionKind:a.kind,requestedKind:kind,sourceRef,proofRef,
+      playerApproved:a.playerApproved===true});
+    if(!proof)return false;
+    const expectedKind=kind+"_proof."+String(
+     kind==="rune_evolve"?"rulers_touch":
+     kind==="title_grant"?q.titleId:q.challengeId);
+    return confirmHistoricProof({proofKind:proof.kind??"",expectedKind,
+     proofTime:proof.time,actionTime:eventTime,proofRef,sourceRef});
+   };
+   const enemyCard=()=>{
+    const en=current.activeEncounter;
+    if(!en)throw Error("V46_NO_SAVED_ENCOUNTER");
+    return monsterForPlayer(current,en.monsterId,{floor:en.floor,
+     monsterRef:en.enemyRef,irregularRef:en.irregularRef});
+   };
+   const host:RuneTitleEventHost={
+    verifyAction:(kind,src,ref)=>src===sourceRef&&ref===proofRef&&verifiedKind(kind),
+    getMaxHp:x=>effectiveJinwooMaxHp(x as unknown as JinwooState),
+    getMaxMp:x=>effectiveJinwooMaxMp(x as unknown as JinwooState),
+    getEffectiveIntelligence:x=>projectJinwooFalna(x as unknown as JinwooState).total.intelligence,
+    getEnemyStats:()=>{
+     const m=enemyCard();return {maxHp:m.hp,armor:m.armor,
+      strength:m.combat.strength,magicResistancePct:0,
+      size:m.kind==="monster_rex"?"giant":m.hp>=1000?"large":"medium",
+      poisonImmune:false};
+    },
+    confirmRuneHit:(src,proofId,enemyRef)=>{
+     // Deterministic server roll; the client cannot submit confirmedHit.
+     let h=2166136261>>>0;
+     for(const c of `rune.hit|${src}|${proofId}|${enemyRef}`){
+      h^=c.charCodeAt(0);h=Math.imul(h,16777619);
+     }
+     const m=enemyCard();
+     const iq=projectJinwooFalna(current).total.intelligence;
+     const chance=Math.max(8,Math.min(97,Math.round(70+
+      .6*(iq-m.combat.perception))));
+     return (h>>>0)%100<chance;
+    },
+    verifyTitleClear:(id,ref)=>ref===proofRef&&proof?.kind==="title_grant_proof."+id&&
+     current.storyFlags.includes(`title.v46.${id}.earned`),
+    verifyChallengeClear:(id,ref)=>ref===proofRef&&
+     proof?.kind==="rune_challenge_proof."+id&&
+     current.storyFlags.includes(`rune.challenge.${id}.cleared`),
+    verifyEvolutionFeat:ref=>ref===proofRef&&
+     proof?.kind==="rune_evolve_proof.rulers_touch"&&
+     current.storyFlags.includes("rune.evolution.rulers_touch.earned"),
+   };
+   const v46=current as unknown as LiveV46Save;
+   if(a.kind==="rune_cast"){
+    const minute=narrativeMinute(eventTime);
+    if(minute===null)throw Error("V46_RUNE_EVENT_CLOCK_INVALID");
+    const r=applyVerifiedV46RuneCast(v46,{sourceRef,proofRef,
+     skillId:String(q.skillId??"") as RuneSkillId,
+     target:String(q.target??"") as "self"|"enemy",
+     serverSecond:minute*60,confirmedPlayerChoice:true,
+     ...(q.durationSeconds!==undefined?{durationSeconds:q.durationSeconds as number}:{}),
+     ...(q.channelSeconds!==undefined?{channelSeconds:q.channelSeconds as number}:{}),
+     ...(q.preparedSeconds!==undefined?{preparedSeconds:q.preparedSeconds as number}:{})
+    },host);
+    if(r.enemyDefeated){
+     const en=current.activeEncounter!;
+     const defeated=structuredClone(r.next) as unknown as JinwooState;
+     defeated.activeEncounter=undefined;
+     return commitBalancedMonsterDefeat(defeated,{
+      sourceRef:childRuneVictoryRef(sourceRef,"direct"),monsterId:en.monsterId,
+      floor:en.floor,monsterRef:en.enemyRef,confirmedDefeat:true,killer:"player",
+      ...(en.irregularRef?{confirmedIrregularRef:en.irregularRef}:{})
+     });
+    }
+    return r.next as unknown as JinwooState;
+   }
+   if(a.kind==="rune_evolve")return applyVerifiedV46RulerEvolution(v46,{
+    sourceRef,proofRef,confirmedPlayerChoice:true},host) as unknown as JinwooState;
+   if(a.kind==="equip_title")return applyVerifiedV46EquipTitle(v46,{
+    sourceRef,proofRef,titleId:q.titleId===null?null:String(q.titleId??"") as TitleId,
+    confirmedPlayerChoice:true},host) as unknown as JinwooState;
+   if(a.kind==="title_grant")return applyVerifiedV46TitleGrant(v46,{
+    sourceRef,proofRef,titleId:String(q.titleId??"") as TitleId},host) as unknown as JinwooState;
+   return applyVerifiedV46RuneChallenge(v46,{sourceRef,proofRef,
+    challengeId:String(q.challengeId??"") as RuneChallengeId},host) as unknown as JinwooState;
+  }
+  case "rune_study":
+   return applyV4RuneStudy(current as unknown as LiveV46Save,{sourceRef,skillId:String(q.skillId??""),
+    playerConfirmed:true}) as unknown as JinwooState;
   case "start_battle":
    if(!s.player.locationId?.startsWith("orario.dungeon")&&
      !Object.values(current.dungeonKeys).some(k=>k.state==="entered"))
@@ -306,11 +446,57 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
     ...q,sourceRef,playerCommitted:a.playerApproved===true,
     confirmedHostile:q.confirmedHostile===true
    } as Parameters<typeof startConfirmedOrarioBattle>[1]);
-  case "combat_exchange":
-   return resolveConfirmedOrarioExchange(current,{
+  case "combat_exchange":{
+   // The current authenticated event binds an intended vital strike to
+   // the precise encounter. The client cannot choose a proof ref.
+   if(q.vitalProofRef!==undefined)
+    throw Error("V47_CLIENT_VITAL_PROOF_NOT_ALLOWED");
+   const vitalEnemy=current.activeEncounter;
+   const vitalProof=q.vitalTarget===undefined?undefined:
+    scopedVitalProofRef({sourceRef,
+     encounterStartedRef:vitalEnemy?.startedRef??"",
+     enemyRef:vitalEnemy?.enemyRef??"",
+     monsterId:vitalEnemy?.monsterId??"",
+     targetLocation:String(q.targetLocation??""),
+     vitalTarget:q.vitalTarget as "brain"|"heart"|"magic_stone",
+     hasMagicStone:!!vitalEnemy&&!isSystemEncounterId(vitalEnemy.monsterId)});
+   const result=resolveConfirmedOrarioExchange(current,{
     ...q,sourceRef,playerCommitted:a.playerApproved===true,
-    currentMinute:narrativeMinute(eventTime)??-1
-   } as Parameters<typeof resolveConfirmedOrarioExchange>[1]).next;
+    currentMinute:narrativeMinute(eventTime)??-1,
+    ...(vitalProof?{vitalProofRef:vitalProof}:{})
+   } as Parameters<typeof resolveConfirmedOrarioExchange>[1]);
+   if(!current.storyFlags.includes("chroma_crossover_v4")||
+      !result.next.activeEncounter||!result.next.chromaV4Meta?.runeRuntime)
+    return result.next;
+   const minute=narrativeMinute(eventTime);
+   if(minute===null)throw Error("V46_RUNE_EXCHANGE_CLOCK_REQUIRED");
+   const nextState=result.next,en=nextState.activeEncounter!;
+   const card=monsterForPlayer(nextState,en.monsterId,{floor:en.floor,
+    monsterRef:en.enemyRef,irregularRef:en.irregularRef});
+   const host:RuneTitleEventHost={
+    verifyAction:()=>false,verifyTitleClear:()=>false,
+    verifyChallengeClear:()=>false,verifyEvolutionFeat:()=>false,confirmRuneHit:()=>false,
+    getMaxHp:x=>effectiveJinwooMaxHp(x as unknown as JinwooState),
+    getMaxMp:x=>effectiveJinwooMaxMp(x as unknown as JinwooState),
+    getEffectiveIntelligence:x=>projectJinwooFalna(x as unknown as JinwooState).total.intelligence,
+    getEnemyStats:()=>({maxHp:card.hp,armor:card.armor,
+     strength:card.combat.strength,magicResistancePct:0,
+     size:card.kind==="monster_rex"?"giant":card.hp>=1000?"large":"medium",
+     poisonImmune:false})};
+   const before=nextState.chromaV4Meta!.runeRuntime!.nowSecond;
+   const ticked=advanceVerifiedV46RuneTime(nextState as unknown as LiveV46Save,{
+    serverSecond:Math.max(minute*60,before+1)},host);
+   if(ticked.enemyDefeated){
+    const outcome=structuredClone(ticked.next) as unknown as JinwooState;
+    outcome.activeEncounter=undefined;
+    return commitBalancedMonsterDefeat(outcome,{
+     sourceRef:childRuneVictoryRef(sourceRef,"dot"),monsterId:en.monsterId,
+     floor:en.floor,monsterRef:en.enemyRef,
+     confirmedDefeat:true,killer:"player",
+     ...(en.irregularRef?{confirmedIrregularRef:en.irregularRef}:{})});
+   }
+   return ticked.next as unknown as JinwooState;
+  }
   case "activate_skill":
    return activateConfirmedPlayerSkill(current,{
     ...q,sourceRef,startMinute:narrativeMinute(eventTime)??-1,
@@ -401,11 +587,13 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
          proof?.monsterId!==monsterId)||
        a.playerApproved!==true)
      throw Error("CHROMA_STONE_SPECIES_OR_PROOF_REQUIRED");
-    const quote=quoteChromaLinosMagicStone({
-     monsterId,sizePct:q.sizePct as number,
-     saturationPct:q.saturationPct as number,
-     integrityPct:q.integrityPct as number
-    });
+    const quote=current.storyFlags.includes("chroma_crossover_v4")?
+     quoteChromaV4Stone({monsterId,sizePct:q.sizePct as number,
+      saturationPct:q.saturationPct as number,
+      integrityPct:q.integrityPct as number}):
+     quoteChromaLinosMagicStone({monsterId,sizePct:q.sizePct as number,
+      saturationPct:q.saturationPct as number,
+      integrityPct:q.integrityPct as number});
     if(quote.valis<1||
        (q.guildValueValis!==undefined&&q.guildValueValis!==quote.valis))
      throw Error("CHROMA_STONE_PRICE_NOT_CONFIRMED");
@@ -413,7 +601,8 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
      ...q,sourceRef,confirmedLoot:q.confirmedLoot===true,
      guildValueValis:quote.valis,
      sizePct:quote.sizePct,saturationPct:quote.saturationPct,
-     integrityPct:quote.integrityPct,pricingModel:"chroma_linos_v1"
+     integrityPct:quote.integrityPct,pricingModel:current.storyFlags.includes("chroma_crossover_v4")?
+      "chroma_bestiary_v2":"chroma_linos_v1"
     } as Parameters<typeof addConfirmedMagicStone>[1]);
    }
    return addConfirmedMagicStone(current,{

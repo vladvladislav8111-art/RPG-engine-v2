@@ -1,0 +1,3476 @@
+{
+  "schema": "chroma.system_monsters.v4.staging",
+  "origin": "DanMachi_SoloLeveling_bestiary_v2_prices.json",
+  "notDeployed": true,
+  "monsters": [
+    {
+      "id": "goblin",
+      "name": "Гоблин",
+      "systemLevelMin": 1,
+      "systemLevelMax": 3,
+      "hp": 80,
+      "baseXp": 13,
+      "baseGold": 8,
+      "priceMagicStoneValis": 180,
+      "canSpawnNaturally": true,
+      "kind": "обычный",
+      "floorMin": 1,
+      "floorRanges": [
+        [
+          1,
+          4
+        ],
+        [
+          8,
+          9
+        ]
+      ],
+      "material": {
+        "name": "Клык гоблина",
+        "percent": 6
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "goblin"
+    },
+    {
+      "id": "kobold",
+      "name": "Кобольд",
+      "systemLevelMin": 2,
+      "systemLevelMax": 4,
+      "hp": 95,
+      "baseXp": 17,
+      "baseGold": 11,
+      "priceMagicStoneValis": 220,
+      "canSpawnNaturally": true,
+      "kind": "обычный",
+      "floorMin": 1,
+      "floorRanges": [
+        [
+          1,
+          4
+        ],
+        [
+          8,
+          9
+        ]
+      ],
+      "material": {
+        "name": "Коготь кобольда",
+        "percent": 6
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "kobold"
+    },
+    {
+      "id": "jack_bird",
+      "name": "Птица Джек",
+      "systemLevelMin": 7,
+      "systemLevelMax": 10,
+      "hp": 45,
+      "baseXp": 50,
+      "baseGold": 32,
+      "priceMagicStoneValis": 340,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": 1,
+      "floorRanges": [
+        [
+          1,
+          1
+        ]
+      ],
+      "material": {
+        "name": "Золотое яйцо",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "jack_bird"
+    },
+    {
+      "id": "dungeon_lizard",
+      "name": "Подземная ящерица",
+      "systemLevelMin": 3,
+      "systemLevelMax": 5,
+      "hp": 125,
+      "baseXp": 23,
+      "baseGold": 15,
+      "priceMagicStoneValis": 380,
+      "canSpawnNaturally": true,
+      "kind": "обычный",
+      "floorMin": 2,
+      "floorRanges": [
+        [
+          2,
+          4
+        ]
+      ],
+      "material": null,
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "dungeon_lizard"
+    },
+    {
+      "id": "frog_shooter",
+      "name": "Лягушка-стрелок",
+      "systemLevelMin": 5,
+      "systemLevelMax": 7,
+      "hp": 119,
+      "baseXp": 46,
+      "baseGold": 30,
+      "priceMagicStoneValis": 550,
+      "canSpawnNaturally": true,
+      "kind": "обычный",
+      "floorMin": 6,
+      "floorRanges": [
+        [
+          6,
+          6
+        ]
+      ],
+      "material": null,
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "frog_shooter"
+    },
+    {
+      "id": "war_shadow",
+      "name": "Военная тень",
+      "systemLevelMin": 7,
+      "systemLevelMax": 9,
+      "hp": 175,
+      "baseXp": 96,
+      "baseGold": 62,
+      "priceMagicStoneValis": 1250,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 6,
+      "floorRanges": [
+        [
+          6,
+          6
+        ]
+      ],
+      "material": {
+        "name": "Пальцевое лезвие",
+        "percent": 5
+      },
+      "rune": {
+        "name": "Скрытность: глушит звук/след и зрительную заметность на короткое время",
+        "percent": 0.6
+      },
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "war_shadow"
+    },
+    {
+      "id": "killer_ant",
+      "name": "Муравей-убийца",
+      "systemLevelMin": 8,
+      "systemLevelMax": 10,
+      "hp": 260,
+      "baseXp": 116,
+      "baseGold": 75,
+      "priceMagicStoneValis": 1200,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 7,
+      "floorRanges": [
+        [
+          7,
+          9
+        ]
+      ],
+      "material": {
+        "name": "Хитиновая пластина",
+        "percent": 12
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "killer_ant"
+    },
+    {
+      "id": "purple_moth",
+      "name": "Фиолетовый мотылёк",
+      "systemLevelMin": 6,
+      "systemLevelMax": 8,
+      "hp": 105,
+      "baseXp": 58,
+      "baseGold": 38,
+      "priceMagicStoneValis": 650,
+      "canSpawnNaturally": true,
+      "kind": "обычный",
+      "floorMin": 7,
+      "floorRanges": [
+        [
+          7,
+          7
+        ]
+      ],
+      "material": {
+        "name": "Крыло мотылька",
+        "percent": 6
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "purple_moth"
+    },
+    {
+      "id": "needle_rabbit",
+      "name": "Игольчатый кролик",
+      "systemLevelMin": 8,
+      "systemLevelMax": 10,
+      "hp": 165,
+      "baseXp": 96,
+      "baseGold": 62,
+      "priceMagicStoneValis": 1000,
+      "canSpawnNaturally": true,
+      "kind": "обычный",
+      "floorMin": 7,
+      "floorRanges": [
+        [
+          7,
+          10
+        ]
+      ],
+      "material": {
+        "name": "Рог кролика",
+        "percent": 7
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "needle_rabbit"
+    },
+    {
+      "id": "blue_papilio",
+      "name": "Синяя папилио",
+      "systemLevelMin": 5,
+      "systemLevelMax": 7,
+      "hp": 30,
+      "baseXp": 35,
+      "baseGold": 23,
+      "priceMagicStoneValis": 490,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": 7,
+      "floorRanges": [
+        [
+          7,
+          7
+        ]
+      ],
+      "material": {
+        "name": "Целебное крыло",
+        "percent": 15
+      },
+      "rune": {
+        "name": "Малое исцеление: затрата MP для восстановления обычных ран",
+        "percent": 0.7
+      },
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "blue_papilio"
+    },
+    {
+      "id": "imp",
+      "name": "Имп",
+      "systemLevelMin": 11,
+      "systemLevelMax": 13,
+      "hp": 195,
+      "baseXp": 155,
+      "baseGold": 101,
+      "priceMagicStoneValis": 1750,
+      "canSpawnNaturally": true,
+      "kind": "обычный",
+      "floorMin": 10,
+      "floorRanges": [
+        [
+          10,
+          12
+        ]
+      ],
+      "material": null,
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "imp"
+    },
+    {
+      "id": "bad_bat",
+      "name": "Злобная летучая мышь",
+      "systemLevelMin": 10,
+      "systemLevelMax": 12,
+      "hp": 221,
+      "baseXp": 128,
+      "baseGold": 83,
+      "priceMagicStoneValis": 1150,
+      "canSpawnNaturally": true,
+      "kind": "обычный",
+      "floorMin": 10,
+      "floorRanges": [
+        [
+          10,
+          12
+        ]
+      ],
+      "material": null,
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "bad_bat"
+    },
+    {
+      "id": "orc",
+      "name": "Орк",
+      "systemLevelMin": 15,
+      "systemLevelMax": 17,
+      "hp": 660,
+      "baseXp": 340,
+      "baseGold": 221,
+      "priceMagicStoneValis": 5450,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 10,
+      "floorRanges": [
+        [
+          10,
+          12
+        ]
+      ],
+      "material": {
+        "name": "Шкура орка",
+        "percent": 7
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "orc"
+    },
+    {
+      "id": "silverback",
+      "name": "Сильвербек",
+      "systemLevelMin": 16,
+      "systemLevelMax": 19,
+      "hp": 430,
+      "baseXp": 215,
+      "baseGold": 140,
+      "priceMagicStoneValis": 10200,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 11,
+      "floorRanges": [
+        [
+          11,
+          12
+        ]
+      ],
+      "material": null,
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "silverback"
+    },
+    {
+      "id": "hard_armored",
+      "name": "Тяжёлобронированный",
+      "systemLevelMin": 17,
+      "systemLevelMax": 20,
+      "hp": 700,
+      "baseXp": 245,
+      "baseGold": 159,
+      "priceMagicStoneValis": 13600,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 11,
+      "floorRanges": [
+        [
+          11,
+          12
+        ]
+      ],
+      "material": {
+        "name": "Броневая пластина",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "hard_armored"
+    },
+    {
+      "id": "infant_dragon",
+      "name": "Молодой дракон",
+      "systemLevelMin": 21,
+      "systemLevelMax": 25,
+      "hp": 1000,
+      "baseXp": 540,
+      "baseGold": 351,
+      "priceMagicStoneValis": 105000,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": 11,
+      "floorRanges": [
+        [
+          11,
+          12
+        ]
+      ],
+      "material": {
+        "name": "Драконья чешуя",
+        "percent": 7
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "infant_dragon"
+    },
+    {
+      "id": "black_wyvern",
+      "name": "Чёрная виверна",
+      "systemLevelMin": 26,
+      "systemLevelMax": 32,
+      "hp": 1078,
+      "baseXp": 1500,
+      "baseGold": 975,
+      "priceMagicStoneValis": 86100,
+      "canSpawnNaturally": false,
+      "kind": "особый",
+      "floorMin": 12,
+      "floorRanges": [
+        [
+          12,
+          12
+        ]
+      ],
+      "material": null,
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "black_wyvern"
+    },
+    {
+      "id": "wyvern",
+      "name": "Виверна",
+      "systemLevelMin": 19,
+      "systemLevelMax": 25,
+      "hp": 632,
+      "baseXp": 461,
+      "baseGold": 300,
+      "priceMagicStoneValis": 41100,
+      "canSpawnNaturally": false,
+      "kind": "опасный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Виверновая чешуя",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "wyvern"
+    },
+    {
+      "id": "crystal_mantis",
+      "name": "Кристальный богомол",
+      "systemLevelMin": 20,
+      "systemLevelMax": 23,
+      "hp": 706,
+      "baseXp": 365,
+      "baseGold": 237,
+      "priceMagicStoneValis": 15600,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": 13,
+      "floorRanges": [
+        [
+          13,
+          15
+        ]
+      ],
+      "material": {
+        "name": "Крыло кристального богомола",
+        "percent": 4
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "crystal_mantis"
+    },
+    {
+      "id": "lamia_mormos",
+      "name": "Ламия-мормос",
+      "systemLevelMin": 17,
+      "systemLevelMax": 22,
+      "hp": 455,
+      "baseXp": 333,
+      "baseGold": 216,
+      "priceMagicStoneValis": 5800,
+      "canSpawnNaturally": false,
+      "kind": "обычный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Ламиина кожа",
+        "percent": 6
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "lamia_mormos"
+    },
+    {
+      "id": "hellhound",
+      "name": "Адская гончая",
+      "systemLevelMin": 19,
+      "systemLevelMax": 23,
+      "hp": 593,
+      "baseXp": 260,
+      "baseGold": 169,
+      "priceMagicStoneValis": 8500,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 13,
+      "floorRanges": [
+        [
+          13,
+          17
+        ]
+      ],
+      "material": {
+        "name": "Клык адской гончей",
+        "percent": 8
+      },
+      "rune": {
+        "name": "Огненное дыхание: направленный конус пламени за MP",
+        "percent": 0.65
+      },
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "hellhound"
+    },
+    {
+      "id": "almiraj",
+      "name": "Альмираж",
+      "systemLevelMin": 16,
+      "systemLevelMax": 19,
+      "hp": 394,
+      "baseXp": 190,
+      "baseGold": 124,
+      "priceMagicStoneValis": 3650,
+      "canSpawnNaturally": true,
+      "kind": "обычный",
+      "floorMin": 13,
+      "floorRanges": [
+        [
+          13,
+          14
+        ]
+      ],
+      "material": {
+        "name": "Мех альмиража",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "almiraj"
+    },
+    {
+      "id": "dungeon_worm",
+      "name": "Подземный червь",
+      "systemLevelMin": 18,
+      "systemLevelMax": 21,
+      "hp": 455,
+      "baseXp": 220,
+      "baseGold": 143,
+      "priceMagicStoneValis": 7600,
+      "canSpawnNaturally": true,
+      "kind": "обычный",
+      "floorMin": 13,
+      "floorRanges": [
+        [
+          13,
+          15
+        ]
+      ],
+      "material": null,
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "dungeon_worm"
+    },
+    {
+      "id": "minotaur",
+      "name": "Минотавр",
+      "systemLevelMin": 24,
+      "systemLevelMax": 28,
+      "hp": 930,
+      "baseXp": 360,
+      "baseGold": 234,
+      "priceMagicStoneValis": 34500,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 15,
+      "floorRanges": [
+        [
+          15,
+          17
+        ]
+      ],
+      "material": {
+        "name": "Рог минотавра",
+        "percent": 5
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "minotaur"
+    },
+    {
+      "id": "ligerfang",
+      "name": "Лигерфанг",
+      "systemLevelMin": 24,
+      "systemLevelMax": 28,
+      "hp": 798,
+      "baseXp": 561,
+      "baseGold": 365,
+      "priceMagicStoneValis": 17300,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 15,
+      "floorRanges": [
+        [
+          15,
+          17
+        ]
+      ],
+      "material": {
+        "name": "Мех лигерфанга",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "ligerfang"
+    },
+    {
+      "id": "goliath_17",
+      "name": "Голиаф",
+      "systemLevelMin": 45,
+      "systemLevelMax": 55,
+      "hp": 9400,
+      "baseXp": 2450,
+      "baseGold": 1991,
+      "priceMagicStoneValis": 1029000,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": 17,
+      "floorRanges": [
+        [
+          17,
+          17
+        ]
+      ],
+      "material": {
+        "name": "Зуб Голиафа",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "goliath_17"
+    },
+    {
+      "id": "black_goliath",
+      "name": "Чёрный Голиаф",
+      "systemLevelMin": 58,
+      "systemLevelMax": 66,
+      "hp": 9228,
+      "baseXp": 3900,
+      "baseGold": 3169,
+      "priceMagicStoneValis": 3075000,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": 18,
+      "floorRanges": [
+        [
+          18,
+          18
+        ]
+      ],
+      "material": {
+        "name": "Твёрдая шкура чёрного Голиафа",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "black_goliath"
+    },
+    {
+      "id": "bugbear",
+      "name": "Багбир",
+      "systemLevelMin": 27,
+      "systemLevelMax": 31,
+      "hp": 1261,
+      "baseXp": 797,
+      "baseGold": 518,
+      "priceMagicStoneValis": 28200,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 19,
+      "floorRanges": [
+        [
+          19,
+          20
+        ]
+      ],
+      "material": {
+        "name": "Коготь багбира",
+        "percent": 7
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "bugbear"
+    },
+    {
+      "id": "battle_boar",
+      "name": "Боевой кабан",
+      "systemLevelMin": 23,
+      "systemLevelMax": 27,
+      "hp": 638,
+      "baseXp": 446,
+      "baseGold": 290,
+      "priceMagicStoneValis": 15800,
+      "canSpawnNaturally": true,
+      "kind": "обычный",
+      "floorMin": 19,
+      "floorRanges": [
+        [
+          19,
+          19
+        ]
+      ],
+      "material": {
+        "name": "Клык кабана",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "battle_boar"
+    },
+    {
+      "id": "lizardman",
+      "name": "Ящеролюд",
+      "systemLevelMin": 27,
+      "systemLevelMax": 32,
+      "hp": 954,
+      "baseXp": 651,
+      "baseGold": 423,
+      "priceMagicStoneValis": 18500,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 19,
+      "floorRanges": [
+        [
+          19,
+          24
+        ]
+      ],
+      "material": {
+        "name": "Коготь ящеролюда",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "lizardman"
+    },
+    {
+      "id": "firebird",
+      "name": "Огненная птица",
+      "systemLevelMin": 29,
+      "systemLevelMax": 34,
+      "hp": 1213,
+      "baseXp": 850,
+      "baseGold": 552,
+      "priceMagicStoneValis": 17600,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": 19,
+      "floorRanges": [
+        [
+          19,
+          19
+        ]
+      ],
+      "material": {
+        "name": "Огненное перо",
+        "percent": 8
+      },
+      "rune": {
+        "name": "Огненный снаряд: дальняя атака из уплотнённого пламени",
+        "percent": 0.45
+      },
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "firebird"
+    },
+    {
+      "id": "vouivre",
+      "name": "Вуивра",
+      "systemLevelMin": 31,
+      "systemLevelMax": 37,
+      "hp": 1355,
+      "baseXp": 930,
+      "baseGold": 604,
+      "priceMagicStoneValis": 43700,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": 19,
+      "floorRanges": [
+        [
+          19,
+          24
+        ]
+      ],
+      "material": {
+        "name": "Слеза вуивры",
+        "percent": 3
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "vouivre"
+    },
+    {
+      "id": "mad_beetle",
+      "name": "Бешеный жук",
+      "systemLevelMin": 28,
+      "systemLevelMax": 33,
+      "hp": 1000,
+      "baseXp": 677,
+      "baseGold": 440,
+      "priceMagicStoneValis": 25900,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 19,
+      "floorRanges": [
+        [
+          19,
+          24
+        ]
+      ],
+      "material": {
+        "name": "Хитиновая пластина жука",
+        "percent": 12
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "mad_beetle"
+    },
+    {
+      "id": "mammoth_fool",
+      "name": "Мамонт-фул",
+      "systemLevelMin": 33,
+      "systemLevelMax": 38,
+      "hp": 1690,
+      "baseXp": 1012,
+      "baseGold": 658,
+      "priceMagicStoneValis": 145000,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 21,
+      "floorRanges": [
+        [
+          21,
+          24
+        ]
+      ],
+      "material": {
+        "name": "Бивень мамонта",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "mammoth_fool"
+    },
+    {
+      "id": "dark_fungus",
+      "name": "Тёмный гриб",
+      "systemLevelMin": 27,
+      "systemLevelMax": 31,
+      "hp": 784,
+      "baseXp": 532,
+      "baseGold": 346,
+      "priceMagicStoneValis": 9650,
+      "canSpawnNaturally": true,
+      "kind": "обычный",
+      "floorMin": 19,
+      "floorRanges": [
+        [
+          19,
+          24
+        ]
+      ],
+      "material": {
+        "name": "Ядовитая спора",
+        "percent": 20
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "dark_fungus"
+    },
+    {
+      "id": "gun_libellula",
+      "name": "Стрекоза-стрелок",
+      "systemLevelMin": 28,
+      "systemLevelMax": 32,
+      "hp": 822,
+      "baseXp": 553,
+      "baseGold": 359,
+      "priceMagicStoneValis": 5650,
+      "canSpawnNaturally": true,
+      "kind": "обычный",
+      "floorMin": 19,
+      "floorRanges": [
+        [
+          19,
+          22
+        ]
+      ],
+      "material": {
+        "name": "Снарядный шип",
+        "percent": 14
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "gun_libellula"
+    },
+    {
+      "id": "sword_stag",
+      "name": "Мечерогий олень",
+      "systemLevelMin": 32,
+      "systemLevelMax": 36,
+      "hp": 1168,
+      "baseXp": 770,
+      "baseGold": 500,
+      "priceMagicStoneValis": 34700,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 22,
+      "floorRanges": [
+        [
+          22,
+          24
+        ]
+      ],
+      "material": {
+        "name": "Мечевидные рога",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "sword_stag"
+    },
+    {
+      "id": "deadly_hornet",
+      "name": "Смертельный шершень",
+      "systemLevelMin": 35,
+      "systemLevelMax": 39,
+      "hp": 1795,
+      "baseXp": 1063,
+      "baseGold": 691,
+      "priceMagicStoneValis": 9350,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 22,
+      "floorRanges": [
+        [
+          22,
+          24
+        ]
+      ],
+      "material": {
+        "name": "Панцирь шершня",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "deadly_hornet"
+    },
+    {
+      "id": "moss_huge",
+      "name": "Моховый гигант",
+      "systemLevelMin": 36,
+      "systemLevelMax": 40,
+      "hp": 1591,
+      "baseXp": 1061,
+      "baseGold": 690,
+      "priceMagicStoneValis": 99800,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": 24,
+      "floorRanges": [
+        [
+          24,
+          24
+        ]
+      ],
+      "material": {
+        "name": "Ядро мха",
+        "percent": 7
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "moss_huge"
+    },
+    {
+      "id": "moss_huge_enhanced",
+      "name": "Усиленный моховый гигант",
+      "systemLevelMin": 42,
+      "systemLevelMax": 47,
+      "hp": 2003,
+      "baseXp": 1454,
+      "baseGold": 945,
+      "priceMagicStoneValis": 277000,
+      "canSpawnNaturally": false,
+      "kind": "особый",
+      "floorMin": 25,
+      "floorRanges": [
+        [
+          25,
+          25
+        ]
+      ],
+      "material": {
+        "name": "Особое сердце моха",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "moss_huge_enhanced"
+    },
+    {
+      "id": "metal_rabbit",
+      "name": "Металлический кролик",
+      "systemLevelMin": 31,
+      "systemLevelMax": 35,
+      "hp": 1297,
+      "baseXp": 898,
+      "baseGold": 584,
+      "priceMagicStoneValis": 14100,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": 24,
+      "floorRanges": [
+        [
+          24,
+          24
+        ]
+      ],
+      "material": {
+        "name": "Металлический мех кролика",
+        "percent": 18
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "metal_rabbit"
+    },
+    {
+      "id": "green_dragon",
+      "name": "Зелёный дракон",
+      "systemLevelMin": 39,
+      "systemLevelMax": 44,
+      "hp": 1809,
+      "baseXp": 1339,
+      "baseGold": 870,
+      "priceMagicStoneValis": 352000,
+      "canSpawnNaturally": false,
+      "kind": "особый",
+      "floorMin": 24,
+      "floorRanges": [
+        [
+          24,
+          24
+        ]
+      ],
+      "material": {
+        "name": "Зелёная чешуя",
+        "percent": 10
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "green_dragon"
+    },
+    {
+      "id": "hobgoblin",
+      "name": "Хобгоблин",
+      "systemLevelMin": 32,
+      "systemLevelMax": 36,
+      "hp": 1168,
+      "baseXp": 770,
+      "baseGold": 500,
+      "priceMagicStoneValis": 26000,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 24,
+      "floorRanges": [
+        [
+          24,
+          24
+        ]
+      ],
+      "material": {
+        "name": "Клык хобгоблина",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "hobgoblin"
+    },
+    {
+      "id": "viscum",
+      "name": "Вискум",
+      "systemLevelMin": 38,
+      "systemLevelMax": 44,
+      "hp": 1777,
+      "baseXp": 1160,
+      "baseGold": 754,
+      "priceMagicStoneValis": 134000,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": 24,
+      "floorRanges": [
+        [
+          24,
+          24
+        ]
+      ],
+      "material": {
+        "name": "Ядовитый цветок",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "viscum"
+    },
+    {
+      "id": "raider_fish",
+      "name": "Рыба-налётчик",
+      "systemLevelMin": 35,
+      "systemLevelMax": 40,
+      "hp": 1129,
+      "baseXp": 720,
+      "baseGold": 468,
+      "priceMagicStoneValis": 23500,
+      "canSpawnNaturally": false,
+      "kind": "обычный",
+      "floorMin": null,
+      "floorRanges": [
+        [
+          25,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Клык рыбы",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "raider_fish"
+    },
+    {
+      "id": "harpy",
+      "name": "Гарпия",
+      "systemLevelMin": 37,
+      "systemLevelMax": 42,
+      "hp": 1217,
+      "baseXp": 766,
+      "baseGold": 498,
+      "priceMagicStoneValis": 25100,
+      "canSpawnNaturally": false,
+      "kind": "обычный",
+      "floorMin": null,
+      "floorRanges": [
+        [
+          25,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Крупное перо",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "harpy"
+    },
+    {
+      "id": "siren",
+      "name": "Сирена-птица",
+      "systemLevelMin": 39,
+      "systemLevelMax": 44,
+      "hp": 1558,
+      "baseXp": 974,
+      "baseGold": 633,
+      "priceMagicStoneValis": 32000,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 25,
+      "floorRanges": [
+        [
+          25,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Голосовая мембрана",
+        "percent": 6
+      },
+      "rune": {
+        "name": "Звуковой импульс: ударная волна и нарушение равновесия",
+        "percent": 0.4
+      },
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "siren"
+    },
+    {
+      "id": "blue_crab",
+      "name": "Синий краб",
+      "systemLevelMin": 38,
+      "systemLevelMax": 43,
+      "hp": 2049,
+      "baseXp": 1183,
+      "baseGold": 769,
+      "priceMagicStoneValis": 66800,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 25,
+      "floorRanges": [
+        [
+          25,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Панцирь синего краба",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "blue_crab"
+    },
+    {
+      "id": "aqua_serpent",
+      "name": "Водяная змея",
+      "systemLevelMin": 38,
+      "systemLevelMax": 43,
+      "hp": 1504,
+      "baseXp": 946,
+      "baseGold": 615,
+      "priceMagicStoneValis": 83600,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 25,
+      "floorRanges": [
+        [
+          25,
+          26
+        ]
+      ],
+      "material": {
+        "name": "Плавник водяной змеи",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "aqua_serpent"
+    },
+    {
+      "id": "crystal_turtle",
+      "name": "Кристальная черепаха",
+      "systemLevelMin": 40,
+      "systemLevelMax": 45,
+      "hp": 2199,
+      "baseXp": 1252,
+      "baseGold": 814,
+      "priceMagicStoneValis": 108000,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 25,
+      "floorRanges": [
+        [
+          25,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Кристалл панциря",
+        "percent": 11
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "crystal_turtle"
+    },
+    {
+      "id": "devil_mosquito",
+      "name": "Дьявольский комар",
+      "systemLevelMin": 37,
+      "systemLevelMax": 41,
+      "hp": 1195,
+      "baseXp": 754,
+      "baseGold": 490,
+      "priceMagicStoneValis": 7300,
+      "canSpawnNaturally": true,
+      "kind": "обычный",
+      "floorMin": 25,
+      "floorRanges": [
+        [
+          25,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Хоботок",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "devil_mosquito"
+    },
+    {
+      "id": "light_quartz",
+      "name": "Световой кварц",
+      "systemLevelMin": 40,
+      "systemLevelMax": 45,
+      "hp": 1613,
+      "baseXp": 1002,
+      "baseGold": 651,
+      "priceMagicStoneValis": 40500,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 25,
+      "floorRanges": [
+        [
+          25,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Световое ядро",
+        "percent": 6
+      },
+      "rune": {
+        "name": "Световой луч: линейный энергетический выстрел с перезарядкой",
+        "percent": 0.45
+      },
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "light_quartz"
+    },
+    {
+      "id": "crystaroth_urchin",
+      "name": "Кристаллический ёж",
+      "systemLevelMin": 39,
+      "systemLevelMax": 43,
+      "hp": 1531,
+      "baseXp": 960,
+      "baseGold": 624,
+      "priceMagicStoneValis": 22400,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 25,
+      "floorRanges": [
+        [
+          25,
+          26
+        ]
+      ],
+      "material": {
+        "name": "Кристальные шипы",
+        "percent": 11
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "crystaroth_urchin"
+    },
+    {
+      "id": "iguazu",
+      "name": "Игуасу",
+      "systemLevelMin": 44,
+      "systemLevelMax": 49,
+      "hp": 2509,
+      "baseXp": 1392,
+      "baseGold": 905,
+      "priceMagicStoneValis": 23700,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 25,
+      "floorRanges": [
+        [
+          25,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Крыло игуасу",
+        "percent": 6
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "iguazu"
+    },
+    {
+      "id": "mermaid",
+      "name": "Русалка",
+      "systemLevelMin": 37,
+      "systemLevelMax": 43,
+      "hp": 1715,
+      "baseXp": 1127,
+      "baseGold": 733,
+      "priceMagicStoneValis": 30800,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": 25,
+      "floorRanges": [
+        [
+          25,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Кровь русалки",
+        "percent": 5
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "mermaid"
+    },
+    {
+      "id": "merman",
+      "name": "Мерман",
+      "systemLevelMin": 39,
+      "systemLevelMax": 44,
+      "hp": 1558,
+      "baseXp": 974,
+      "baseGold": 633,
+      "priceMagicStoneValis": 39100,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 26,
+      "floorRanges": [
+        [
+          26,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Чешуя мермана",
+        "percent": 7
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "merman"
+    },
+    {
+      "id": "merman_leader",
+      "name": "Вожак мерманов",
+      "systemLevelMin": 43,
+      "systemLevelMax": 47,
+      "hp": 2391,
+      "baseXp": 1339,
+      "baseGold": 870,
+      "priceMagicStoneValis": 58900,
+      "canSpawnNaturally": false,
+      "kind": "элитный",
+      "floorMin": 26,
+      "floorRanges": [
+        [
+          26,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Нагрудная чешуя вожака",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "merman_leader"
+    },
+    {
+      "id": "drag_octopus",
+      "name": "Гигантский осьминог",
+      "systemLevelMin": 38,
+      "systemLevelMax": 43,
+      "hp": 1504,
+      "baseXp": 946,
+      "baseGold": 615,
+      "priceMagicStoneValis": 70200,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 25,
+      "floorRanges": [
+        [
+          25,
+          25
+        ]
+      ],
+      "material": {
+        "name": "Чернила осьминога",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "drag_octopus"
+    },
+    {
+      "id": "carbuncle",
+      "name": "Карбункул",
+      "systemLevelMin": 41,
+      "systemLevelMax": 47,
+      "hp": 1970,
+      "baseXp": 1261,
+      "baseGold": 820,
+      "priceMagicStoneValis": 53100,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": 25,
+      "floorRanges": [
+        [
+          25,
+          25
+        ]
+      ],
+      "material": {
+        "name": "Мистический кристалл",
+        "percent": 12
+      },
+      "rune": {
+        "name": "Барьер: прочный энергетический щит за MP",
+        "percent": 0.8
+      },
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "carbuncle"
+    },
+    {
+      "id": "afanc",
+      "name": "Афанк",
+      "systemLevelMin": 40,
+      "systemLevelMax": 44,
+      "hp": 1329,
+      "baseXp": 823,
+      "baseGold": 535,
+      "priceMagicStoneValis": 36600,
+      "canSpawnNaturally": true,
+      "kind": "обычный",
+      "floorMin": 27,
+      "floorRanges": [
+        [
+          27,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Зуб афанка",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "afanc"
+    },
+    {
+      "id": "dodora",
+      "name": "Додора",
+      "systemLevelMin": 41,
+      "systemLevelMax": 46,
+      "hp": 1668,
+      "baseXp": 1029,
+      "baseGold": 669,
+      "priceMagicStoneValis": 104000,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 27,
+      "floorRanges": [
+        [
+          27,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Клык додоры",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "dodora"
+    },
+    {
+      "id": "lamia",
+      "name": "Ламия",
+      "systemLevelMin": 42,
+      "systemLevelMax": 47,
+      "hp": 1724,
+      "baseXp": 1057,
+      "baseGold": 687,
+      "priceMagicStoneValis": 59400,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 27,
+      "floorRanges": [
+        [
+          27,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Чешуя ламии",
+        "percent": 7
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "lamia"
+    },
+    {
+      "id": "voltimeria",
+      "name": "Вольтимерия",
+      "systemLevelMin": 45,
+      "systemLevelMax": 50,
+      "hp": 2204,
+      "baseXp": 1380,
+      "baseGold": 897,
+      "priceMagicStoneValis": 84600,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": 27,
+      "floorRanges": [
+        [
+          27,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Каменный плавник",
+        "percent": 7
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "voltimeria"
+    },
+    {
+      "id": "kelpie",
+      "name": "Келпи",
+      "systemLevelMin": 45,
+      "systemLevelMax": 50,
+      "hp": 2589,
+      "baseXp": 1428,
+      "baseGold": 928,
+      "priceMagicStoneValis": 77600,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 27,
+      "floorRanges": [
+        [
+          27,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Грива келпи",
+        "percent": 7
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "kelpie"
+    },
+    {
+      "id": "amphisbaena",
+      "name": "Амфисбена",
+      "systemLevelMin": 62,
+      "systemLevelMax": 68,
+      "hp": 29000,
+      "baseXp": 8000,
+      "baseGold": 6500,
+      "priceMagicStoneValis": 1037000,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": 27,
+      "floorRanges": [
+        [
+          27,
+          27
+        ]
+      ],
+      "material": {
+        "name": "Драконья печень Амфисбены",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "amphisbaena"
+    },
+    {
+      "id": "bloodsaurus",
+      "name": "Кровозавр",
+      "systemLevelMin": 46,
+      "systemLevelMax": 51,
+      "hp": 2669,
+      "baseXp": 1463,
+      "baseGold": 951,
+      "priceMagicStoneValis": 211000,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 30,
+      "floorRanges": [
+        [
+          30,
+          30
+        ]
+      ],
+      "material": {
+        "name": "Зуб кровозавра",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "bloodsaurus"
+    },
+    {
+      "id": "basilisk",
+      "name": "Василиск",
+      "systemLevelMin": 54,
+      "systemLevelMax": 59,
+      "hp": 2844,
+      "baseXp": 1693,
+      "baseGold": 1100,
+      "priceMagicStoneValis": 495000,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": null,
+      "floorRanges": [
+        [
+          33,
+          33
+        ]
+      ],
+      "material": {
+        "name": "Ядовитая железа",
+        "percent": 7
+      },
+      "rune": {
+        "name": "Парализующий токсин: направленная ядовитая атака",
+        "percent": 0.55
+      },
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "basilisk"
+    },
+    {
+      "id": "spartoi",
+      "name": "Спартой",
+      "systemLevelMin": 61,
+      "systemLevelMax": 68,
+      "hp": 4067,
+      "baseXp": 2048,
+      "baseGold": 1331,
+      "priceMagicStoneValis": 134000,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 37,
+      "floorRanges": [
+        [
+          37,
+          37
+        ]
+      ],
+      "material": {
+        "name": "Костяное лезвие",
+        "percent": 7
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "spartoi"
+    },
+    {
+      "id": "barbarian",
+      "name": "Варвар",
+      "systemLevelMin": 58,
+      "systemLevelMax": 64,
+      "hp": 2737,
+      "baseXp": 1534,
+      "baseGold": 997,
+      "priceMagicStoneValis": 154000,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 37,
+      "floorRanges": [
+        [
+          37,
+          37
+        ]
+      ],
+      "material": {
+        "name": "Мех варвара",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "barbarian"
+    },
+    {
+      "id": "lizardman_elite",
+      "name": "Элитный ящеролюд",
+      "systemLevelMin": 58,
+      "systemLevelMax": 64,
+      "hp": 3745,
+      "baseXp": 1918,
+      "baseGold": 1247,
+      "priceMagicStoneValis": 125000,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 37,
+      "floorRanges": [
+        [
+          37,
+          37
+        ]
+      ],
+      "material": {
+        "name": "Элитная чешуя",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "lizardman_elite"
+    },
+    {
+      "id": "obsidian_soldier",
+      "name": "Обсидиановый солдат",
+      "systemLevelMin": 59,
+      "systemLevelMax": 65,
+      "hp": 2803,
+      "baseXp": 1564,
+      "baseGold": 1017,
+      "priceMagicStoneValis": 151000,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 37,
+      "floorRanges": [
+        [
+          37,
+          37
+        ]
+      ],
+      "material": {
+        "name": "Обсидиановый камень",
+        "percent": 10
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "obsidian_soldier"
+    },
+    {
+      "id": "skull_sheep",
+      "name": "Черепная овца",
+      "systemLevelMin": 58,
+      "systemLevelMax": 64,
+      "hp": 2737,
+      "baseXp": 1534,
+      "baseGold": 997,
+      "priceMagicStoneValis": 96200,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 37,
+      "floorRanges": [
+        [
+          37,
+          37
+        ]
+      ],
+      "material": {
+        "name": "Чёрная шкура",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "skull_sheep"
+    },
+    {
+      "id": "loup_garou",
+      "name": "Лу-гару",
+      "systemLevelMin": 59,
+      "systemLevelMax": 66,
+      "hp": 2837,
+      "baseXp": 1579,
+      "baseGold": 1026,
+      "priceMagicStoneValis": 123000,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 37,
+      "floorRanges": [
+        [
+          37,
+          37
+        ]
+      ],
+      "material": {
+        "name": "Клык лу-гару",
+        "percent": 10
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "loup_garou"
+    },
+    {
+      "id": "peluda",
+      "name": "Пелуда",
+      "systemLevelMin": 64,
+      "systemLevelMax": 70,
+      "hp": 4303,
+      "baseXp": 2142,
+      "baseGold": 1392,
+      "priceMagicStoneValis": 278000,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 37,
+      "floorRanges": [
+        [
+          37,
+          37
+        ]
+      ],
+      "material": {
+        "name": "Ядовитый шип",
+        "percent": 7
+      },
+      "rune": {
+        "name": "Ядовитый веер: выпуск управляемых отравленных игл",
+        "percent": 0.45
+      },
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "peluda"
+    },
+    {
+      "id": "worm_well",
+      "name": "Лэмбтон / Червь-колодец",
+      "systemLevelMin": 63,
+      "systemLevelMax": 70,
+      "hp": 3618,
+      "baseXp": 2053,
+      "baseGold": 1334,
+      "priceMagicStoneValis": 606000,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": 37,
+      "floorRanges": [
+        [
+          37,
+          37
+        ]
+      ],
+      "material": {
+        "name": "Головной панцирь лэмбтона",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "worm_well"
+    },
+    {
+      "id": "udaeus",
+      "name": "Удайос",
+      "systemLevelMin": 83,
+      "systemLevelMax": 93,
+      "hp": 65000,
+      "baseXp": 17000,
+      "baseGold": 13812,
+      "priceMagicStoneValis": 2540000,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": 37,
+      "floorRanges": [
+        [
+          37,
+          37
+        ]
+      ],
+      "material": {
+        "name": "Чёрный меч Удайоса",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "udaeus"
+    },
+    {
+      "id": "delphyne",
+      "name": "Дельфин / Делфина",
+      "systemLevelMin": 86,
+      "systemLevelMax": 96,
+      "hp": 5762,
+      "baseXp": 3382,
+      "baseGold": 2198,
+      "priceMagicStoneValis": 3838000,
+      "canSpawnNaturally": false,
+      "kind": "особый",
+      "floorMin": 37,
+      "floorRanges": [
+        [
+          37,
+          37
+        ]
+      ],
+      "material": {
+        "name": "Чёрная чешуя",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "delphyne"
+    },
+    {
+      "id": "ooze",
+      "name": "Ууз / Слизь",
+      "systemLevelMin": 59,
+      "systemLevelMax": 64,
+      "hp": 2770,
+      "baseXp": 1549,
+      "baseGold": 1007,
+      "priceMagicStoneValis": 70300,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 37,
+      "floorRanges": [
+        [
+          37,
+          37
+        ]
+      ],
+      "material": {
+        "name": "Жидкость слизи",
+        "percent": 12
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "ooze"
+    },
+    {
+      "id": "flame_rock",
+      "name": "Пламенная скала",
+      "systemLevelMin": 67,
+      "systemLevelMax": 73,
+      "hp": 3353,
+      "baseXp": 1805,
+      "baseGold": 1173,
+      "priceMagicStoneValis": 271000,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 44,
+      "floorRanges": [
+        [
+          44,
+          44
+        ]
+      ],
+      "material": {
+        "name": "Огненный камень",
+        "percent": 10
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "flame_rock"
+    },
+    {
+      "id": "fomoire",
+      "name": "Фомор",
+      "systemLevelMin": 72,
+      "systemLevelMax": 78,
+      "hp": 3103,
+      "baseXp": 1631,
+      "baseGold": 1060,
+      "priceMagicStoneValis": 226000,
+      "canSpawnNaturally": true,
+      "kind": "обычный",
+      "floorMin": 49,
+      "floorRanges": [
+        [
+          49,
+          49
+        ]
+      ],
+      "material": {
+        "name": "Рог фомора",
+        "percent": 10
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "fomoire"
+    },
+    {
+      "id": "balor",
+      "name": "Балор",
+      "systemLevelMin": 105,
+      "systemLevelMax": 116,
+      "hp": 115000,
+      "baseXp": 25000,
+      "baseGold": 20312,
+      "priceMagicStoneValis": 10530000,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": 49,
+      "floorRanges": [
+        [
+          49,
+          49
+        ]
+      ],
+      "material": {
+        "name": "Глаз Балора",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "balor"
+    },
+    {
+      "id": "virga",
+      "name": "Вирга",
+      "systemLevelMin": 78,
+      "systemLevelMax": 86,
+      "hp": 4238,
+      "baseXp": 2175,
+      "baseGold": 1414,
+      "priceMagicStoneValis": 427000,
+      "canSpawnNaturally": false,
+      "kind": "опасный",
+      "floorMin": 50,
+      "floorRanges": [
+        [
+          50,
+          51
+        ]
+      ],
+      "material": {
+        "name": "Кислотная железа Вирги",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "virga"
+    },
+    {
+      "id": "black_rhinos",
+      "name": "Чёрный носорог",
+      "systemLevelMin": 78,
+      "systemLevelMax": 87,
+      "hp": 5861,
+      "baseXp": 2738,
+      "baseGold": 1780,
+      "priceMagicStoneValis": 695000,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 51,
+      "floorRanges": [
+        [
+          51,
+          51
+        ]
+      ],
+      "material": {
+        "name": "Рог носорога",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "black_rhinos"
+    },
+    {
+      "id": "deformis_spider",
+      "name": "Деформис-паук",
+      "systemLevelMin": 76,
+      "systemLevelMax": 84,
+      "hp": 4086,
+      "baseXp": 2113,
+      "baseGold": 1373,
+      "priceMagicStoneValis": 339000,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 51,
+      "floorRanges": [
+        [
+          51,
+          51
+        ]
+      ],
+      "material": {
+        "name": "Прочная паутина",
+        "percent": 10
+      },
+      "rune": {
+        "name": "Клейкая нить: создание боевой ловушки из прочного волокна",
+        "percent": 0.5
+      },
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "deformis_spider"
+    },
+    {
+      "id": "cadmus",
+      "name": "Кадм",
+      "systemLevelMin": 91,
+      "systemLevelMax": 101,
+      "hp": 6239,
+      "baseXp": 3166,
+      "baseGold": 2058,
+      "priceMagicStoneValis": 4482000,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": 51,
+      "floorRanges": [
+        [
+          51,
+          51
+        ]
+      ],
+      "material": {
+        "name": "Кожа Кадма",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "cadmus"
+    },
+    {
+      "id": "venom_scorpion",
+      "name": "Ядовитый скорпион",
+      "systemLevelMin": 79,
+      "systemLevelMax": 86,
+      "hp": 4276,
+      "baseXp": 2191,
+      "baseGold": 1424,
+      "priceMagicStoneValis": 391000,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 52,
+      "floorRanges": [
+        [
+          52,
+          52
+        ]
+      ],
+      "material": {
+        "name": "Ядовитое жало",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "venom_scorpion"
+    },
+    {
+      "id": "thunder_snake",
+      "name": "Грозовая змея",
+      "systemLevelMin": 82,
+      "systemLevelMax": 89,
+      "hp": 4509,
+      "baseXp": 2285,
+      "baseGold": 1485,
+      "priceMagicStoneValis": 647000,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 52,
+      "floorRanges": [
+        [
+          52,
+          52
+        ]
+      ],
+      "material": {
+        "name": "Грозовая железа",
+        "percent": 7
+      },
+      "rune": {
+        "name": "Молниевый импульс: ближний электрический разряд",
+        "percent": 0.55
+      },
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "thunder_snake"
+    },
+    {
+      "id": "silver_worm",
+      "name": "Серебряный червь",
+      "systemLevelMin": 78,
+      "systemLevelMax": 85,
+      "hp": 4200,
+      "baseXp": 2159,
+      "baseGold": 1403,
+      "priceMagicStoneValis": 378000,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 52,
+      "floorRanges": [
+        [
+          52,
+          52
+        ]
+      ],
+      "material": {
+        "name": "Серебристая кожа",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "silver_worm"
+    },
+    {
+      "id": "ill_wyvern",
+      "name": "Ил-виверна",
+      "systemLevelMin": 84,
+      "systemLevelMax": 92,
+      "hp": 4706,
+      "baseXp": 2364,
+      "baseGold": 1537,
+      "priceMagicStoneValis": 1555000,
+      "canSpawnNaturally": true,
+      "kind": "опасный",
+      "floorMin": 56,
+      "floorRanges": [
+        [
+          56,
+          56
+        ]
+      ],
+      "material": {
+        "name": "Огненная чешуя",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "ill_wyvern"
+    },
+    {
+      "id": "valgang_dragon",
+      "name": "Дракон Вальганга",
+      "systemLevelMin": 110,
+      "systemLevelMax": 123,
+      "hp": 35000,
+      "baseXp": 9000,
+      "baseGold": 5850,
+      "priceMagicStoneValis": 10572000,
+      "canSpawnNaturally": false,
+      "kind": "элитный",
+      "floorMin": 58,
+      "floorRanges": [
+        [
+          58,
+          58
+        ]
+      ],
+      "material": {
+        "name": "Клык дракона Вальганга",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "valgang_dragon"
+    },
+    {
+      "id": "titan_alm",
+      "name": "Титан-альм",
+      "systemLevelMin": 111,
+      "systemLevelMax": 125,
+      "hp": 9990,
+      "baseXp": 4177,
+      "baseGold": 2715,
+      "priceMagicStoneValis": 5860000,
+      "canSpawnNaturally": true,
+      "kind": "элитный",
+      "floorMin": 59,
+      "floorRanges": [
+        [
+          59,
+          59
+        ]
+      ],
+      "material": {
+        "name": "Сердцевина растения",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": false,
+      "origin": "DanMachi",
+      "sourceCardId": "titan_alm"
+    },
+    {
+      "id": "demi_spirit",
+      "name": "Полудух",
+      "systemLevelMin": 130,
+      "systemLevelMax": 155,
+      "hp": 145000,
+      "baseXp": 34000,
+      "baseGold": 27625,
+      "priceMagicStoneValis": 25167000,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": 59,
+      "floorRanges": [
+        [
+          59,
+          59
+        ]
+      ],
+      "material": {
+        "name": "Осколок ядра полудуха",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "demi_spirit"
+    },
+    {
+      "id": "varasite",
+      "name": "Варазит",
+      "systemLevelMin": 126,
+      "systemLevelMax": 148,
+      "hp": 10601,
+      "baseXp": 5480,
+      "baseGold": 3562,
+      "priceMagicStoneValis": 6431000,
+      "canSpawnNaturally": false,
+      "kind": "особый",
+      "floorMin": 60,
+      "floorRanges": [
+        [
+          60,
+          60
+        ]
+      ],
+      "material": {
+        "name": "Паразитическое ядро",
+        "percent": 5
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "varasite"
+    },
+    {
+      "id": "corrupted_spirit",
+      "name": "Осквернённый дух",
+      "systemLevelMin": 150,
+      "systemLevelMax": 185,
+      "hp": 200000,
+      "baseXp": 50000,
+      "baseGold": 40625,
+      "priceMagicStoneValis": 62712000,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": 60,
+      "floorRanges": [
+        [
+          60,
+          60
+        ],
+        [
+          61,
+          61
+        ]
+      ],
+      "material": {
+        "name": "Нестабильное ядро",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "corrupted_spirit"
+    },
+    {
+      "id": "troll",
+      "name": "Тролль",
+      "systemLevelMin": 34,
+      "systemLevelMax": 42,
+      "hp": 1371,
+      "baseXp": 878,
+      "baseGold": 571,
+      "priceMagicStoneValis": 71300,
+      "canSpawnNaturally": false,
+      "kind": "опасный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Мех тролля",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "troll"
+    },
+    {
+      "id": "poison_vermis",
+      "name": "Ядовитый вермис",
+      "systemLevelMin": 37,
+      "systemLevelMax": 45,
+      "hp": 1777,
+      "baseXp": 1160,
+      "baseGold": 754,
+      "priceMagicStoneValis": 58600,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Токсин вермиса",
+        "percent": 10
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "poison_vermis"
+    },
+    {
+      "id": "old_bison",
+      "name": "Старый бизон",
+      "systemLevelMin": 28,
+      "systemLevelMax": 42,
+      "hp": 1023,
+      "baseXp": 664,
+      "baseGold": 432,
+      "priceMagicStoneValis": 46600,
+      "canSpawnNaturally": false,
+      "kind": "обычный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Шкура старого бизона",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "old_bison"
+    },
+    {
+      "id": "dungeon_fly",
+      "name": "Подземная муха",
+      "systemLevelMin": 1,
+      "systemLevelMax": 5,
+      "hp": 10,
+      "baseXp": 3,
+      "baseGold": 2,
+      "priceMagicStoneValis": 100,
+      "canSpawnNaturally": false,
+      "kind": "обычный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": null,
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "dungeon_fly"
+    },
+    {
+      "id": "ogre",
+      "name": "Огр",
+      "systemLevelMin": 35,
+      "systemLevelMax": 50,
+      "hp": 1613,
+      "baseXp": 1002,
+      "baseGold": 651,
+      "priceMagicStoneValis": 106000,
+      "canSpawnNaturally": false,
+      "kind": "опасный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Кость огра",
+        "percent": 7
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "ogre"
+    },
+    {
+      "id": "gargoyle",
+      "name": "Горгулья",
+      "systemLevelMin": 38,
+      "systemLevelMax": 52,
+      "hp": 1753,
+      "baseXp": 1071,
+      "baseGold": 696,
+      "priceMagicStoneValis": 75200,
+      "canSpawnNaturally": false,
+      "kind": "опасный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Каменное крыло",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "gargoyle"
+    },
+    {
+      "id": "gryphon",
+      "name": "Грифон",
+      "systemLevelMin": 38,
+      "systemLevelMax": 52,
+      "hp": 1753,
+      "baseXp": 1071,
+      "baseGold": 696,
+      "priceMagicStoneValis": 122000,
+      "canSpawnNaturally": false,
+      "kind": "опасный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Перья грифона",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "gryphon"
+    },
+    {
+      "id": "arachne",
+      "name": "Арахна",
+      "systemLevelMin": 40,
+      "systemLevelMax": 54,
+      "hp": 1867,
+      "baseXp": 1128,
+      "baseGold": 733,
+      "priceMagicStoneValis": 68200,
+      "canSpawnNaturally": false,
+      "kind": "опасный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Кислотная железа",
+        "percent": 8
+      },
+      "rune": {
+        "name": "Кислотный плевок: дальняя атака разъедающей жидкостью",
+        "percent": 0.4
+      },
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "arachne"
+    },
+    {
+      "id": "hippogriff",
+      "name": "Гиппогриф",
+      "systemLevelMin": 40,
+      "systemLevelMax": 55,
+      "hp": 1896,
+      "baseXp": 1142,
+      "baseGold": 742,
+      "priceMagicStoneValis": 150000,
+      "canSpawnNaturally": false,
+      "kind": "опасный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Перо гиппогрифа",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "hippogriff"
+    },
+    {
+      "id": "armarosaurus",
+      "name": "Армарозавр",
+      "systemLevelMin": 44,
+      "systemLevelMax": 58,
+      "hp": 2874,
+      "baseXp": 1552,
+      "baseGold": 1009,
+      "priceMagicStoneValis": 301000,
+      "canSpawnNaturally": false,
+      "kind": "элитный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Тройная костная пластина",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "armarosaurus"
+    },
+    {
+      "id": "scylla",
+      "name": "Сцилла",
+      "systemLevelMin": 44,
+      "systemLevelMax": 60,
+      "hp": 2165,
+      "baseXp": 1271,
+      "baseGold": 826,
+      "priceMagicStoneValis": 190000,
+      "canSpawnNaturally": false,
+      "kind": "опасный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Щупальце сциллы",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "scylla"
+    },
+    {
+      "id": "unicorn",
+      "name": "Единорог",
+      "systemLevelMin": 32,
+      "systemLevelMax": 55,
+      "hp": 1938,
+      "baseXp": 1244,
+      "baseGold": 809,
+      "priceMagicStoneValis": 86400,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Рог единорога",
+        "percent": 0
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "unicorn"
+    },
+    {
+      "id": "blood_smeared_troll",
+      "name": "Окровавленный тролль",
+      "systemLevelMin": 52,
+      "systemLevelMax": 66,
+      "hp": 3032,
+      "baseXp": 2028,
+      "baseGold": 1318,
+      "priceMagicStoneValis": 273000,
+      "canSpawnNaturally": false,
+      "kind": "особый",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Сердце усиленного тролля",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "blood_smeared_troll"
+    },
+    {
+      "id": "golmina",
+      "name": "Гольмина",
+      "systemLevelMin": 47,
+      "systemLevelMax": 58,
+      "hp": 2553,
+      "baseXp": 1553,
+      "baseGold": 1009,
+      "priceMagicStoneValis": 130000,
+      "canSpawnNaturally": false,
+      "kind": "редкий",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Рог гольмины",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "golmina"
+    },
+    {
+      "id": "sand_worm",
+      "name": "Песчаный червь",
+      "systemLevelMin": 33,
+      "systemLevelMax": 46,
+      "hp": 1450,
+      "baseXp": 919,
+      "baseGold": 597,
+      "priceMagicStoneValis": 100000,
+      "canSpawnNaturally": false,
+      "kind": "опасный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Зуб песчаного червя",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "sand_worm"
+    },
+    {
+      "id": "desert_lizard",
+      "name": "Пустынный ящер",
+      "systemLevelMin": 25,
+      "systemLevelMax": 38,
+      "hp": 881,
+      "baseXp": 586,
+      "baseGold": 381,
+      "priceMagicStoneValis": 12600,
+      "canSpawnNaturally": false,
+      "kind": "обычный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Шкура ящера",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "desert_lizard"
+    },
+    {
+      "id": "sand_scorpion",
+      "name": "Песчаный скорпион",
+      "systemLevelMin": 30,
+      "systemLevelMax": 42,
+      "hp": 1268,
+      "baseXp": 823,
+      "baseGold": 535,
+      "priceMagicStoneValis": 37400,
+      "canSpawnNaturally": false,
+      "kind": "опасный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Жало скорпиона",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "sand_scorpion"
+    },
+    {
+      "id": "vulture_hunter",
+      "name": "Гриф-охотник",
+      "systemLevelMin": 26,
+      "systemLevelMax": 40,
+      "hp": 941,
+      "baseXp": 619,
+      "baseGold": 402,
+      "priceMagicStoneValis": 16200,
+      "canSpawnNaturally": false,
+      "kind": "обычный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Хищное перо",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "vulture_hunter"
+    },
+    {
+      "id": "harpy_surface",
+      "name": "Гарпия поверхности",
+      "systemLevelMin": 37,
+      "systemLevelMax": 42,
+      "hp": 1217,
+      "baseXp": 766,
+      "baseGold": 498,
+      "priceMagicStoneValis": 25100,
+      "canSpawnNaturally": false,
+      "kind": "обычный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Крупное перо",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "harpy_surface"
+    },
+    {
+      "id": "raider_fish_surface",
+      "name": "Рыба-налётчик поверхности",
+      "systemLevelMin": 35,
+      "systemLevelMax": 40,
+      "hp": 1129,
+      "baseXp": 720,
+      "baseGold": 468,
+      "priceMagicStoneValis": 23500,
+      "canSpawnNaturally": false,
+      "kind": "обычный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Клык рыбы",
+        "percent": 9
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "raider_fish_surface"
+    },
+    {
+      "id": "loup_garou_surface",
+      "name": "Лу-гару на поверхности",
+      "systemLevelMin": 59,
+      "systemLevelMax": 66,
+      "hp": 2837,
+      "baseXp": 1579,
+      "baseGold": 1026,
+      "priceMagicStoneValis": 123000,
+      "canSpawnNaturally": false,
+      "kind": "опасный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Клык лу-гару",
+        "percent": 10
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "loup_garou_surface"
+    },
+    {
+      "id": "juggernaut",
+      "name": "Джаггернаут",
+      "systemLevelMin": 57,
+      "systemLevelMax": 90,
+      "hp": 5000,
+      "baseXp": 9000,
+      "baseGold": 5850,
+      "priceMagicStoneValis": null,
+      "canSpawnNaturally": false,
+      "kind": "особый",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": null,
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "juggernaut"
+    },
+    {
+      "id": "valg",
+      "name": "Вальг",
+      "systemLevelMin": 52,
+      "systemLevelMax": 64,
+      "hp": 2541,
+      "baseXp": 1446,
+      "baseGold": 940,
+      "priceMagicStoneValis": 92700,
+      "canSpawnNaturally": false,
+      "kind": "опасный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Кислотная железа",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "valg"
+    },
+    {
+      "id": "violas",
+      "name": "Виолас",
+      "systemLevelMin": 65,
+      "systemLevelMax": 78,
+      "hp": 4028,
+      "baseXp": 2544,
+      "baseGold": 1654,
+      "priceMagicStoneValis": 442000,
+      "canSpawnNaturally": false,
+      "kind": "особый",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Тёмная лоза",
+        "percent": 8
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "violas"
+    },
+    {
+      "id": "jewel_fetus",
+      "name": "Драгоценный зародыш",
+      "systemLevelMin": 65,
+      "systemLevelMax": 83,
+      "hp": 4239,
+      "baseXp": 1500,
+      "baseGold": 975,
+      "priceMagicStoneValis": 258000,
+      "canSpawnNaturally": false,
+      "kind": "особый",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": null,
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "jewel_fetus"
+    },
+    {
+      "id": "anglfish_ova",
+      "name": "Гигантский удильщик OVA",
+      "systemLevelMin": 33,
+      "systemLevelMax": 42,
+      "hp": 1561,
+      "baseXp": 1188,
+      "baseGold": 772,
+      "priceMagicStoneValis": 110000,
+      "canSpawnNaturally": false,
+      "kind": "особый",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": null,
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "anglfish_ova"
+    },
+    {
+      "id": "antares_movie",
+      "name": "Антарес (фильм)",
+      "systemLevelMin": 100,
+      "systemLevelMax": 130,
+      "hp": 8165,
+      "baseXp": 4458,
+      "baseGold": 2898,
+      "priceMagicStoneValis": 15538000,
+      "canSpawnNaturally": false,
+      "kind": "особый",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": null,
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "DanMachi",
+      "sourceCardId": "antares_movie"
+    },
+    {
+      "id": "sl_wolf",
+      "name": "Волк мгновенного подземелья",
+      "systemLevelMin": 4,
+      "systemLevelMax": 7,
+      "hp": 140,
+      "baseXp": 40,
+      "baseGold": 26,
+      "priceMagicStoneValis": null,
+      "canSpawnNaturally": false,
+      "kind": "системный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": null,
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "Solo Leveling",
+      "sourceCardId": "sl_wolf"
+    },
+    {
+      "id": "sl_briga",
+      "name": "Брига",
+      "systemLevelMin": 8,
+      "systemLevelMax": 11,
+      "hp": 350,
+      "baseXp": 125,
+      "baseGold": 81,
+      "priceMagicStoneValis": null,
+      "canSpawnNaturally": false,
+      "kind": "системный",
+      "floorMin": 2,
+      "floorRanges": [
+        [
+          2,
+          2
+        ]
+      ],
+      "material": null,
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "Solo Leveling",
+      "sourceCardId": "sl_briga"
+    },
+    {
+      "id": "sl_razan",
+      "name": "Разан",
+      "systemLevelMin": 11,
+      "systemLevelMax": 14,
+      "hp": 500,
+      "baseXp": 200,
+      "baseGold": 130,
+      "priceMagicStoneValis": null,
+      "canSpawnNaturally": false,
+      "kind": "системный",
+      "floorMin": 2,
+      "floorRanges": [
+        [
+          2,
+          2
+        ]
+      ],
+      "material": null,
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "Solo Leveling",
+      "sourceCardId": "sl_razan"
+    },
+    {
+      "id": "sl_kasaka",
+      "name": "Синезубый Касака",
+      "systemLevelMin": 17,
+      "systemLevelMax": 23,
+      "hp": 1200,
+      "baseXp": 600,
+      "baseGold": 488,
+      "priceMagicStoneValis": null,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Клык Касаки",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "Solo Leveling",
+      "sourceCardId": "sl_kasaka"
+    },
+    {
+      "id": "sl_cerberus",
+      "name": "Цербер",
+      "systemLevelMin": 24,
+      "systemLevelMax": 32,
+      "hp": 2835,
+      "baseXp": 2000,
+      "baseGold": 1625,
+      "priceMagicStoneValis": null,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Клык Цербера",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "Solo Leveling",
+      "sourceCardId": "sl_cerberus"
+    },
+    {
+      "id": "sl_giant_spider",
+      "name": "Гигантский паук",
+      "systemLevelMin": 13,
+      "systemLevelMax": 20,
+      "hp": 1310,
+      "baseXp": 650,
+      "baseGold": 528,
+      "priceMagicStoneValis": null,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Паучий трофей",
+        "percent": 50
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "Solo Leveling",
+      "sourceCardId": "sl_giant_spider"
+    },
+    {
+      "id": "sl_igris",
+      "name": "Игрис Кровавый",
+      "systemLevelMin": 45,
+      "systemLevelMax": 58,
+      "hp": 6998,
+      "baseXp": 7000,
+      "baseGold": 5688,
+      "priceMagicStoneValis": null,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Рунический камень «Руки правителя»",
+        "percent": 100
+      },
+      "rune": {
+        "name": "Прикосновение властителя: начальная форма телекинеза, развивается в Власть правителя",
+        "percent": 100
+      },
+      "requiresStoryTrigger": true,
+      "origin": "Solo Leveling",
+      "sourceCardId": "sl_igris"
+    },
+    {
+      "id": "sl_baruka",
+      "name": "Бару́ка",
+      "systemLevelMin": 48,
+      "systemLevelMax": 57,
+      "hp": 7201,
+      "baseXp": 6500,
+      "baseGold": 5281,
+      "priceMagicStoneValis": null,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Кинжал Баруки",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "Solo Leveling",
+      "sourceCardId": "sl_baruka"
+    },
+    {
+      "id": "sl_high_orc",
+      "name": "Высший орк",
+      "systemLevelMin": 33,
+      "systemLevelMax": 43,
+      "hp": 1867,
+      "baseXp": 1097,
+      "baseGold": 713,
+      "priceMagicStoneValis": null,
+      "canSpawnNaturally": false,
+      "kind": "элитный",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Броня высшего орка",
+        "percent": 6
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "Solo Leveling",
+      "sourceCardId": "sl_high_orc"
+    },
+    {
+      "id": "sl_kargalgan",
+      "name": "Каргалган",
+      "systemLevelMin": 58,
+      "systemLevelMax": 72,
+      "hp": 9902,
+      "baseXp": 12000,
+      "baseGold": 9750,
+      "priceMagicStoneValis": null,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Шаманский посох",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "Solo Leveling",
+      "sourceCardId": "sl_kargalgan"
+    },
+    {
+      "id": "sl_vulcan",
+      "name": "Вулкан",
+      "systemLevelMin": 63,
+      "systemLevelMax": 78,
+      "hp": 11179,
+      "baseXp": 14000,
+      "baseGold": 11375,
+      "priceMagicStoneValis": null,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Сфера алчности",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "Solo Leveling",
+      "sourceCardId": "sl_vulcan"
+    },
+    {
+      "id": "sl_metus",
+      "name": "Метус",
+      "systemLevelMin": 70,
+      "systemLevelMax": 84,
+      "hp": 12753,
+      "baseXp": 17000,
+      "baseGold": 13812,
+      "priceMagicStoneValis": null,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Уникальный ключ этажа",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "Solo Leveling",
+      "sourceCardId": "sl_metus"
+    },
+    {
+      "id": "sl_baran",
+      "name": "Баран",
+      "systemLevelMin": 87,
+      "systemLevelMax": 105,
+      "hp": 17733,
+      "baseXp": 30000,
+      "baseGold": 24375,
+      "priceMagicStoneValis": null,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Особый артефакт правителя демонов",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "Solo Leveling",
+      "sourceCardId": "sl_baran"
+    },
+    {
+      "id": "sl_ant_king",
+      "name": "Король муравьёв",
+      "systemLevelMin": 95,
+      "systemLevelMax": 120,
+      "hp": 21004,
+      "baseXp": 45000,
+      "baseGold": 36562,
+      "priceMagicStoneValis": null,
+      "canSpawnNaturally": false,
+      "kind": "босс",
+      "floorMin": null,
+      "floorRanges": [],
+      "material": {
+        "name": "Особое ядро насекомого",
+        "percent": 100
+      },
+      "rune": null,
+      "requiresStoryTrigger": true,
+      "origin": "Solo Leveling",
+      "sourceCardId": "sl_ant_king"
+    }
+  ],
+  "storyOnly": [
+    "nidhogg",
+    "behemoth",
+    "leviathan",
+    "one_eyed_black_dragon",
+    "venenthes",
+    "black_balor",
+    "xenos_wiene",
+    "xenos_lyd",
+    "xenos_ray",
+    "xenos_gros",
+    "xenos_asterius",
+    "xenos_marie",
+    "xenos_arles",
+    "xenos_helga",
+    "xenos_laura",
+    "xenos_fear",
+    "xenos_ranye",
+    "xenos_fou",
+    "xenos_oud",
+    "xenos_cliff",
+    "xenos_lett"
+  ]
+}

@@ -1,3 +1,6 @@
+import {receiptForVerifiedSnapshot,migrationStateHash} from "./verified_chroma_backup.ts";
+import type {MigrationRestorePoint} from "./migration_restore_point.ts";
+import {requireMigrationReceipt,type MigrationBackupReceipt} from "./migration_receipt.ts";
 /** Versioned, authenticated, isolated multi-project RPG Lab API.
  * KV prefix is entirely separate from legacy character/save/financial writer.
  */
@@ -218,13 +221,25 @@ export async function commitLabCampaignEvent(args:{
 }):Promise<{ok:true;revision:number;projectId:string;sessionId:string;
  sourceRef:string;gameClock:string;rememberedBy:string[];legacySaveTouched:false;
  roleplayGuardRequired:boolean;roleplayGuardVerified:boolean}>{
+ const loaded=await loadLabProjectFromKv(args.projectId);
+ return commitLabCampaignEventInKv(await storage(),args,loaded);
+}
+
+/** Same authoritative CAS path, injectable KV for isolated integration tests. */
+export async function commitLabCampaignEventInKv(kv:Deno.Kv,args:{
+ projectId:string;sessionId:string;expectedRevision:number;
+ event:LabTurnWithPlan;expectedPackRevision?:number;
+},loaded?:{pack:LabPack;revision:number}){
  const {projectId,sessionId,expectedRevision,event,expectedPackRevision}=args;
  if(!projectRe.test(projectId)||!projectRe.test(sessionId)||!Number.isSafeInteger(expectedRevision)||
   expectedRevision<1)throw Error("LAB_EVENT_SESSION_REF_INVALID");
- const {pack,revision:packRevision}=await loadLabProjectFromKv(projectId);
- if(expectedPackRevision!==undefined&&expectedPackRevision!==packRevision)
-  throw Error("LAB_REVISION_CONFLICT");
- const kv=await storage(),key=[ROOT,"sessions",projectId,sessionId];
+ const project=await kv.get<LabStored>(keyOf(projectId));
+ if(!project.value)throw Error("LAB_PROJECT_NOT_FOUND");
+ const packRevision=project.value.revision;
+ if((expectedPackRevision!==undefined&&expectedPackRevision!==packRevision)||
+    (loaded&&loaded.revision!==packRevision))throw Error("LAB_REVISION_CONFLICT");
+ const pack=loaded?.pack??await decodeLabPack(project.value);
+ const key=[ROOT,"sessions",projectId,sessionId];
  const existing=await kv.get<LabSessionStored>(key);
  if(!existing.value)throw Error("LAB_SESSION_NOT_FOUND");
  const retired=await kv.get<LabArchiveMarker>(archivedLabKey(projectId,sessionId));
@@ -239,26 +254,95 @@ export async function commitLabCampaignEvent(args:{
  const refKey=[ROOT,"event_refs",projectId,sessionId,event.sourceRef];
  const ref=await kv.get(refKey);
  if(ref.value)throw Error("LAB_EVENT_ALREADY_APPLIED");
+ const restoreKey=[ROOT,"migration_restore_points",projectId,sessionId];
+ const actionKind=event.playerSystem?.kind;
+ const isMigration=actionKind==="chroma_v4_migrate",isRollback=actionKind==="chroma_v4_rollback";
+ let restoreEntry:Deno.KvEntryMaybe<MigrationRestorePoint>|undefined;
+ let restorePoint:MigrationRestorePoint|undefined;
+ if(isMigration||isRollback){
+  const allowed=new Set(["sourceRef","time","kind","summary","knownBy","gmConfirmed","playerSystem"]);
+  if(event.gmConfirmed!==true||event.playerSystem?.playerApproved!==true||
+     event.kind!==(isMigration?"schema_migration":"schema_rollback")||
+     event.time!==session.gameClock||event.knownBy.length!==0||
+     Object.keys(event).some(k=>!allowed.has(k)))throw Error("CHROMA_MIGRATION_METADATA_ONLY_REQUIRED");
+  restoreEntry=await kv.get<MigrationRestorePoint>(restoreKey);
+ }
+ if(isRollback){
+  const point=restoreEntry?.value;
+  if(!point||point.schema!=="CHROMA_MIGRATION_RESTORE_POINT_V1"||point.rolledBack||
+     point.projectId!==projectId||point.sessionId!==sessionId||point.migratedRevision!==expectedRevision||
+     point.packRevision!==packRevision||await migrationStateHash(pack)!==point.packSha256)
+   throw Error("CHROMA_ROLLBACK_NOT_AT_MIGRATION_REVISION");
+  const original=await decodeLabSessionFromKv(kv,projectId,sessionId,point.originalHead,pack);
+  if(await migrationStateHash(original)!==point.sessionSha256)throw Error("CHROMA_RESTORE_POINT_CORRUPT");
+  const {playerSystem:_,...journal}=event;
+  const restored=applyGuardedLabEvent(original,pack,journal,expectedRevision).next;
+  const encoded=await encodeLabSession(restored,pack,expectedRevision+1);
+  const head=await prepareLabSessionHead(kv,projectId,sessionId,encoded);
+  const done=await kv.atomic()
+   .check({key,versionstamp:existing.versionstamp})
+   .check({key:keyOf(projectId),versionstamp:project.versionstamp})
+   .check({key:archivedLabKey(projectId,sessionId),versionstamp:retired.versionstamp})
+   .check({key:restoreKey,versionstamp:restoreEntry!.versionstamp})
+   .check({key:refKey,versionstamp:ref.versionstamp})
+   .set(key,head).set(refKey,{revision:expectedRevision+1,event})
+   .set(restoreKey,{...point,rolledBack:true,rollbackRevision:expectedRevision+1}).commit();
+  if(!done.ok)throw Error("LAB_REVISION_CONFLICT");
+  return {ok:true as const,revision:expectedRevision+1,projectId,sessionId,sourceRef:event.sourceRef,
+   gameClock:restored.gameClock,rememberedBy:[] as string[],legacySaveTouched:false as const,
+   roleplayGuardRequired:false,roleplayGuardVerified:false};
+ }
  const planned=planLabEventArchive(session);
- const checked=applyGuardedLabEvent(planned.working,pack,event,expectedRevision);
+ // Historical proof is resolved from the immutable campaign journal, never
+ // from caller-supplied evidence or only from the bounded active event window.
+ let historicProof:LabSession["events"][number]|undefined;
+ const action=event.playerSystem;
+ if(action&&["title_grant","rune_challenge","rune_evolve"].includes(action.kind)){
+  const proofRef=action.args?.proofRef;
+  if(typeof proofRef!=="string"||!/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(proofRef)||proofRef===event.sourceRef)
+   throw Error("CHROMA_HISTORIC_PROOF_REF_INVALID");
+  const saved=await kv.get<{revision:number;event:LabConfirmedEvent}>(
+   [ROOT,"event_refs",projectId,sessionId,proofRef]);
+  if(!saved.value||saved.value.revision>expectedRevision||
+     saved.value.event.gmConfirmed!==true||saved.value.event.sourceRef!==proofRef)
+   throw Error("CHROMA_HISTORIC_PROOF_NOT_FOUND");
+  historicProof=saved.value.event;
+ }
+ let receipt:MigrationBackupReceipt|undefined;
+ let backupEntry:Deno.KvEntryMaybe<MigrationBackupReceipt>|undefined;
+ if(action?.kind==="chroma_v4_migrate"){
+  backupEntry=await kv.get<MigrationBackupReceipt>([ROOT,"migration_backups",projectId,sessionId]);
+  receipt=requireMigrationReceipt(backupEntry.value??await receiptForVerifiedSnapshot(session,pack,expectedRevision,packRevision),projectId,sessionId);
+  if(restoreEntry?.value)throw Error("CHROMA_RESTORE_POINT_ALREADY_EXISTS");
+  restorePoint={schema:"CHROMA_MIGRATION_RESTORE_POINT_V1",projectId,sessionId,
+   originalRevision:expectedRevision,migratedRevision:expectedRevision+1,packRevision,
+   packSha256:await migrationStateHash(pack),sessionSha256:await migrationStateHash(session),
+   backupSha256:receipt.sha256,originalHead:existing.value};
+  if(receipt.revision!==expectedRevision)throw Error("CHROMA_BACKUP_REVISION_CONFLICT");
+ }
+ const checked=applyGuardedLabEvent(planned.working,pack,event,expectedRevision,historicProof,receipt);
  const next=checked.next;
  const value=await encodeLabSession(next,pack,expectedRevision+1);
  const head=await prepareLabSessionHead(kv,projectId,sessionId,value);
  let tx=kv.atomic()
+  .check({key:keyOf(projectId),versionstamp:project.versionstamp})
   .check({key,versionstamp:existing.versionstamp})
   .check({key:archivedLabKey(projectId,sessionId),versionstamp:retired.versionstamp})
   .check({key:refKey,versionstamp:ref.versionstamp})
   .set(key,head)
   .set(refKey,{revision:expectedRevision+1,event});
+ if(backupEntry)tx=tx.check({key:backupEntry.key,versionstamp:backupEntry.versionstamp})
+  .set(backupEntry.key,receipt);
+ if(restorePoint&&restoreEntry)tx=tx.check({key:restoreKey,versionstamp:restoreEntry.versionstamp}).set(restoreKey,restorePoint);
  if(planned.archive){
   const archiveKey=[ROOT,"event_archive",projectId,sessionId,planned.archive.index];
   tx=tx.set(archiveKey,planned.archive.events);
  }
  const done=await tx.commit();
  if(!done.ok)throw Error("LAB_REVISION_CONFLICT");
- return {ok:true,revision:value.revision,projectId,sessionId,
+ return {ok:true as const,revision:value.revision,projectId,sessionId,
   sourceRef:event.sourceRef,gameClock:next.gameClock,
-  rememberedBy:event.observations?.map(x=>x.npcId)??[],legacySaveTouched:false,
+  rememberedBy:event.observations?.map(x=>x.npcId)??[],legacySaveTouched:false as const,
   roleplayGuardRequired:checked.guardRequired,roleplayGuardVerified:checked.guardVerified};
 }
 
@@ -331,9 +415,9 @@ export async function readLabConfirmedEvent(projectId:string,sessionId:string,so
   event:result.value.event,readOnly:true,legacySaveTouched:false};
 }
 
-export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
+export async function handleRpgLabHttp(req:Request,url:URL,commitEvent=commitLabCampaignEvent,openStorage=storage):Promise<Response>{
  try{
-  const kv=await storage(),path=url.pathname;
+  const kv=await openStorage(),path=url.pathname;
   if(path==="/rpg-lab/v1/campaigns"&&req.method==="GET")
    return reply(await listLabCampaignInventory(url.searchParams.get("includeArchived")==="true"));
   if(path==="/rpg-lab/v1/campaigns/archive"&&req.method==="POST"){
@@ -472,7 +556,7 @@ export async function handleRpgLabHttp(req:Request,url:URL):Promise<Response>{
    if(!obj(data)||!Number.isSafeInteger(data.expectedRevision))
     throw Error("LAB_REVISION_CONFLICT");
    try{
-    return reply(await commitLabCampaignEvent({
+    return reply(await commitEvent({
      projectId,sessionId,expectedRevision:data.expectedRevision as number,
      expectedPackRevision:data.expectedPackRevision as number|undefined,
      event:data.event as LabConfirmedEvent,

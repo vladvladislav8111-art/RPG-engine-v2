@@ -1,3 +1,5 @@
+import {recoverChromaCatalogMaterial} from "./chroma_material_recovery.ts";
+import {getV4MonsterCard} from "./live_monster_profile.ts";
 /** Optional System bonus loot after a verified monster defeat.
  * The ordinary magic stone is a SEPARATE recoverable item (and can become
  * a shadow). No duplicate rewards from one defeated monster.
@@ -6,6 +8,9 @@
 import type {JinwooState} from "./shadow_monarch_rules.ts";
 import {ORARIO_MONSTER_BY_ID} from "./danmachi_player_balance.ts";
 export const SYSTEM_MONSTER_DROPS={
+ // These supported legacy monsters have no approved optional bonus table.
+ // Empty tables grant nothing; ordinary physical loot remains separate.
+ imp:[],needle_rabbit:[],orc:[],purple_moth:[],
  goblin:[{id:"wound_dressing",weight:7},{id:"rusty_dagger_drop",weight:3}],
  kobold:[{id:"potion_fatigue",weight:5},{id:"daggers_throwing",weight:2}],
  dungeon_lizard:[{id:"potion_hp_small",weight:4},{id:"lizard_scale",weight:6}],
@@ -42,14 +47,21 @@ export function recordConfirmedMonsterDrop(s:JinwooState,e:{
   s.appliedRewardRefs.includes(e.sourceRef)||
   !s.defeatedTargetRefs.includes(e.monsterRef)||
   (s.systemDropRefs??[]).includes(e.monsterRef)||
-  !Object.hasOwn(SYSTEM_MONSTER_DROPS,e.monsterId))
+  (!Object.hasOwn(SYSTEM_MONSTER_DROPS,e.monsterId)&&
+    !(s.storyFlags.includes("chroma_crossover_v4")&&getV4MonsterCard(e.monsterId))))
   throw Error("PLAYER_MONSTER_DROP_NOT_EARNED");
+ if(s.storyFlags.includes("chroma_crossover_v4")&&getV4MonsterCard(e.monsterId)?.origin==="DanMachi")
+  return recoverChromaCatalogMaterial(s,e);
+ if(s.storyFlags.includes("chroma_crossover_v4")&&s.defeatEvidence?.[e.monsterRef]?.monsterId!==e.monsterId)
+  throw Error("CHROMA_MATERIAL_DEFEAT_PROOF_REQUIRED");
  // A Kasaka keepsake is a canonical two-piece boss reward, never two
  // independent loot rolls nor an item recoverable from a different kill.
  if(e.monsterId==="system.kasaka"&&
     s.defeatEvidence?.[e.monsterRef]?.monsterId!=="system.kasaka")
   throw Error("PLAYER_KASAKA_DROP_BOSS_PROOF_REQUIRED");
- const table=SYSTEM_MONSTER_DROPS[e.monsterId as keyof typeof SYSTEM_MONSTER_DROPS];
+ const source=SYSTEM_MONSTER_DROPS[e.monsterId as keyof typeof SYSTEM_MONSTER_DROPS];
+ const table=s.storyFlags.includes("chroma_crossover_v4")?
+  source.filter(row=>!row.id.startsWith("rune_")):source;
  const roll=draw(e.monsterRef+"|"+e.monsterId);
  let remaining=roll,itemId:string|null=null;
  for(const row of table){remaining-=row.weight;if(remaining<=0){

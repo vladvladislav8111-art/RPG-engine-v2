@@ -1,3 +1,4 @@
+import type {MigrationBackupReceipt} from "./migration_receipt.ts";
 /**
  * Confirmed, source-tagged, CAS-ready RPG Lab turn event.
  * Pure function. Never grants preview loot, rewrites canon or touches legacy saves.
@@ -130,7 +131,7 @@ function nextTimeValid(after:string,before:string):boolean{
  return a!==null&&b!==null&&a>=b;
 }
 
-export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:LabConfirmedEvent):LabSession{
+export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:LabConfirmedEvent,historicProof?:LabSession["events"][number],backupReceipt?:MigrationBackupReceipt):LabSession{
  validateLabSession(session,pack);
  if(!record(event)||event.gmConfirmed!==true||!good(event.sourceRef)||!good(event.kind)||
     !phrase(event.time,100)||!phrase(event.summary,600)||!bounded(event.knownBy,60))
@@ -795,7 +796,7 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
    }
  if(event.playerSystem!==undefined){
   next.player.jinwoo=applyOrarioPlayerAction(session,event.playerSystem,
-    event.sourceRef,event.time);
+    event.sourceRef,event.time,historicProof,backupReceipt);
  }
  if(event.gmPostRef!==undefined){
   const cadence=next.gmPostCadence??{count:0,lastPostRef:"",recentPostRefs:[]};

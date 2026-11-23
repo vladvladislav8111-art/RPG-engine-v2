@@ -182,7 +182,7 @@ export interface JinwooMagicStone{
  guildValueValis:number;corruptedMana:boolean;
  /** Optional validated Linos-model provenance for new Chroma stones only. */
  sizePct?:number;saturationPct?:number;integrityPct?:number;
- pricingModel?:"chroma_linos_v1";
+ pricingModel?:"chroma_linos_v1"|"chroma_bestiary_v2";
  intact:boolean;state:"held"|"consumed_by_shadow"|"sold";
  collectedRef:string;
 }
@@ -201,6 +201,9 @@ export interface PlayerCombatEncounter{
  enemyHp:number;round:number;startedRef:string;
  irregularRef?:string;lastCombatRef?:string;
  blindedUntilRound?:number;
+ /** V4 enemy effects persist between authenticated combat exchanges. */
+ bleedingWounds?:{damageFractionPerSecond:number;secondsRemaining:number}[];
+ paralyzedLocations?:{location:string;secondsRemaining:number}[];
 }
 export interface JinwooState{
  schema:"DANMACHI_JINWOO_PREP_V1";
@@ -216,6 +219,10 @@ export interface JinwooState{
  skillMastery?:Record<string,import("./orario_player_skills.ts").SkillMasteryProgress>;
  combatTraining?:Record<string,{uses:number;enemyRefs:string[];lastPracticeRef:string}>;
  activeEncounter?:PlayerCombatEncounter;
+ /** Explicitly opt-in v4 schema, never inferred from legacy snapshots. */
+ layeredFalnaV4?:FalnaStateV4|null;
+ crossoverSchema?:"chroma_v4_staged";
+ chromaV4Meta?:ChromaV4Meta;
 
  phase:JinwooPhase;postAscensionInterface:PostAscensionInterface;
  /** The selected new campaign begins here, before the first System panel. */
@@ -286,10 +293,16 @@ export const CHROMA_BALANCE_FLAG="chroma_falna_v2";
 /** Earned with the Double Dungeon's Player awakening, recognized later. */
 export const KANDIARU_BLESSING_FLAG="blessing.kandiaru_poison_immunity";
 const hasChromaBalance=(s:JinwooState)=>s.storyFlags.includes(CHROMA_BALANCE_FLAG);
-export const SYSTEM_XP_FORMULA="100 * level^1.5; CROSSOVER, NOT NOVEL CANON";
-export function xpToNextLevel(level:number):number{
+import {projectFalna as projectFalnaV4,xpToNextLevel as xpNextV4,
+ type FalnaStateV4} from "./crossover_core.ts";
+import {applyV4GodStatus,type ChromaV4Meta} from "./legacy_lab_adapter.ts";
+export const CHROMA_V4_RELEASE_FLAG="chroma_crossover_v4";
+const isChromaV4=(s:JinwooState)=>s.storyFlags.includes(CHROMA_V4_RELEASE_FLAG);
+export const SYSTEM_XP_FORMULA="100*level^1.5; v4 candidate curve is not activated";
+export function xpToNextLevel(level:number,v4=false):number{
  if(!Number.isSafeInteger(level)||level<1||level>10000)
   throw Error("JINWOO_LEVEL_INVALID");
+ // Keep the deployed curve until the candidate 1.75 curve is approved.
  return Math.ceil(100*Math.pow(level,1.5));
 }
 function assertPlayerSystem(s:JinwooState){
@@ -307,7 +320,8 @@ export function awardJinwooEncounter(s:JinwooState,e:{
  assertPlayerSystem(s);requireReward(s,e.sourceRef);
  if(!e.confirmed||!e.gmThreatRated||!e.isNewDefeat||
   !validRef(e.targetRef)||s.defeatedTargetRefs.includes(e.targetRef)||
-  !Number.isSafeInteger(e.xp)||e.xp<0||e.xp>1000000||
+  !Number.isSafeInteger(e.xp)||e.xp<0||
+  e.xp>(isChromaV4(s)?1000000000000:1000000)||
   !Number.isSafeInteger(e.systemGold)||e.systemGold<0||e.systemGold>1000000||
   !["player","shadow"].includes(e.killer))
   throw Error("JINWOO_UNCONFIRMED_XP_OR_KILL");
@@ -323,9 +337,9 @@ export function awardJinwooEncounter(s:JinwooState,e:{
  n.gold+=e.systemGold;
  n.xp+=e.xp;
  let steps=0;
- while(n.xp>=xpToNextLevel(n.systemLevel)){
-  if(++steps>200)throw Error("JINWOO_LEVEL_BATCH_EXCEEDED");
-  n.xp-=xpToNextLevel(n.systemLevel);
+ while(n.xp>=xpToNextLevel(n.systemLevel,isChromaV4(n))){
+  if(++steps>(isChromaV4(n)?10000:200))throw Error("JINWOO_LEVEL_BATCH_EXCEEDED");
+  n.xp-=xpToNextLevel(n.systemLevel,isChromaV4(n));
   n.systemLevel++;
   for(const key of JINWOO_STATS)n.stats[key]++;
   n.freeStatPoints+=5;
@@ -363,7 +377,7 @@ export function completeJinwooDaily(s:JinwooState,e:{
  n.appliedRewardRefs.push(e.sourceRef);n.freeStatPoints+=3;return n;
 }
 export function shopAvailable(s:JinwooState){
- if(s.awaitingActivation)return false;
+ if(s.awaitingActivation||(isChromaV4(s)&&s.systemLevel<20))return false;
  return s.phase!=="true_monarch"||
   s.postAscensionInterface==="crossover_persists";
 }
@@ -523,6 +537,24 @@ export type FalnaProjection={
  explanation:string;
 };
 export function projectJinwooFalna(s:JinwooState):FalnaProjection{
+ if(isChromaV4(s)){
+  if(s.falna.blessed&&(!s.layeredFalnaV4||
+     s.layeredFalnaV4.divineLevel!==s.falna.divineLevel||
+     JSON.stringify(s.layeredFalnaV4.current)!==JSON.stringify(s.falna.status)))
+   throw Error("CHROMA_V4_FALNA_LAYER_MISSING_OR_MISMATCH");
+  const projected=s.falna.blessed?
+   projectFalnaV4(s.layeredFalnaV4!,s.stats):null;
+  return {blessed:s.falna.blessed,
+   divineLevel:s.falna.blessed?s.falna.divineLevel:null,
+   sourceOfCombatPower:"SYSTEM_PLUS_FALNA",
+   display:s.falna.blessed?{...s.falna.status}:null,
+   base:{...s.stats},
+   bonus:projected?.falna??{strength:0,stamina:0,agility:0,perception:0,intelligence:0},
+   total:projected?.combined??{...s.stats},
+   overRank:s.falna.blessed&&Object.values(s.falna.status).some(x=>x>999),
+   explanation:"Фальна v4: каждый уровень сохраняет собственный слой характеристик."
+  };
+ }
  const blessed=s.falna.blessed;
  const r=blessed?s.falna.status:null;
  const chroma=hasChromaBalance(s);
@@ -583,6 +615,14 @@ export function updateJinwooFalna(s:JinwooState,e:{
  if(e.newSkill!==undefined&&
   (!validRef(e.newSkill)||s.falna.skills.includes(e.newSkill)))
   throw Error("JINWOO_FALNA_SKILL_UNVERIFIED");
+ if(isChromaV4(s)){
+  const n=applyV4GodStatus(s as unknown as Parameters<typeof applyV4GodStatus>[0],{
+   sourceRef:e.sourceRef,godId:e.godId,godConfirmed:e.godConfirmed,
+   newStatus:e.newStatus,...(e.levelUpFeatRef?{levelUpFeatRef:e.levelUpFeatRef}:{})
+  },featRef=>s.storyFlags.includes(featRef)) as unknown as JinwooState;
+  if(e.newSkill)n.falna.skills.push(e.newSkill);
+  return n;
+ }
  const n=clone(s);
  n.falna.status={...e.newStatus};
  if(e.levelUpFeatRef!==undefined)n.falna.divineLevel++;

@@ -4,13 +4,15 @@
  * Item armor, weapon bonuses and set slots are CROSSOVER house rules.
  */
 import {JINWOO_STORE,type JinwooState} from "./shadow_monarch_rules.ts";
-import {previewCombatExchange,ORARIO_MONSTER_BY_ID,
+import {previewCombatExchange,monsterForPlayer,
  type CombatMove} from "./danmachi_player_balance.ts";
 type Slot="weapon"|"body"|"shield"|"feet"|"hands"|"cloak"|"neck";
 type Effect={slot:Slot;attack:number;armor:number;speedPenalty:number;
  armorPiercing?:number;skillGate?:string};
 export const SYSTEM_EQUIPMENT_EFFECTS:Readonly<Record<string,Effect>>={
  blade_training:{slot:"weapon",attack:0,armor:0,speedPenalty:0},
+  // A plain steel dagger is already held by Chroma in her documented dual setup.
+  steel_dagger:{slot:"weapon",attack:0,armor:0,speedPenalty:0},
  blade_steel:{slot:"weapon",attack:4,armor:0,speedPenalty:0},
  sword_iron:{slot:"weapon",attack:5,armor:0,speedPenalty:0},
  spear_steel:{slot:"weapon",attack:7,armor:0,speedPenalty:1},
@@ -33,7 +35,7 @@ export const SYSTEM_EQUIPMENT_EFFECTS:Readonly<Record<string,Effect>>={
  cloak_ember:{slot:"cloak",attack:0,armor:2,speedPenalty:0},
  necklace_ward:{slot:"neck",attack:0,armor:1,speedPenalty:0},
 };
-export type Loadout={weaponId?:string;armorIds?:string[]};
+export type Loadout={weaponId?:string;offhandWeaponId?:string;armorIds?:string[]};
 const catalog=Object.fromEntries(JINWOO_STORE.map(x=>[x.id,x]));
 export function previewVerifiedLoadout(s:JinwooState,e:Loadout){
  const ids=[...(e.weaponId?[e.weaponId]:[]),...(e.armorIds??[])];
@@ -45,11 +47,15 @@ export function previewVerifiedLoadout(s:JinwooState,e:Loadout){
   const m=SYSTEM_EQUIPMENT_EFFECTS[id],entry=catalog[id];
   const loadedKnives=id==="daggers_throwing"&&
    (s.ammoRemaining?.daggers_throwing??0)>0;
-  const earnedKasakaFang=id==="kasaka_fang"&&
+   const heldSteelDagger=id==="steel_dagger"&&
+     s.storyFlags.includes("chroma.dual_daggers.verified")&&
+     s.storyFlags.includes("chroma.equipment.kasaka_fang_right")&&
+     (s.inventory.steel_dagger??0)>0;
+   const earnedKasakaFang=id==="kasaka_fang"&&
    (s.systemDropRefs??[]).some(ref=>
     s.defeatEvidence?.[ref]?.monsterId==="system.kasaka");
-  if(!m||(!entry&&!earnedKasakaFang)||
-     ((s.inventory[id]??0)<1&&!loadedKnives))
+   if(!m||(!entry&&!earnedKasakaFang&&!heldSteelDagger)||
+      ((s.inventory[id]??0)<1&&!loadedKnives&&!heldSteelDagger))
    throw Error("PLAYER_EQUIPMENT_NOT_OWNED_OR_UNSUPPORTED");
   if(m.skillGate&&!s.unlockedSkills.includes(m.skillGate))
    throw Error("PLAYER_EQUIPMENT_SKILL_LOCKED");
@@ -75,7 +81,9 @@ export function previewOwnedEquipmentEncounter(s:JinwooState,e:{
  spellMpCost?:number;spellId?:string;confirmedIrregularRef?:string;
 }){
  const gear=previewVerifiedLoadout(s,e.loadout);
- const mob=ORARIO_MONSTER_BY_ID[e.monsterId];
+ const mob=monsterForPlayer(s,e.monsterId,{floor:e.floor,
+  monsterRef:s.activeEncounter?.enemyRef??"preview."+e.monsterId,
+  irregularRef:e.confirmedIrregularRef});
  if(!mob)throw Error("PLAYER_EQUIPMENT_MONSTER_UNKNOWN");
  const piercing=gear.armorPiercing>0&&mob.armor>=5?
   Math.min(gear.armorPiercing,mob.armor):0;

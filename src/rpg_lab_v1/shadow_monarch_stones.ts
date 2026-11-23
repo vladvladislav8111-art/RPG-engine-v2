@@ -11,6 +11,7 @@
 import type {JinwooMagicStone,JinwooShadow,JinwooState} from
  "./shadow_monarch_rules.ts";
 import {shadowCapacity} from "./shadow_monarch_rules.ts";
+import {quoteChromaV4Stone} from "./chroma_v4_stone_prices.ts";
 const valid=(x:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(x);
 const clone=(s:JinwooState)=>structuredClone(s);
 function gate(s:JinwooState,sourceRef:string){
@@ -24,7 +25,7 @@ export type AcquiredStone={
  verifiedProvenance?:boolean;paidValis?:number;
  powerTier:JinwooShadow["powerTier"];guildValueValis:number;
  sizePct?:number;saturationPct?:number;integrityPct?:number;
- pricingModel?:"chroma_linos_v1";
+ pricingModel?:"chroma_linos_v1"|"chroma_bestiary_v2";
  corruptedMana:boolean;
 };
 export function addConfirmedMagicStone(s:JinwooState,e:AcquiredStone):JinwooState{
@@ -42,11 +43,22 @@ export function addConfirmedMagicStone(s:JinwooState,e:AcquiredStone):JinwooStat
   !e.monsterName.trim()||
   !Number.isSafeInteger(e.powerRating)||e.powerRating<1||e.powerRating>10000||
   !Number.isSafeInteger(e.guildValueValis)||e.guildValueValis<1||
-  e.guildValueValis>10000000||!!s.magicStones[e.stoneId]||
+  e.guildValueValis>(s.storyFlags.includes("chroma_crossover_v4")&&
+    e.pricingModel==="chroma_bestiary_v2"?250000000:10000000)||
+  !!s.magicStones[e.stoneId]||
   Object.values(s.magicStones).some(v=>v.monsterRef===e.monsterRef)||
   s.shadowRoster.some(sh=>sh.id===e.monsterRef)||
   Object.keys(s.magicStones).length>=500)
   throw Error("PLAYER_MAGIC_STONE_LOOT_NOT_VERIFIED");
+ if(e.pricingModel==="chroma_bestiary_v2"){
+  const proof=s.defeatEvidence?.[e.monsterRef];
+  if(!s.storyFlags.includes("chroma_crossover_v4")||!proof||
+     (e.acquisition!==undefined&&e.acquisition!=="own_kill"))
+   throw Error("CHROMA_V4_STONE_PROOF_REQUIRED");
+  const quote=quoteChromaV4Stone({monsterId:proof.monsterId,
+   sizePct:e.sizePct!,saturationPct:e.saturationPct!,integrityPct:e.integrityPct!});
+  if(quote.valis!==e.guildValueValis)throw Error("CHROMA_V4_STONE_QUOTE_MISMATCH");
+ }
  const n=clone(s);
  n.magicStones[e.stoneId]={
   id:e.stoneId,monsterRef:e.monsterRef,monsterName:e.monsterName,
@@ -54,7 +66,8 @@ export function addConfirmedMagicStone(s:JinwooState,e:AcquiredStone):JinwooStat
   powerTier:e.powerTier,guildValueValis:e.guildValueValis,
   corruptedMana:e.corruptedMana,intact:true,state:"held",
   collectedRef:e.sourceRef,
-  ...(e.pricingModel==="chroma_linos_v1"?{
+  ...((e.pricingModel==="chroma_linos_v1"||
+     e.pricingModel==="chroma_bestiary_v2")?{
    pricingModel:e.pricingModel,sizePct:e.sizePct,
    saturationPct:e.saturationPct,integrityPct:e.integrityPct
   }:{}),

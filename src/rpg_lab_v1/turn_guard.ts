@@ -1,3 +1,4 @@
+import type {MigrationBackupReceipt} from "./migration_receipt.ts";
 /** Atomic roleplay turn gate for opt-in / newly created strict RPG Lab sessions.
  *
  * The narration plan is structured GM metadata, never player-facing prose.
@@ -55,8 +56,8 @@ function activeNpcRoles(event:LabConfirmedEvent){
  return sortedUnique(participants);
 }
 export function applyGuardedLabEvent(session:LabSession,pack:LabPack,
- event:LabTurnWithPlan,expectedRevision:number){
- const changed=applyConfirmedLabEvent(session,pack,event);
+ event:LabTurnWithPlan,expectedRevision:number,historicProof?:LabSession["events"][number],backupReceipt?:MigrationBackupReceipt){
+ const changed=applyConfirmedLabEvent(session,pack,event,historicProof,backupReceipt);
  if(session.roleplayGuard!=="strict")
   return {next:changed,guardRequired:false,guardVerified:false,checkedActorIds:[]};
  let cycleVerified=false;

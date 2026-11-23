@@ -10,7 +10,7 @@ test("first instant dungeon is actually earnable from the daily randomized rewar
  s.completedDailyDays.push("0");
  s.inventory.system_daily_box=1;
  const first=openConfirmedDailyBox(s,{
-  sourceRef:"evt.box.key.8",playerApproved:true,confirmedOpen:true});
+  sourceRef:"evt.box.key.10",playerApproved:true,confirmedOpen:true});
  assert.equal(first.reward,"system_instant_dungeon_key");
  assert.equal(first.next.inventory.system_instant_dungeon_key,1);
  assert.ok(first.next.storyFlags.includes("quest.reward.instant_key_from_box"));
@@ -34,8 +34,8 @@ test("a narrative story flag alone cannot create a phantom key or duplicate rewa
  }),/NOT_EARNED/);
  s.inventory.system_daily_box=1;
  const repeated=openConfirmedDailyBox(s,{
-  sourceRef:"evt.box.key.8",playerApproved:true,confirmedOpen:true});
- assert.equal(repeated.reward,"wound_dressing");
+  sourceRef:"evt.box.key.10",playerApproved:true,confirmedOpen:true});
+ assert.equal(repeated.reward,"system_daily_handkerchief");
  assert.equal(repeated.next.inventory.system_instant_dungeon_key??0,0);
- assert.equal(repeated.next.inventory.wound_dressing,1);
+ assert.equal(repeated.next.inventory.system_daily_handkerchief,1);
 });

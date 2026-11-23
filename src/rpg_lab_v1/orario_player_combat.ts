@@ -1,3 +1,4 @@
+import {boundedChildRef} from "./event_child_refs.ts";
 /** Event-sourced freeform skirmish integration.
  * One confirmed exchange can represent a short narration sequence, but all
  * mechanical outcomes remain deterministic and derived from a saved action.
@@ -5,7 +6,7 @@
  */
 import type {JinwooState,PlayerCombatEncounter} from "./shadow_monarch_rules.ts";
 import {
- ORARIO_MONSTER_BY_ID,previewCombatExchange,commitBalancedMonsterDefeat,
+  monsterForPlayer,previewCombatExchange,commitBalancedMonsterDefeat,
  type CombatMove
 } from "./danmachi_player_balance.ts";
 import {previewOwnedEquipmentEncounter,type Loadout} from
@@ -14,7 +15,14 @@ import {previewInjuryPenalties,applyConfirmedInjury} from
  "./orario_player_survival.ts";
 import {getPlayerSkillBattleModifiers,recordConfirmedSkillPractice,
  recordConfirmedCombatTechnique,previewDaggerTechnique} from "./orario_player_skills.ts";
-import {effectiveJinwooMaxHp} from "./shadow_monarch_rules.ts";
+import {effectiveJinwooMaxHp,xpToNextLevel} from "./shadow_monarch_rules.ts";
+import {activeTitleImpact} from "./title_rules_v45.ts";
+import {validScopedVitalProof} from "./v47_vital_hit_proof.ts";
+import {projectJinwooFalna} from "./shadow_monarch_rules.ts";
+import {toV4Player} from "./legacy_lab_adapter.ts";
+import {applyV46UnbrokenDefense,type LiveV46Save} from "./rune_title_actions_v46.ts";
+import {readCombatCondition,applyConfirmedImpacts,advanceEnemyStatuses,
+ paralysisCounterPenalty,type ConfirmedImpact} from "./chroma_live_combat_status.ts";
 import {isSystemEncounterId,systemEncounterEntryAllowed} from "./orario_system_encounters.ts";
 const safeRef=(x:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(x);
 function hash(ref:string,salt:string):number{
@@ -38,7 +46,8 @@ export function startConfirmedOrarioBattle(s:JinwooState,e:{
   !safeRef(e.monsterRef)||s.appliedRewardRefs.includes(e.sourceRef)||
   s.defeatedTargetRefs.includes(e.monsterRef))
   throw Error("PLAYER_BATTLE_NOT_AUTHORIZED");
- const mob=ORARIO_MONSTER_BY_ID[e.monsterId];
+ const mob=monsterForPlayer(s,e.monsterId,{
+  floor:e.floor,monsterRef:e.monsterRef,irregularRef:e.irregularRef});
  if(!mob)throw Error("PLAYER_BATTLE_ENEMY_UNKNOWN");
  if(isSystemEncounterId(e.monsterId)&&
   !systemEncounterEntryAllowed(s,e.monsterId))
@@ -63,9 +72,14 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  confirmedPaintAvailable?:boolean;
  confirmedWeakPointHit?:boolean;
  /** Explicitly described multi-cut sequence, not a free automatic strike. */
- confirmedComboAttack?:boolean;
+  confirmedComboAttack?:boolean;
+  targetLocation?:string;
+  /** Requires a preexisting immutable GM/journal proof flag, not this declaration. */
+  vitalProofRef?:string;
+  vitalTarget?:"brain"|"heart"|"magic_stone";
 }):BattleResolution{
- const battle=s.activeEncounter,mob=battle&&ORARIO_MONSTER_BY_ID[battle.monsterId];
+ const battle=s.activeEncounter,mob=battle&&monsterForPlayer(s,battle.monsterId,{
+  floor:battle.floor,monsterRef:battle.enemyRef,irregularRef:battle.irregularRef});
  if(!battle||!mob||!e.playerCommitted||!safeRef(e.sourceRef)||
   s.appliedRewardRefs.includes(e.sourceRef)||s.hp<=0||s.awaitingActivation)
   throw Error("PLAYER_EXCHANGE_NOT_AUTHORIZED");
@@ -76,7 +90,20 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
   throw Error("PLAYER_DAGGER_COMBO_REQUIRES_STRIKE");
  if(e.tacticalApproach==="paint_blind"&&e.confirmedPaintAvailable!==true)
   throw Error("PLAYER_PAINT_NOT_CONFIRMED");
- const rolls={player:hash(e.sourceRef,"player"),enemy:hash(e.sourceRef,"enemy")};
+  const v4=s.storyFlags.includes("chroma_crossover_v4");
+  if(e.loadout.offhandWeaponId&&(!v4||e.move!=="strike"||
+     e.loadout.offhandWeaponId===e.loadout.weaponId))
+   throw Error("ORARIO_V4_OFFHAND_NOT_AUTHORIZED");
+  const vitalScoped=e.vitalTarget!==undefined&&battle!==undefined&&
+   validScopedVitalProof(e.vitalProofRef,{
+    sourceRef:e.sourceRef,encounterStartedRef:battle.startedRef,
+    enemyRef:battle.enemyRef,monsterId:battle.monsterId,
+    targetLocation:e.targetLocation??"",vitalTarget:e.vitalTarget,
+    hasMagicStone:!isSystemEncounterId(battle.monsterId)});
+  if(e.vitalTarget!==undefined&&(!v4||!vitalScoped||
+     e.confirmedWeakPointHit!==true))
+   throw Error("ORARIO_V47_VITAL_HIT_UNVERIFIED");
+  const rolls={player:hash(e.sourceRef,"player"),enemy:hash(e.sourceRef,"enemy")};
  const next=structuredClone(s);
  const active=next.activeEncounter!;
  const injury=previewInjuryPenalties(next);
@@ -87,10 +114,21 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  // Expired System skills never affect combat, and their modifier snapshot
  // cannot mutate base System attributes or permanently award levels.
  const modifiers=getPlayerSkillBattleModifiers(next,minute);
+ const beastForTitle=/wolf|kobold|silverback|beast/.test(mob.id);
+ const wolfTitleBoost=v4&&beastForTitle&&
+  next.chromaV4Meta?.activeTitle==="wolf_slayer"&&
+  next.chromaV4Meta.titleIds.includes("wolf_slayer")?1.4:1;
+ const rawTotal=wolfTitleBoost>1?projectJinwooFalna(next):null;
+ const boost=(key:keyof JinwooState["stats"])=>(rawTotal?
+  Math.max(0,Math.round(rawTotal.total[key]*wolfTitleBoost)-rawTotal.bonus[key]):
+  next.stats[key]);
  const battleStats={...next,stats:{...next.stats,
-  agility:next.stats.agility+modifiers.agilityBonus}};
+  strength:boost("strength"),stamina:boost("stamina"),
+  agility:boost("agility")+modifiers.agilityBonus,
+  perception:boost("perception"),intelligence:boost("intelligence")}};
  const daggerFighting=e.move==="strike"&&(
   e.loadout.weaponId?.includes("dagger")===true||
+  e.loadout.weaponId==="kasaka_fang"||
   (!e.loadout.weaponId&&next.storyFlags.includes("chroma.dual_daggers.verified")));
  if(e.confirmedComboAttack===true&&!daggerFighting)
   throw Error("PLAYER_DAGGER_COMBO_REQUIRES_DAGGERS");
@@ -125,7 +163,8 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
     [ammoId]:remaining-1};
   }
  }
- const chance=wear.exchange.hitChancePercent;
+  const chance=wear.exchange.hitChancePercent;
+  const enemyHpBeforeV4=active.enemyHp;
  let dealt=0,taken=0,daggerComboBonusDamage=0,injuryRef:undefined|string;
  if(e.move==="retreat"){
   const evade=Math.max(10,Math.min(92,Math.round(45+
@@ -159,15 +198,71 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
     dealt+=daggerComboBonusDamage;
    }
   }
+  if(s.storyFlags.includes("chroma_crossover_v4")&&s.chromaV4Meta){
+   const tags:string[]=[];
+   if(/wolf|kobold|silverback|beast/.test(mob.id))tags.push("beast");
+   if(/ant|spider|mantis|arachne/.test(mob.id))tags.push("chitin");
+   if(/goliath|giant|udaius|titan/.test(mob.id))tags.push("giant");
+   if(mob.armor>=10)tags.push("armor");
+   const title=activeTitleImpact(toV4Player(next as unknown as LiveV46Save),{
+    tags,weakPointConfirmed:e.confirmedWeakPointHit===true&&
+     vitalScoped,
+    jointStrikeConfirmed:e.confirmedWeakPointHit===true,
+    physicalAttack:e.move==="strike"});
+   dealt=Math.max(1,Math.round(dealt*title.physicalDamageMultiplier));
+   dealt+=Math.round(mob.armor*1.6*title.armorIgnoreFraction);
+  }
   active.enemyHp=Math.max(0,active.enemyHp-dealt);
  }
- const cost=wear.exchange.attackerResourceCost;
+  // V4 only: independently validate the second held blade, calculate its
+  // own hit roll and damage, then advance persisted bleed and paralysis.
+  let v4ParalysisPenalty=0,v4DirectLanded=false;
+  if(v4&&e.move!=="retreat"){
+   const impacts:ConfirmedImpact[]=[];
+   const loc=e.targetLocation??"torso";
+   const confirmedVital=e.vitalTarget!==undefined&&
+     e.vitalProofRef!==undefined&&vitalScoped;
+   if(dealt>0&&e.move==="strike")impacts.push({
+    weaponId:e.loadout.weaponId??"unarmed",attackLanded:true,penetrated:true,
+    physicalDamage:dealt,location:loc,
+    ...(confirmedVital?{confirmedVitalEvidence:true,weakPoint:e.vitalTarget}:{}),
+   });
+   if(e.move==="strike"&&e.loadout.offhandWeaponId&&active.enemyHp>0){
+    const off=previewOwnedEquipmentEncounter(battleStats,{
+     monsterId:battle.monsterId,floor:battle.floor,
+     loadout:{weaponId:e.loadout.offhandWeaponId},move:"strike",
+     positionBonus:(e.positionBonus??0)+modifiers.positionBonus-injury.speedPenalty,
+     ...(e.proficiencyBonus!==undefined?{proficiencyBonus:e.proficiencyBonus}:{}),
+     ...(battle.irregularRef?{confirmedIrregularRef:battle.irregularRef}:{})
+    });
+    if(hash(e.sourceRef,"offhand_hit")<=off.exchange.hitChancePercent){
+     const offDamage=Math.max(1,off.exchange.damageIfHit-injury.attackPenalty);
+     impacts.push({weaponId:e.loadout.offhandWeaponId,attackLanded:true,
+      penetrated:true,physicalDamage:offDamage,location:loc});
+     next.fatigue=Math.min(100,next.fatigue+off.exchange.attackerResourceCost.fatigue);
+    }
+   }
+   const initial=readCombatCondition({enemyHp:enemyHpBeforeV4,
+    enemyMaxHp:mob.hp,physiology:mob.kind==="monster_rex"?"large":"ordinary",
+    hasMagicStone:!isSystemEncounterId(battle.monsterId),
+    status:{bleedingWounds:active.bleedingWounds,
+     paralyzedLocations:active.paralyzedLocations}});
+   v4DirectLanded=impacts.length>0;
+   const inflicted=applyConfirmedImpacts(initial,impacts);
+   const advanced=advanceEnemyStatuses(inflicted.target,1);
+   active.enemyHp=advanced.hp;
+   active.bleedingWounds=advanced.bleedingWounds;
+   active.paralyzedLocations=advanced.paralyzedLocations;
+   v4ParalysisPenalty=paralysisCounterPenalty(advanced);
+   dealt=enemyHpBeforeV4-active.enemyHp;
+  }
+  const cost=wear.exchange.attackerResourceCost;
  if(cost.mp>next.mp)throw Error("PLAYER_BATTLE_MP_INSUFFICIENT");
  next.mp-=cost.mp;next.fatigue=Math.min(100,next.fatigue+cost.fatigue);
  active.round++;
  active.lastCombatRef=e.sourceRef;
  // Credit one source-attested success per enemy, not every hit or activation.
- if(dealt>0&&e.move==="strike"){
+ if(dealt>0&&e.move==="strike"&&(!v4||v4DirectLanded)){
   const speedSkill=modifiers.currentlyActive.includes("quicksilver")?"quicksilver":
    modifiers.currentlyActive.includes("sprint")?"sprint":null;
   if(speedSkill)next.skillMastery=recordConfirmedSkillPractice(next,{
@@ -210,8 +305,10 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
   return {next:raised,rolls,dealt,taken,outcome:"victory",
    daggerComboBonusDamage,
    xpGranted:raised.systemLevel===oldLevel?raised.xp-oldXp:
-    // Level-up consumed prior XP: report awarded total via one preview.
-    0,
+    // Reconstruct total awarded XP across all crossed levels.
+    Array.from({length:raised.systemLevel-oldLevel},(_,i)=>oldLevel+i)
+      .reduce((sum,l)=>sum+xpToNextLevel(l,raised.storyFlags.includes("chroma_crossover_v4")),0)
+      +raised.xp-oldXp,
    systemGoldGranted:raised.gold-oldGold};
  }
  // Real distance and visibility decide whether a counterattack is possible.
@@ -219,12 +316,22 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
   battleStats.stats.agility>=mob.combat.agility*1.2;
  const blinded=active.blindedUntilRound!==undefined&&
   active.round<=active.blindedUntilRound;
- const counterChance=outOfReach?0:Math.max(0,
+  let counterChance=outOfReach?0:Math.max(0,
   wear.exchange.counterHitChancePercent-(blinded?45:0)-
   Math.round((modifiers.reactionMultiplier-1)*50)-
   (next.unlockedSkills.includes("combat_evasion")?4:0)-
-  (daggerFighting?Math.round(daggerTechnique.attackSpeedBonusPercent/4):0));
- if(rolls.enemy>counterChance&&counterChance>0&&
+   (daggerFighting?Math.round(daggerTechnique.attackSpeedBonusPercent/4):0)-
+   v4ParalysisPenalty);
+  if(v4&&next.chromaV4Meta?.runeRuntime){
+   const runes=next.chromaV4Meta.runeRuntime;
+   const active=runes.effects.filter(x=>x.targetId===battle.enemyRef&&
+    x.expiresSecond>runes.nowSecond);
+   if(active.some(x=>x.type==="stagger"||x.type==="webbed"||
+    (x.type==="paralyzed"&&x.location==="whole_body")))counterChance=0;
+   else counterChance=Math.max(0,counterChance-active.reduce((n,x)=>n+
+    (x.type==="paralyzed"?20:0),0));
+  }
+  if(rolls.enemy>counterChance&&counterChance>0&&
     !outOfReach&&e.move==="strike"){
   const trained=recordConfirmedCombatTechnique(next,{kind:"evasion",
    enemyRef:battle.enemyRef,sourceRef:e.sourceRef,confirmedEffective:true});
@@ -242,7 +349,24 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
   const maxHp=effectiveJinwooMaxHp(next);
   if(next.unlockedSkills.includes("tenacity")&&next.hp<=maxHp*.30)
    taken=Math.max(1,Math.round(taken*.80));
-  next.hp=Math.max(0,next.hp-taken);
+   if(v4&&next.chromaV4Meta){
+    const protectedHit=applyV46UnbrokenDefense(next as unknown as LiveV46Save,{
+     sourceRef:e.sourceRef,incomingPhysicalDamage:taken,maxHp});
+    next.chromaV4Meta=protectedHit.next.chromaV4Meta;
+    taken=protectedHit.damage;
+   }
+   if(v4&&next.chromaV4Meta?.runeRuntime){
+    const ledger=next.chromaV4Meta.runeRuntime;
+    const barriers=ledger.effects.filter(x=>x.targetId==="hero.chroma"&&
+     x.type==="barrier"&&x.expiresSecond>ledger.nowSecond);
+    for(const barrier of barriers){
+     if(taken<=0)break;
+     const absorbed=Math.min(taken,Math.floor(barrier.power));
+     barrier.power-=absorbed;taken-=absorbed;
+    }
+    ledger.effects=ledger.effects.filter(x=>x.type!=="barrier"||x.power>0);
+   }
+   next.hp=Math.max(0,next.hp-taken);
   if(next.hp>0&&next.hp<=maxHp*.30){
    const trained=recordConfirmedCombatTechnique(next,{kind:"survival",
     enemyRef:battle.enemyRef,sourceRef:e.sourceRef,confirmedEffective:true});
@@ -254,9 +378,9 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
    const place=["torso","left_arm","right_arm","left_leg","right_leg","head"] as const;
    const location=place[hash(e.sourceRef,"part")%place.length];
    const severity=taken>=maxHp*.35?3:taken>=maxHp*.23?2:1;
-   injuryRef=e.sourceRef+".wound";
+   injuryRef=boundedChildRef(e.sourceRef,"",".wound");
    const h=applyConfirmedInjury({...next,hp:next.hp+taken},{
-    sourceRef:injuryRef,injuryId:"wound."+e.sourceRef,location,
+    sourceRef:injuryRef,injuryId:boundedChildRef(e.sourceRef,"wound.",""),location,
     kind:location==="torso"?"bruise":"bleeding",
     severity:severity as 1|2|3,damage:taken,confirmedCause:true
    });
@@ -272,7 +396,9 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
 }
 export function readCurrentPlayerBattle(s:JinwooState){
  if(!s.activeEncounter)return {active:false,readOnly:true};
- const mob=ORARIO_MONSTER_BY_ID[s.activeEncounter.monsterId];
+ const mob=monsterForPlayer(s,s.activeEncounter.monsterId,{
+  floor:s.activeEncounter.floor,monsterRef:s.activeEncounter.enemyRef,
+  irregularRef:s.activeEncounter.irregularRef});
  return {active:true,enemyRef:s.activeEncounter.enemyRef,
   enemyType:mob?.name??"неизвестно",
   enemyHp:s.activeEncounter.enemyHp,enemyMaxHp:mob?.hp,
