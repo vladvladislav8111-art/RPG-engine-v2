@@ -5,8 +5,9 @@
  * No combat victory, damage, loot, XP or Dungeon access is committed by a
  * preview. The narrative decides consequences and retains player agency.
  */
-import {awardJinwooEncounter,projectJinwooFalna,
+import {awardJinwooEncounter,projectJinwooFalna,CHROMA_BALANCE_FLAG,
  type JinwooStats,type JinwooState} from "./shadow_monarch_rules.ts";
+import {CHROMA_LINOS_STONE_BASE_VALIS} from "./chroma_guild_economy.ts";
 import {SYSTEM_ENCOUNTER_BY_ID,FIRST_INSTANT_CANON_RULES} from "./orario_system_encounters.ts";
 type Tier="ordinary"|"elite"|"rare"|"monster_rex";
 export type DanmachiMonsterBalance={
@@ -249,7 +250,9 @@ export function previewBalancedMonsterReward(s:JinwooState,params:{
  return {
   monsterId:mob.id,monsterRef:params.monsterRef,
   earnedOnlyAfterConfirmedDefeat:true,
-  xp,systemGold,potentialMagicStoneValis:mob.magicStoneValis,
+  xp,systemGold,potentialMagicStoneValis:s.storyFlags.includes(CHROMA_BALANCE_FLAG)?
+    (CHROMA_LINOS_STONE_BASE_VALIS[mob.id]??mob.magicStoneValis):
+    mob.magicStoneValis,
    monsterSystemThreatLevel:mob.systemThreatLevel,monsterThreatClass:mob.kind,
   lootIsSeparateFromXP:true,notAutoAwarded:true,
   playerAlreadyReceivedXp:s.defeatedTargetRefs.includes(params.monsterRef),
