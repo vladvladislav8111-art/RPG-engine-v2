@@ -23,6 +23,8 @@ export type AcquiredStone={
  acquisition?:"own_kill"|"confirmed_trade"|"confirmed_gift"|"confirmed_find";
  verifiedProvenance?:boolean;paidValis?:number;
  powerTier:JinwooShadow["powerTier"];guildValueValis:number;
+ sizePct?:number;saturationPct?:number;integrityPct?:number;
+ pricingModel?:"chroma_linos_v1";
  corruptedMana:boolean;
 };
 export function addConfirmedMagicStone(s:JinwooState,e:AcquiredStone):JinwooState{
@@ -52,6 +54,10 @@ export function addConfirmedMagicStone(s:JinwooState,e:AcquiredStone):JinwooStat
   powerTier:e.powerTier,guildValueValis:e.guildValueValis,
   corruptedMana:e.corruptedMana,intact:true,state:"held",
   collectedRef:e.sourceRef,
+  ...(e.pricingModel==="chroma_linos_v1"?{
+   pricingModel:e.pricingModel,sizePct:e.sizePct,
+   saturationPct:e.saturationPct,integrityPct:e.integrityPct
+  }:{}),
  } as JinwooMagicStone;
  n.valis-=paid;
  n.appliedRewardRefs.push(e.sourceRef);return n;
