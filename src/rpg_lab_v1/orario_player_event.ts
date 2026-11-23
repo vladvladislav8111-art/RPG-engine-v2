@@ -25,6 +25,7 @@ import {
  addConfirmedMagicStone,sellConfirmedMagicStone,
  sellConfirmedMagicStoneBatch,extractShadowFromMagicStone
 } from "./shadow_monarch_stones.ts";
+import {quoteChromaLinosMagicStone} from "./chroma_guild_economy.ts";
 import {
  issueSystemDungeonKey,enterSystemDungeon,completeSystemDungeon,
  useConfirmedInstantReturnCrystal
@@ -52,7 +53,8 @@ const playable=new Set([
  "shadow_revive","daily_box","injury","rest","medical_care",
  "reconcile_chroma_d1","reconcile_chroma_starting_valis",
  "reconcile_chroma_d3_xp","reconcile_chroma_d3_full",
- "reconcile_chroma_razan_xp","reconcile_chroma_kandiaru_blessing","evolve_skill",
+ "reconcile_chroma_razan_xp","reconcile_chroma_kandiaru_blessing",
+ "reconcile_chroma_d3_linos_47_stones","evolve_skill",
  "local_purchase"
 ]);
 export type OrarioPlayerAction={
@@ -138,6 +140,52 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
    const n=structuredClone(current);
    n.valis+=30000;
    n.appliedRewardRefs=[...n.appliedRewardRefs,sourceRef];
+   return n;
+  }
+  case "reconcile_chroma_d3_linos_47_stones":{
+   // PLAYER AUTHORISED: one-time correction of ONLY the 47 stones already
+   // sold on D3, never the earlier batch of fourteen stones on D1.
+   // Actual size/saturation/integrity of the D3 stones were never recorded.
+   // We deliberately price each as one ordinary standard intact specimen
+   // (100/100/100); do NOT retrospectively generate rare qualities or loot.
+   const originalSaleRef="chroma.d3_guild_eina_sell_47_stones.650";
+   const verifiedSpeciesRef="chroma.repair.d3_guild_47_stones_species_detail.652";
+   const approvedEconomyRef="chroma.rules.linos_guild_economy_docs_transfer.660";
+   const knownKinds=[
+    {monsterId:"killer_ant",count:22},
+    {monsterId:"war_shadow",count:20},
+    {monsterId:"goblin",count:2},
+    {monsterId:"kobold",count:2},
+    {monsterId:"dungeon_lizard",count:1}
+   ] as const;
+   const repairedTotal=knownKinds.reduce((v,k)=>v+
+    quoteChromaLinosMagicStone({
+     monsterId:k.monsterId,sizePct:100,saturationPct:100,integrityPct:100
+    }).valis*k.count,0);
+   const originalValis=5040;
+   const sold=Object.values(current.magicStones).filter(x=>x.state==="sold");
+   const recordedSaleValis=sold.reduce((v,x)=>v+x.guildValueValis,0);
+   if(s.projectId!=="chroma_orario_main_20261120"||
+      s.sessionId!=="chroma_day0_20261120"||
+      s.player.hero?.id!=="hero.chroma"||
+      sourceRef!=="chroma.repair.d3_linos_47_stones_reprice.661"||
+      eventTime!=="D3 19:44"||a.playerApproved!==true||
+      q.confirmStandardQualityForHistorical47!==true||
+      q.excludeFirst14!==true||
+      !s.events.some(ev=>ev.sourceRef===originalSaleRef)||
+      !s.events.some(ev=>ev.sourceRef===verifiedSpeciesRef)||
+      !s.events.some(ev=>ev.sourceRef===approvedEconomyRef)||
+      sold.length!==47||
+      recordedSaleValis!==originalValis||
+      repairedTotal!==54550||
+      current.valis!==33870||
+      current.appliedRewardRefs.includes(sourceRef))
+    throw Error("CHROMA_LINOS_D3_47_STONE_REPAIR_EVIDENCE_MISMATCH");
+   const n=structuredClone(current);
+   n.valis+=repairedTotal-originalValis; // +49,510; expected 83,380.
+   n.appliedRewardRefs.push(sourceRef);
+   // Do not re-mark stones as sold, mutate the old Guild receipt,
+   // award more XP or System Gold, or manufacture stone qualities.
    return n;
   }
   case "reconcile_chroma_d3_xp":{
@@ -314,10 +362,39 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
     ...q,sourceRef,confirmedDefeat:q.confirmedDefeat===true,
     confirmedSearch:a.playerApproved===true
    } as Parameters<typeof recordConfirmedMonsterDrop>[1]).next;
-  case "stone_collect":
+  case "stone_collect":{
+   // Only Chroma's new stone acquisitions use the approved Linos valuation.
+   // No auto-default quality and no retroactive revaluation of sold stones.
+   if(s.projectId==="chroma_orario_main_20261120"&&
+      s.sessionId==="chroma_day0_20261120"&&
+      s.player.hero?.id==="hero.chroma"){
+    const targetRef=String(q.monsterRef??"");
+    const proof=current.defeatEvidence?.[targetRef];
+    const monsterId=q.monsterId??proof?.monsterId;
+    if(typeof monsterId!=="string"||
+       ((q.acquisition??"own_kill")==="own_kill"&&
+         proof?.monsterId!==monsterId)||
+       a.playerApproved!==true)
+     throw Error("CHROMA_STONE_SPECIES_OR_PROOF_REQUIRED");
+    const quote=quoteChromaLinosMagicStone({
+     monsterId,sizePct:q.sizePct as number,
+     saturationPct:q.saturationPct as number,
+     integrityPct:q.integrityPct as number
+    });
+    if(quote.valis<1||
+       (q.guildValueValis!==undefined&&q.guildValueValis!==quote.valis))
+     throw Error("CHROMA_STONE_PRICE_NOT_CONFIRMED");
+    return addConfirmedMagicStone(current,{
+     ...q,sourceRef,confirmedLoot:q.confirmedLoot===true,
+     guildValueValis:quote.valis,
+     sizePct:quote.sizePct,saturationPct:quote.saturationPct,
+     integrityPct:quote.integrityPct,pricingModel:"chroma_linos_v1"
+    } as Parameters<typeof addConfirmedMagicStone>[1]);
+   }
    return addConfirmedMagicStone(current,{
     ...q,sourceRef,confirmedLoot:q.confirmedLoot===true
    } as Parameters<typeof addConfirmedMagicStone>[1]);
+  }
   case "stone_sell":
    return sellConfirmedMagicStone(current,{
     ...q,sourceRef,confirmedGuildExchange:q.confirmedGuildExchange===true
