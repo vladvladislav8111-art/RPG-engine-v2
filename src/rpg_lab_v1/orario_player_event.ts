@@ -25,6 +25,7 @@ import {
  addConfirmedMagicStone,sellConfirmedMagicStone,
  sellConfirmedMagicStoneBatch,extractShadowFromMagicStone
 } from "./shadow_monarch_stones.ts";
+import {quoteChromaLinosMagicStone} from "./chroma_guild_economy.ts";
 import {
  issueSystemDungeonKey,enterSystemDungeon,completeSystemDungeon,
  useConfirmedInstantReturnCrystal
@@ -314,10 +315,39 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
     ...q,sourceRef,confirmedDefeat:q.confirmedDefeat===true,
     confirmedSearch:a.playerApproved===true
    } as Parameters<typeof recordConfirmedMonsterDrop>[1]).next;
-  case "stone_collect":
+  case "stone_collect":{
+   // Only Chroma's new stone acquisitions use the approved Linos valuation.
+   // No auto-default quality and no retroactive revaluation of sold stones.
+   if(s.projectId==="chroma_orario_main_20261120"&&
+      s.sessionId==="chroma_day0_20261120"&&
+      s.player.hero?.id==="hero.chroma"){
+    const targetRef=String(q.monsterRef??"");
+    const proof=current.defeatEvidence?.[targetRef];
+    const monsterId=q.monsterId??proof?.monsterId;
+    if(typeof monsterId!=="string"||
+       ((q.acquisition??"own_kill")==="own_kill"&&
+         proof?.monsterId!==monsterId)||
+       a.playerApproved!==true)
+     throw Error("CHROMA_STONE_SPECIES_OR_PROOF_REQUIRED");
+    const quote=quoteChromaLinosMagicStone({
+     monsterId,sizePct:q.sizePct as number,
+     saturationPct:q.saturationPct as number,
+     integrityPct:q.integrityPct as number
+    });
+    if(quote.valis<1||
+       (q.guildValueValis!==undefined&&q.guildValueValis!==quote.valis))
+     throw Error("CHROMA_STONE_PRICE_NOT_CONFIRMED");
+    return addConfirmedMagicStone(current,{
+     ...q,sourceRef,confirmedLoot:q.confirmedLoot===true,
+     guildValueValis:quote.valis,
+     sizePct:quote.sizePct,saturationPct:quote.saturationPct,
+     integrityPct:quote.integrityPct,pricingModel:"chroma_linos_v1"
+    } as Parameters<typeof addConfirmedMagicStone>[1]);
+   }
    return addConfirmedMagicStone(current,{
     ...q,sourceRef,confirmedLoot:q.confirmedLoot===true
    } as Parameters<typeof addConfirmedMagicStone>[1]);
+  }
   case "stone_sell":
    return sellConfirmedMagicStone(current,{
     ...q,sourceRef,confirmedGuildExchange:q.confirmedGuildExchange===true
