@@ -35,7 +35,8 @@ import {
 } from "./danmachi_shadow_balance.ts";
 import {recordConfirmedMonsterDrop} from "./orario_player_loot.ts";
 import {verifySystemDungeonBossEvidence} from "./orario_system_encounters.ts";
-import {activateConfirmedPlayerSkill,evolveConfirmedSprint} from "./orario_player_skills.ts";
+import {activateConfirmedPlayerSkill,evolveConfirmedSprint,
+ previewDaggerTechnique} from "./orario_player_skills.ts";
 import {reconcileChromaD3ThroughWolf02} from "./chroma_campaign_reconcile.ts";
 import {narrativeMinute} from "./events.ts";
 import type {LabSession} from "./session.ts";
@@ -386,6 +387,8 @@ export function readOrarioPlayerHud(s:LabSession){
   dailyTraining:p.dailyTraining?structuredClone(p.dailyTraining):null,
   skillMastery:structuredClone(p.skillMastery??{}),
   unlockedSkills:[...p.unlockedSkills],
+  daggerTechnique:previewDaggerTechnique(p),
+  combatTraining:structuredClone(p.combatTraining??{}),
   injuries:structuredClone(p.injuries??[]),
   shadowCount:p.shadowRoster.length,
   availableMagicStones:Object.values(p.magicStones).filter(x=>x.state==="held").length,

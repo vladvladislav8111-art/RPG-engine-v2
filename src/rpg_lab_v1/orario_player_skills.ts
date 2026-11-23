@@ -35,7 +35,8 @@ export function recordConfirmedSkillPractice(s:JinwooState,e:{
  return next;
 }
 export type ActivePlayerSkill={
- id:"stealth"|"sprint"|"quicksilver"|"monarch_domain";
+ id:"stealth"|"sprint"|"quicksilver"|"monarch_domain"|
+  "critical_attack"|"mutilation"|"dagger_throw"|"dagger_rush";
  startedRef:string;expiresMinute:number;
  agilityBonus:number;positionBonus:number;mpSpent:number;
  /** Snapshot at activation; gaining mastery mid-buff cannot reprice or reboost it. */
@@ -55,6 +56,12 @@ export function activateConfirmedPlayerSkill(s:JinwooState,e:{
   throw Error("PLAYER_SKILL_NOT_UNLOCKED_OR_CONFIRMED");
  const now=(s.activeSkills??[]).filter(x=>x.expiresMinute>e.startMinute);
  if(now.some(x=>x.id===e.skillId))throw Error("PLAYER_SKILL_ALREADY_ACTIVE");
+ if(["critical_attack","mutilation"].includes(e.skillId)&&
+    now.some(x=>["critical_attack","mutilation"].includes(x.id)))
+  throw Error("PLAYER_CRITICAL_ATTACKS_CANNOT_STACK");
+ if(["dagger_throw","dagger_rush"].includes(e.skillId)&&
+    now.some(x=>["dagger_throw","dagger_rush"].includes(x.id)))
+  throw Error("PLAYER_DAGGER_THROW_SKILLS_CANNOT_STACK");
  if(["sprint","quicksilver"].includes(e.skillId)&&
     now.some(x=>["sprint","quicksilver"].includes(x.id)))
   throw Error("PLAYER_SPEED_SKILLS_CANNOT_STACK");
@@ -84,6 +91,19 @@ export function activateConfirmedPlayerSkill(s:JinwooState,e:{
     .03*(skillMasteryLevel(s,"quicksilver")-1)).toFixed(2));
    agilityBonus=Math.round(projectJinwooFalna(s).total.agility*
     (speedMultiplier-1));break;
+  case "critical_attack":
+   if(e.durationMinutes!==1)throw Error("PLAYER_SKILL_DURATION_INVALID");
+   mpCost=12;break;
+  case "mutilation":
+   if(e.durationMinutes!==1)throw Error("PLAYER_SKILL_DURATION_INVALID");
+   mpCost=24;break;
+  case "dagger_throw":
+   if(e.durationMinutes!==1)throw Error("PLAYER_SKILL_DURATION_INVALID");
+   mpCost=8;break;
+  case "dagger_rush":
+   if(e.durationMinutes!==1||!s.unlockedSkills.includes("rulers_authority"))
+    throw Error("PLAYER_DAGGER_RUSH_REQUIRES_AUTHORITY");
+   mpCost=16;break;
   case "monarch_domain":{
    const domain=previewMonarchDomain(s,{confirmedActive:true,
     durationMinutes:e.durationMinutes});
@@ -128,11 +148,13 @@ export function evolveConfirmedSprint(s:JinwooState,e:{
  n.appliedRewardRefs.push(e.sourceRef);
  return n;
 }
-type CombatKind="dagger"|"weakpoint"|"evasion";
+export type CombatKind="dagger"|"weakpoint"|"evasion"|"throw"|"survival";
 const combatThreshold:Record<CombatKind,{count:number;skill:string}>={
  dagger:{count:12,skill:"dagger_mastery"},
- weakpoint:{count:15,skill:"weakpoint_precision"},
- evasion:{count:12,skill:"combat_evasion"}
+ weakpoint:{count:15,skill:"critical_attack"},
+ evasion:{count:12,skill:"combat_evasion"},
+ throw:{count:8,skill:"dagger_throw"},
+ survival:{count:4,skill:"tenacity"}
 };
 /** Count independent proven encounters, not repeated attacks on one enemy. */
 export function recordConfirmedCombatTechnique(s:JinwooState,e:{
@@ -152,5 +174,47 @@ export function recordConfirmedCombatTechnique(s:JinwooState,e:{
  const award=combatThreshold[e.kind];
  if(uses>=award.count&&!next.unlockedSkills.includes(award.skill))
   next.unlockedSkills.push(award.skill);
+ // Evolved skills require a separate high-volume training threshold.
+ if(e.kind==="dagger"&&uses>=180&&
+    !next.unlockedSkills.includes("master_of_shortsword"))
+  next.unlockedSkills.push("master_of_shortsword");
+ if(e.kind==="weakpoint"&&uses>=45&&
+    !next.unlockedSkills.includes("mutilation"))
+  next.unlockedSkills.push("mutilation");
+ if(e.kind==="throw"&&uses>=35&&
+    next.unlockedSkills.includes("rulers_authority")&&
+    !next.unlockedSkills.includes("dagger_rush"))
+  next.unlockedSkills.push("dagger_rush");
  return next;
+}
+
+/** Canon-inspired dagger proficiency: original advanced technique adds damage
+ * and later becomes Master of Shortsword. Attack-speed scaling is a documented
+ * crossover adaptation, not a sixth System stat or a free extra action.
+ *
+ * Unlocks at 12 distinct effective enemies; level depends on the same
+ * evidence-backed unique-enemy progress, not System level or raw strike count.
+ */
+export function previewDaggerTechnique(s:JinwooState){
+ const uses=s.combatTraining?.dagger?.uses??0;
+ const owned=s.unlockedSkills.includes("dagger_mastery")||
+  s.unlockedSkills.includes("master_of_shortsword");
+ const mastered=owned&&uses>=180&&
+  s.unlockedSkills.includes("master_of_shortsword");
+ const level=!owned?0:uses>=140?5:uses>=96?4:
+  uses>=64?3:uses>=32?2:1;
+ const bonusDamage=mastered?33:level<=0?0:4+level*4;
+ const bonusAttackSpeed=mastered?20:level<=0?0:2+level*3;
+ return {
+  unlocked:owned,level,evolved:mastered,
+  id:mastered?"master_of_shortsword":"dagger_mastery",
+  name:mastered?"Мастер короткого клинка":"Владение кинжалами",
+  practicedEnemies:uses,nextMilestone:mastered?null:
+   !owned?12:uses<32?32:uses<64?64:uses<96?96:uses<140?140:180,
+  damageBonusPercent:bonusDamage,
+  attackSpeedBonusPercent:bonusAttackSpeed,
+  damageMultiplier:1+bonusDamage/100,
+  attackSpeedMultiplier:1+bonusAttackSpeed/100,
+  consumesMana:false,readOnly:true
+ };
 }

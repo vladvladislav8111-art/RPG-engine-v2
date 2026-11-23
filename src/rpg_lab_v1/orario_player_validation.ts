@@ -61,7 +61,7 @@ export function validateOrarioPlayerState(s:JinwooState):JinwooState{
  if(s.combatTraining!==undefined){
   if(!keys(s.combatTraining,8))throw Error("ORARIO_COMBAT_TRAINING_MAP_INVALID");
   for(const [kind,p] of Object.entries(s.combatTraining)){
-   if(!["dagger","weakpoint","evasion"].includes(kind)||!p||
+   if(!["dagger","weakpoint","evasion","throw","survival"].includes(kind)||!p||
       !nat(p.uses)||p.uses>10000000||!id(p.lastPracticeRef)||
       !Array.isArray(p.enemyRefs)||p.enemyRefs.length>127||
       p.enemyRefs.some(x=>!id(x))||new Set(p.enemyRefs).size!==p.enemyRefs.length)
