@@ -70,7 +70,10 @@ export function applyConfirmedCombatDamage(s:JinwooState,e:{
  source(s,e.sourceRef);
  if(!e.confirmedHit||!Number.isSafeInteger(e.damage)||e.damage<0||
   e.damage>100000)throw Error("PLAYER_COMBAT_DAMAGE_NOT_CONFIRMED");
- const n=copy(s);n.hp=Math.max(0,n.hp-e.damage);
+ const n=copy(s);
+ const actual=s.storyFlags.includes("status.kasaka_armor_scales_20")?
+  Math.max(0,Math.round(e.damage*.8)):e.damage;
+ n.hp=Math.max(0,n.hp-actual);
  n.appliedRewardRefs.push(e.sourceRef);return n;
 }
 /** Physical rest is slower than daily quest Recovery and does not heal
@@ -140,6 +143,24 @@ export function consumeConfirmedSystemItem(s:JinwooState,e:{
  sourceRef:string;itemId:string;confirmedUse:true;
 }):JinwooState{
  source(s,e.sourceRef);
+ // Kasaka's Venom is not a regular healing potion. The original item
+ // grants permanently hardened skin at the cost of 35 Strength points.
+ // Chroma has not earned the distinct Detoxification skill that would
+ // negate this penalty. Do not alter base stats or freely cure the debuff.
+ if(e.itemId==="kasaka_venom"){
+  const bossProof=Object.entries(s.defeatEvidence??{}).some(([ref,v])=>
+   v.monsterId==="system.kasaka"&&(s.systemDropRefs??[]).includes(ref));
+  if(!e.confirmedUse||!bossProof||(s.inventory.kasaka_venom??0)!==1||
+     s.storyFlags.includes("status.kasaka_armor_scales_20")||
+     s.hp<=0)throw Error("KASAKA_VENOM_NOT_OWNED_OR_ALREADY_USED");
+  const n=copy(s);
+  delete n.inventory.kasaka_venom;
+  n.storyFlags.push("status.kasaka_armor_scales_20");
+  if(!n.unlockedSkills.includes("detoxification"))
+   n.storyFlags.push("status.kasaka_weakened_muscles_35");
+  n.appliedRewardRefs.push(e.sourceRef);
+  return n;
+ }
  const ability=restorative[e.itemId];
  if(s.hp<=0)throw Error("PLAYER_UNCONSCIOUS_CANNOT_SELF_MEDICATE");
  if(!ability||(s.inventory[e.itemId]??0)<=0||!e.confirmedUse)

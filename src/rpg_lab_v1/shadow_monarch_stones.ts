@@ -68,6 +68,33 @@ export function sellConfirmedMagicStone(s:JinwooState,e:{
  n.valis+=stone.guildValueValis;
  n.appliedRewardRefs.push(e.sourceRef);return n;
 }
+/** One Guild transaction for all individually verified, still-held stones.
+ * Preserves source attestations and avoids 47 separate unreviewable updates.
+ */
+export function sellConfirmedMagicStoneBatch(s:JinwooState,e:{
+ sourceRef:string;confirmedGuildExchange:boolean;expectedHeldCount:number;
+}):JinwooState{
+ gate(s,e.sourceRef);
+ if(!e.confirmedGuildExchange||!Number.isSafeInteger(e.expectedHeldCount)||
+    e.expectedHeldCount<1||e.expectedHeldCount>500)
+  throw Error("PLAYER_MAGIC_STONE_BATCH_GUILD_NOT_VERIFIED");
+ const held=Object.values(s.magicStones).filter(x=>x.state==="held");
+ if(held.length!==e.expectedHeldCount||
+    held.some(x=>!x.intact||!Number.isSafeInteger(x.guildValueValis)||
+      x.guildValueValis<1))
+  throw Error("PLAYER_MAGIC_STONE_BATCH_COUNT_OR_PROOF_INVALID");
+ const n=clone(s);
+ let amount=0;
+ for(const stone of held){
+  n.magicStones[stone.id].state="sold";
+  amount+=stone.guildValueValis;
+ }
+ if(!Number.isSafeInteger(amount)||amount<=0||
+    n.valis+amount>1e10)throw Error("PLAYER_GUILD_VALIS_INVALID");
+ n.valis+=amount;
+ n.appliedRewardRefs.push(e.sourceRef);
+ return n;
+}
 export type MagicStoneExtraction={
  sourceRef:string;stoneId:string;roll?:number;
  confirmedShadowCommand:boolean;

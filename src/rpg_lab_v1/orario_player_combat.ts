@@ -234,6 +234,11 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  if(rolls.enemy<=counterChance){
   taken=Math.max(0,wear.exchange.counterDamageIfHit+
     injury.defensePenalty);
+  // Canon Kasaka Armored Scales: permanent -20% to PHYSICAL harm only.
+  // Combat exchanges are physical unless a separately proven magic
+  // interaction says otherwise. Apply once before HP/injury severity.
+  if(next.storyFlags.includes("status.kasaka_armor_scales_20"))
+   taken=Math.max(0,Math.round(taken*.8));
   const maxHp=effectiveJinwooMaxHp(next);
   if(next.unlockedSkills.includes("tenacity")&&next.hp<=maxHp*.30)
    taken=Math.max(1,Math.round(taken*.80));

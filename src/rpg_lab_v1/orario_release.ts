@@ -2,7 +2,7 @@
  * Deno Deploy must serve this marker before a rollout is considered verified.
  */
 export const ORARIO_PLAYER_RELEASE={
- version:"danmachi-solo-chroma-rpg-lab-v3.4-2026-11-23",
+ version:"danmachi-solo-chroma-rpg-lab-v3.5-2026-11-23",
  branch:"main",
  features:["player_system","falna_buff","orario_combat","shadow_army",
   "system_instances","npc_suspicion","cas_save",
@@ -16,6 +16,8 @@ export const ORARIO_PLAYER_RELEASE={
   "hapjeong_three_canon_stages","briga_razan_encounters",
   "proof_backed_wolf_slayer","earned_return_crystal_retreat",
   "razan_briga_xp_balance_and_proven_correction",
-  "kasaka_two_canon_rewards_and_earned_fang"] as const,
+  "kasaka_two_canon_rewards_and_earned_fang",
+  "kasaka_venom_permanent_tradeoff","guild_verified_bulk_stone_sale",
+  "chroma_steel_dagger_equipment_swap"] as const,
  noAutomaticCampaignCreation:true
 } as const;

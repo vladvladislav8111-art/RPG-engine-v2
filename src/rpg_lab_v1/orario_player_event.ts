@@ -23,7 +23,7 @@ import {
 } from "./orario_player_combat.ts";
 import {
  addConfirmedMagicStone,sellConfirmedMagicStone,
- extractShadowFromMagicStone
+ sellConfirmedMagicStoneBatch,extractShadowFromMagicStone
 } from "./shadow_monarch_stones.ts";
 import {
  issueSystemDungeonKey,enterSystemDungeon,completeSystemDungeon,
@@ -45,7 +45,8 @@ const playable=new Set([
  "init","activate","start_battle","combat_exchange","activate_skill",
  "daily_start","daily_progress","daily_claim","daily_fail",
  "purchase","use_item","spend_points","falna_bless","falna_update",
- "stone_collect","stone_sell","stone_extract","monster_drop",
+ "stone_collect","stone_sell","stone_sell_batch","stone_extract","monster_drop",
+ "chroma_swap_kasaka_fang",
  "unlock","change_class","plot_key","dungeon_key","dungeon_enter",
  "dungeon_clear","instant_return","first_knight","shadow_deploy","shadow_victory",
  "shadow_revive","daily_box","injury","rest","medical_care",
@@ -293,6 +294,30 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
    return sellConfirmedMagicStone(current,{
     ...q,sourceRef,confirmedGuildExchange:q.confirmedGuildExchange===true
    } as Parameters<typeof sellConfirmedMagicStone>[1]);
+  case "stone_sell_batch":
+   return sellConfirmedMagicStoneBatch(current,{
+    sourceRef,
+    confirmedGuildExchange:q.confirmedGuildExchange===true,
+    expectedHeldCount:Number(q.expectedHeldCount)
+   });
+  case "chroma_swap_kasaka_fang":{
+   // One recorded pre-existing steel dagger moves from hand to inventory.
+   // The owned Kasaka Fang replaces it in the right-hand combat loadout.
+   if(s.projectId!=="chroma_orario_main_20261120"||
+      s.sessionId!=="chroma_day0_20261120"||
+      s.player.hero?.id!=="hero.chroma"||
+      !current.storyFlags.includes("chroma.dual_daggers.verified")||
+      !current.defeatedTargetRefs.includes("chroma.instant.kasaka.01")||
+      !(current.systemDropRefs??[]).includes("chroma.instant.kasaka.01")||
+      (current.inventory.kasaka_fang??0)<1||
+      current.storyFlags.includes("chroma.equipment.kasaka_fang_right"))
+    throw Error("CHROMA_DAGGER_EXCHANGE_NOT_VERIFIED");
+   const n=structuredClone(current);
+   n.inventory.steel_dagger=(n.inventory.steel_dagger??0)+1;
+   n.storyFlags.push("chroma.equipment.kasaka_fang_right");
+   n.appliedRewardRefs.push(sourceRef);
+   return n;
+  }
   case "stone_extract":
    return extractShadowFromMagicStone(current,{
     ...q,sourceRef,confirmedShadowCommand:a.playerApproved===true

@@ -534,6 +534,12 @@ export function projectJinwooFalna(s:JinwooState):FalnaProjection{
  };
  const total={...s.stats};
  for(const k of JINWOO_STATS)total[k]+=bonus[k];
+ // Casaka's canonical permanent toxin penalizes combat-effective Strength,
+ // NOT the permanent System points or the raw Falna rank.
+ // A separate earned Detoxification may negate this only if unlocked.
+ if(s.storyFlags.includes("status.kasaka_weakened_muscles_35")&&
+    !s.unlockedSkills.includes("detoxification"))
+  total.strength=Math.max(0,total.strength-35);
  return {blessed,divineLevel:blessed?s.falna.divineLevel:null,display:r?{...r}:null,
   base:{...s.stats},bonus,total,sourceOfCombatPower:"SYSTEM_PLUS_FALNA",
   overRank:!!r&&Object.values(r).some(x=>x>999),
