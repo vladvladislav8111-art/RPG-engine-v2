@@ -5,7 +5,7 @@
  */
 import {
  completeJinwooDaily,effectiveJinwooMaxHp,effectiveJinwooMaxMp,
- JINWOO_STORE,shopAvailable,type JinwooState
+ JINWOO_STORE,shopAvailable,KANDIARU_BLESSING_FLAG,type JinwooState
 } from "./shadow_monarch_rules.ts";
 export type InjuryLocation="head"|"torso"|"left_arm"|"right_arm"|"left_leg"|"right_leg";
 export type InjuryKind="bruise"|"bleeding"|"fracture"|"burn"|"poison";
@@ -55,6 +55,14 @@ export function applyConfirmedInjury(s:JinwooState,e:{
   (s.injuries??[]).some(x=>x.id===e.injuryId)||
   (s.injuries??[]).length>=64)
   throw Error("PLAYER_INJURY_CAUSE_UNCONFIRMED");
+ // Kandiaru's blessing, awarded with Player awakening, provides
+ // poison immunity from day one. Poison-only damage/status is purged;
+ // physical bite damage must be reported separately as physical injury.
+ if(e.kind==="poison"&&s.storyFlags.includes(KANDIARU_BLESSING_FLAG)){
+  const immune=copy(s);
+  immune.appliedRewardRefs.push(e.sourceRef);
+  return immune;
+ }
  const n=copy(s);
  n.hp=Math.max(0,n.hp-e.damage);
  n.injuries=[...(n.injuries??[]),{
@@ -143,10 +151,9 @@ export function consumeConfirmedSystemItem(s:JinwooState,e:{
  sourceRef:string;itemId:string;confirmedUse:true;
 }):JinwooState{
  source(s,e.sourceRef);
- // Kasaka's Venom is not a regular healing potion. The original item
- // grants permanently hardened skin at the cost of 35 Strength points.
- // Chroma has not earned the distinct Detoxification skill that would
- // negate this penalty. Do not alter base stats or freely cure the debuff.
+ // Kasaka's Venom keeps its permanent physical-defense boon.
+ // Kandiaru's *already existing* blessing neutralizes the toxic
+ // -35 Strength side effect. It is not newly learned Detoxification.
  if(e.itemId==="kasaka_venom"){
   const bossProof=Object.entries(s.defeatEvidence??{}).some(([ref,v])=>
    v.monsterId==="system.kasaka"&&(s.systemDropRefs??[]).includes(ref));
@@ -156,7 +163,8 @@ export function consumeConfirmedSystemItem(s:JinwooState,e:{
   const n=copy(s);
   delete n.inventory.kasaka_venom;
   n.storyFlags.push("status.kasaka_armor_scales_20");
-  if(!n.unlockedSkills.includes("detoxification"))
+  if(!n.storyFlags.includes(KANDIARU_BLESSING_FLAG)&&
+     !n.unlockedSkills.includes("detoxification"))
    n.storyFlags.push("status.kasaka_weakened_muscles_35");
   n.appliedRewardRefs.push(e.sourceRef);
   return n;

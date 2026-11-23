@@ -280,6 +280,8 @@ function requireReward(s:JinwooState,ref:string){
 const clone=(s:JinwooState)=>structuredClone(s);
 const max=(s:JinwooState)=>s.phase!=="player_system";
 export const CHROMA_BALANCE_FLAG="chroma_falna_v2";
+/** Earned with the Double Dungeon's Player awakening, recognized later. */
+export const KANDIARU_BLESSING_FLAG="blessing.kandiaru_poison_immunity";
 const hasChromaBalance=(s:JinwooState)=>s.storyFlags.includes(CHROMA_BALANCE_FLAG);
 export const SYSTEM_XP_FORMULA="100 * level^1.5; CROSSOVER, NOT NOVEL CANON";
 export function xpToNextLevel(level:number):number{
@@ -534,10 +536,11 @@ export function projectJinwooFalna(s:JinwooState):FalnaProjection{
  };
  const total={...s.stats};
  for(const k of JINWOO_STATS)total[k]+=bonus[k];
- // Casaka's canonical permanent toxin penalizes combat-effective Strength,
- // NOT the permanent System points or the raw Falna rank.
- // A separate earned Detoxification may negate this only if unlocked.
+ // The original Kasaka toxic penalty affects combat-effective Strength,
+ // but Kandiaru's blessing from the Double Dungeon automatically purges
+ // the poisonous debuff. The blessing predates recognition of its power.
  if(s.storyFlags.includes("status.kasaka_weakened_muscles_35")&&
+    !s.storyFlags.includes(KANDIARU_BLESSING_FLAG)&&
     !s.unlockedSkills.includes("detoxification"))
   total.strength=Math.max(0,total.strength-35);
  return {blessed,divineLevel:blessed?s.falna.divineLevel:null,display:r?{...r}:null,

@@ -52,7 +52,7 @@ const playable=new Set([
  "shadow_revive","daily_box","injury","rest","medical_care",
  "reconcile_chroma_d1","reconcile_chroma_starting_valis",
  "reconcile_chroma_d3_xp","reconcile_chroma_d3_full",
- "reconcile_chroma_razan_xp","evolve_skill",
+ "reconcile_chroma_razan_xp","reconcile_chroma_kandiaru_blessing","evolve_skill",
  "local_purchase"
 ]);
 export type OrarioPlayerAction={
@@ -180,6 +180,34 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
     throw Error("CHROMA_RAZAN_REWARD_CORRECTION_NOT_PROVEN");
    const n=structuredClone(current);
    n.xp+=28; // 83 newly balanced XP - 55 previously earned XP.
+   n.appliedRewardRefs.push(sourceRef);
+   return n;
+  }
+  case "reconcile_chroma_kandiaru_blessing":{
+   // The original Double Dungeon awakening already conferred Kandiaru's
+   // poison protection. Chroma's v3.5 venom consumption mistakenly treated
+   // this as a later learned skill. Correct status only, not inventory,
+   // resources, wins, Guild money or System XP.
+   const drinkRef="chroma.d3_kasaka_venom_drunk_on_way_guild.641";
+   if(s.projectId!=="chroma_orario_main_20261120"||
+      s.sessionId!=="chroma_day0_20261120"||
+      s.player.hero?.id!=="hero.chroma"||
+      sourceRef!=="chroma.repair.d3_kandiaru_blessing.647"||
+      eventTime!=="D3 19:21"||
+      a.playerApproved!==true||
+      q.confirmPreexistingKandiaruBlessing!==true||
+      current.appliedRewardRefs.includes(sourceRef)||
+      !s.events.some(ev=>ev.sourceRef===drinkRef)||
+      !current.appliedRewardRefs.includes(drinkRef)||
+      !current.storyFlags.includes("status.kasaka_armor_scales_20")||
+      !current.storyFlags.includes("status.kasaka_weakened_muscles_35")||
+      current.storyFlags.includes("blessing.kandiaru_poison_immunity")||
+      current.systemLevel!==8||
+      (current.inventory.kasaka_venom??0)!==0)
+    throw Error("CHROMA_KANDIARU_SOURCE_CORRECTION_UNVERIFIED");
+   const n=structuredClone(current);
+   n.storyFlags=n.storyFlags.filter(x=>x!=="status.kasaka_weakened_muscles_35");
+   n.storyFlags.push("blessing.kandiaru_poison_immunity");
    n.appliedRewardRefs.push(sourceRef);
    return n;
   }
