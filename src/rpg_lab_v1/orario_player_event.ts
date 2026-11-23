@@ -54,7 +54,7 @@ const playable=new Set([
  "reconcile_chroma_d1","reconcile_chroma_starting_valis",
  "reconcile_chroma_d3_xp","reconcile_chroma_d3_full",
  "reconcile_chroma_razan_xp","reconcile_chroma_kandiaru_blessing",
- "reconcile_chroma_d3_linos_47_stones","evolve_skill",
+ "reconcile_chroma_d3_linos_47_stones","reconcile_chroma_d4_daily_triple","evolve_skill",
  "local_purchase"
 ]);
 export type OrarioPlayerAction={
@@ -82,6 +82,31 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
  if(!current)throw Error("ORARIO_PLAYER_NOT_INITIALIZED");
  const q={...a.args,sourceRef} as Record<string,unknown>;
  switch(a.kind){
+  case "reconcile_chroma_d4_daily_triple":{
+   // One-time correction for the D4 claim which was committed by the older
+   // choice-based code. That claim already awarded +3 unallocated points.
+   // Only supply its two missing independent, unspent rewards.
+   const rewardRef="chroma.d4_daily_claim_recovery_plus_three_points.690";
+   const flag="quest.repair.chroma.d4.triple_daily_rewards";
+   if(s.projectId!=="chroma_orario_main_20261120"||
+      s.sessionId!=="chroma_day0_20261120"||
+      s.player.hero?.id!=="hero.chroma"||
+      !s.events.some(e=>e.sourceRef===rewardRef)||
+      current.dailyTraining?.day!==4||
+      current.dailyTraining.status!=="claimed"||
+      current.dailyTraining.rewardRef!==rewardRef||
+      !current.completedDailyDays.includes("4")||
+      current.storyFlags.includes(flag)||
+      q.confirmedHistory!==true)
+    throw Error("CHROMA_D4_TRIPLE_REWARD_REPAIR_NOT_VERIFIED");
+   const n=structuredClone(current);
+   n.inventory.daily_status_recovery_charge=
+    (n.inventory.daily_status_recovery_charge??0)+1;
+   n.inventory.system_daily_box=(n.inventory.system_daily_box??0)+1;
+   n.storyFlags.push(flag);
+   n.appliedRewardRefs.push(sourceRef);
+   return n;
+  }
   case "reconcile_chroma_d1":{
    // One-time, player-approved recovery of the already-played first Orario day.
    // Evidence is in this very RPG Lab session, never another campaign.

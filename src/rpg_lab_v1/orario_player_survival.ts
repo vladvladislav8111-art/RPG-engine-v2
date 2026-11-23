@@ -169,6 +169,25 @@ export function consumeConfirmedSystemItem(s:JinwooState,e:{
   n.appliedRewardRefs.push(e.sourceRef);
   return n;
  }
+ // Full status recovery awarded by a daily quest is an independent,
+ // player-triggered single-use item, not a choice that replaces the random box.
+ if(e.itemId==="daily_status_recovery_charge"){
+  if(!e.confirmedUse||s.hp<=0||
+     (s.inventory.daily_status_recovery_charge??0)<=0)
+   throw Error("PLAYER_DAILY_RECOVERY_NOT_OWNED");
+  const n=copy(s);
+  n.inventory.daily_status_recovery_charge--;
+  if(n.inventory.daily_status_recovery_charge===0)
+   delete n.inventory.daily_status_recovery_charge;
+  n.hp=effectiveJinwooMaxHp(n);
+  n.mp=effectiveJinwooMaxMp(n);
+  n.fatigue=0;
+  for(const wound of n.injuries??[])
+   if(wound.active){wound.treated=true;
+    if(wound.severity===1)wound.active=false;}
+  n.appliedRewardRefs.push(e.sourceRef);
+  return n;
+ }
  const ability=restorative[e.itemId];
  if(s.hp<=0)throw Error("PLAYER_UNCONSCIOUS_CANNOT_SELF_MEDICATE");
  if(!ability||(s.inventory[e.itemId]??0)<=0||!e.confirmedUse)
@@ -225,25 +244,23 @@ export function recordConfirmedTraining(s:JinwooState,e:{
 }
 export function claimConfirmedDailyTraining(s:JinwooState,e:{
  sourceRef:string;day:number;playerClaimed:true;
- choice:"random_box"|"recovery";
+ /** Obsolete UI field accepted for backward compatibility; no choice is required. */
+ choice?:"random_box"|"recovery";
 }):JinwooState{
  source(s,e.sourceRef);
  if(!e.playerClaimed||!s.dailyTraining||s.dailyTraining.day!==e.day||
-   s.dailyTraining.status!=="active"||
-   Object.entries(DAILY_TARGETS).some(([k,v])=>
-    s.dailyTraining!.exercises[k as PlayerDailyExercise]<v))
+    s.dailyTraining.status!=="active"||
+    Object.entries(DAILY_TARGETS).some(([k,v])=>
+      s.dailyTraining!.exercises[k as PlayerDailyExercise]<v))
   throw Error("PLAYER_DAILY_NOT_FINISHED");
- // Underlying canonical reward is +3 points ONCE, plus an adaptation choice.
+ // Ordinary Solo Leveling daily rewards are ADDITIVE, not mutually exclusive:
+ // +3 points, one stored full-recovery charge, and one random box.
  const n=completeJinwooDaily(s,{day:e.day,sourceRef:e.sourceRef,
   proofConfirmed:true});
  n.dailyTraining!.status="claimed";n.dailyTraining!.rewardRef=e.sourceRef;
- if(e.choice==="recovery"){
-  n.hp=effectiveJinwooMaxHp(n);n.mp=effectiveJinwooMaxMp(n);n.fatigue=0;
-  // A recovery selection stabilizes injuries, not instantly reconstructs bone.
-  for(const i of n.injuries??[])if(i.active)i.treated=true;
- }else if(e.choice==="random_box"){
-  n.inventory.system_daily_box=(n.inventory.system_daily_box??0)+1;
- }else throw Error("PLAYER_DAILY_REWARD_CHOICE_INVALID");
+ n.inventory.daily_status_recovery_charge=
+  (n.inventory.daily_status_recovery_charge??0)+1;
+ n.inventory.system_daily_box=(n.inventory.system_daily_box??0)+1;
  return n;
 }
 export function failConfirmedDailyTraining(s:JinwooState,e:{
@@ -259,11 +276,16 @@ export function failConfirmedDailyTraining(s:JinwooState,e:{
  n.storyFlags.push("quest.penalty.pending."+e.day);
  n.appliedRewardRefs.push(e.sourceRef);return n;
 }
+/** Canonical-style ordinary daily boxes: mostly mundane situational objects.
+ * Shop-only healing consumables and ointments are deliberately excluded.
+ * Blessed/Cursed Random Boxes are separate special-quest rewards.
+ * The first instant-dungeon key is rare and never duplicated for the same instance.
+ */
 export const ORARIO_RARE_REWARD_POOL=[
- {id:"wound_dressing",weight:25},{id:"potion_hp_small",weight:22},
- {id:"potion_mp_small",weight:18},{id:"ointment_burn",weight:10},
- {id:"potion_fatigue",weight:10},{id:"rune_perception",weight:5},
- {id:"system_instant_dungeon_key",weight:10}
+ {id:"system_daily_pen",weight:35},
+ {id:"system_daily_handkerchief",weight:35},
+ {id:"system_daily_umbrella",weight:25},
+ {id:"system_instant_dungeon_key",weight:5}
 ] as const;
 function deterministicRoll(ref:string){let h=2166136261;
  for(const x of ref){h^=x.charCodeAt(0);h=Math.imul(h,16777619);}
@@ -286,7 +308,7 @@ export function openConfirmedDailyBox(s:JinwooState,e:{
   // The first key can be found for real. Duplicates are replaced with
   // mundane recovery supplies instead of spawning another instance.
   if(n.storyFlags.includes("quest.reward.instant_key_from_box")){
-   reward="wound_dressing";
+   reward="system_daily_handkerchief";
   }else{
    n.storyFlags.push("quest.reward.instant_key_from_box");
   }
