@@ -101,3 +101,26 @@ export function completeSystemDungeon(s:JinwooState,e:{
  n.appliedRewardRefs.push(e.sourceRef);
  return n;
 }
+
+/** One-use emergency return, accessible only after an actually recovered
+ * Instant Return Crystal drop. It does not count as defeating the boss.
+ */
+export function useConfirmedInstantReturnCrystal(s:JinwooState,e:{
+ sourceRef:string;confirmedUse:boolean;playerApproved:boolean;
+}):JinwooState{
+ if(!e.confirmedUse||!e.playerApproved||!valid(e.sourceRef)||
+    s.appliedRewardRefs.includes(e.sourceRef)||
+    s.dungeonKeys["instant.first"]?.state!=="entered"||
+    (s.inventory.instant_return_crystal??0)<1||
+    s.activeEncounter||s.hp<=0)
+  throw Error("INSTANT_RETURN_CRYSTAL_NOT_AVAILABLE");
+ const n=structuredClone(s);
+ n.inventory.instant_return_crystal--;
+ if(n.inventory.instant_return_crystal===0)
+  delete n.inventory.instant_return_crystal;
+ n.dungeonKeys["instant.first"].state="retreated";
+ n.dungeonKeys["instant.first"].completionRef=e.sourceRef;
+ n.storyFlags.push("instant.first.retreat_via_crystal");
+ n.appliedRewardRefs.push(e.sourceRef);
+ return n;
+}

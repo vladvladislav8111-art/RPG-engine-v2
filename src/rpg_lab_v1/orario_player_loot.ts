@@ -17,7 +17,10 @@ export const SYSTEM_MONSTER_DROPS={
  goliath_17:[{id:"goliath_shard",weight:25},{id:"potion_hp_supreme",weight:20}],
  // Boss keepsakes are earned only after a confirmed System-instance victory.
  // Exact item stats remain GM-only adaptation, not a promised canon drop.
- "system.dungeon_wolf":[{id:"wolf_fang",weight:15}],
+ "system.dungeon_wolf":[{id:"wolf_fang",weight:15},
+  {id:"instant_return_crystal",weight:2}],
+ "system.razan":[{id:"razan_shadow_fur",weight:12}],
+ "system.briga":[{id:"briga_razor_claw",weight:12}],
  "system.kasaka":[{id:"kasaka_fang",weight:100}],
  "system.knight_guard":[{id:"knight_shard",weight:15}],
  "system.igris":[{id:"igris_crest",weight:100}],

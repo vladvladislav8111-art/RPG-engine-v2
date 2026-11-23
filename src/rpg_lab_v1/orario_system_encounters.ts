@@ -7,7 +7,9 @@ import type {DanmachiMonsterBalance} from "./danmachi_player_balance.ts";
 import type {JinwooState} from "./shadow_monarch_rules.ts";
 export const SYSTEM_ENCOUNTER_DEFS={
  "system.dungeon_wolf":{instance:"instant.first",stage:1,importance:"mob"},
- "system.kasaka":{instance:"instant.first",stage:2,importance:"boss"},
+ "system.razan":{instance:"instant.first",stage:2,importance:"mob"},
+ "system.briga":{instance:"instant.first",stage:2,importance:"mob"},
+ "system.kasaka":{instance:"instant.first",stage:3,importance:"boss"},
  "system.knight_guard":{instance:"job.change",stage:1,importance:"mob"},
  "system.igris":{instance:"job.change",stage:2,importance:"boss"},
  "system.demon_guard":{instance:"demon.castle",stage:1,importance:"mob"},
@@ -21,6 +23,20 @@ export const SYSTEM_ENCOUNTER_MOBS:readonly DanmachiMonsterBalance[]=[
   combat:{strength:16,stamina:13,agility:17,perception:16,intelligence:1},
   hp:140,armor:1,weaponForce:5,baseXp:33,baseSystemGold:30,magicStoneValis:0,
   features:["стая","прыжок"],loreNote:"Только экземпляр первого системного подземелья"},
+ {id:"system.razan",name:"Разан Чёрной Тени",
+  floorMin:1,floorMax:100,approximateDanmachiLevel:1,
+  systemThreatLevel:8,kind:"ordinary",
+  combat:{strength:21,stamina:20,agility:24,perception:21,intelligence:1},
+  hp:185,armor:3,weaponForce:8,baseXp:52,baseSystemGold:44,
+  magicStoneValis:0,features:["нападение с земли","слаженные атаки","подвижность"],
+  loreNote:"Канонический второй подвальный уровень Хапчжона; действует вместе с Бригами"},
+ {id:"system.briga",name:"Острокоготный Брига",
+  floorMin:1,floorMax:100,approximateDanmachiLevel:1,
+  systemThreatLevel:9,kind:"ordinary",
+  combat:{strength:20,stamina:19,agility:29,perception:23,intelligence:2},
+  hp:170,armor:2,weaponForce:9,baseXp:59,baseSystemGold:49,
+  magicStoneValis:0,features:["атака с потолка","длинные когти","внезапный прыжок"],
+  loreNote:"Канонический второй подвальный уровень Хапчжона; засады сверху"},
  {id:"system.kasaka",name:"Касака, синий ядовитый змей",
   floorMin:1,floorMax:100,approximateDanmachiLevel:2,systemThreatLevel:15,kind:"rare",
   combat:{strength:31,stamina:35,agility:26,perception:22,intelligence:3},
@@ -79,3 +95,27 @@ export function verifySystemDungeonBossEvidence(s:JinwooState,dungeonId:string){
  if(!boss)return false;
  return Object.values(s.defeatEvidence??{}).some(v=>v.monsterId===boss);
 }
+
+/** Canonical route metadata, GM-only until discovered by Player.
+ * All metro side corridors are local navigation, not replacement floors.
+ * Early-floor respawn is allowed only after a substantial revisit and never
+ * by replaying a previously defeated monsterRef.
+ */
+export const FIRST_INSTANT_CANON_ROUTE=[
+ {stage:1,id:"hapjeong.b1",monsters:["system.dungeon_wolf"],
+  gameplay:"wolf_hunt",knownToPlayerOnlyWhenSeen:true},
+ {stage:2,id:"hapjeong.b2",monsters:["system.razan","system.briga"],
+  gameplay:"mixed_ambush_and_backtracking",knownToPlayerOnlyWhenSeen:true},
+ {stage:3,id:"hapjeong.b3",monsters:["system.kasaka"],
+  gameplay:"final_boss_area",knownToPlayerOnlyWhenSeen:true}
+] as const;
+/** Source-approved, non-automatic reward discovery. Titles are earned
+ * with unique defeated wolf refs; no retroactive granting on a deploy.
+ */
+export const FIRST_INSTANT_CANON_RULES={
+ wolfSlayerEarnedAtUniqueWolves:10,
+ wolfSlayerCombatStatsMultiplier:1.40,
+ returnCrystal:"potential_discoverable_single_use_drop_not_granted",
+ respawn:"earlier_floor_patrol_after_departure_new_unique_refs",
+ bossDefeatRequiredForClear:true
+} as const;

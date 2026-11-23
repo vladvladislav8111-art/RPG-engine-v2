@@ -105,7 +105,7 @@ export function validateOrarioPlayerState(s:JinwooState):JinwooState{
   if(!id(k)||!nat(v)||v>1)throw Error("ORARIO_PLAYER_ATTEMPT_INVALID");
  for(const [k,v] of Object.entries(s.dungeonKeys)){
   if(!id(k)||v.id!==k||!id(v.issuedRef)||
-   !["held","entered","cleared"].includes(v.state))
+   !["held","entered","cleared","retreated"].includes(v.state))
    throw Error("ORARIO_PLAYER_DUNGEON_KEY_INVALID");
  }
  const basicFalna=["strength","endurance","dexterity","agility","magic"] as const;

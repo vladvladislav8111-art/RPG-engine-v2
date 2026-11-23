@@ -190,7 +190,7 @@ export const ZERO_FALNA_SCORES:Readonly<JinwooFalnaScores>={
  strength:0,endurance:0,dexterity:0,agility:0,magic:0
 };
 export interface SystemDungeonKeyState{
- id:string;issuedRef:string;state:"held"|"entered"|"cleared";
+ id:string;issuedRef:string;state:"held"|"entered"|"cleared"|"retreated";
  entryLocationRef?:string;completionRef?:string;
 }
 export interface PlayerCombatEncounter{

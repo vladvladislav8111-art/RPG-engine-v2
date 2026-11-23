@@ -26,7 +26,8 @@ import {
  extractShadowFromMagicStone
 } from "./shadow_monarch_stones.ts";
 import {
- issueSystemDungeonKey,enterSystemDungeon,completeSystemDungeon
+ issueSystemDungeonKey,enterSystemDungeon,completeSystemDungeon,
+ useConfirmedInstantReturnCrystal
 } from "./system_dungeon_keys.ts";
 import {grantDanmachiPlotKey} from "./danmachi_plot_keys.ts";
 import {
@@ -46,7 +47,7 @@ const playable=new Set([
  "purchase","use_item","spend_points","falna_bless","falna_update",
  "stone_collect","stone_sell","stone_extract","monster_drop",
  "unlock","change_class","plot_key","dungeon_key","dungeon_enter",
- "dungeon_clear","first_knight","shadow_deploy","shadow_victory",
+ "dungeon_clear","instant_return","first_knight","shadow_deploy","shadow_victory",
  "shadow_revive","daily_box","injury","rest","medical_care",
  "reconcile_chroma_d1","reconcile_chroma_starting_valis",
  "reconcile_chroma_d3_xp","reconcile_chroma_d3_full","evolve_skill",
@@ -308,6 +309,11 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
    return enterSystemDungeon(current,{
     ...q,sourceRef,confirmedEntry:q.confirmedEntry===true
    } as Parameters<typeof enterSystemDungeon>[1]);
+  case "instant_return":
+   return useConfirmedInstantReturnCrystal(current,{
+    sourceRef,confirmedUse:q.confirmedUse===true,
+    playerApproved:a.playerApproved===true
+   });
   case "dungeon_clear":
    if(typeof q.dungeonId!=="string"||
       !verifySystemDungeonBossEvidence(current,q.dungeonId))

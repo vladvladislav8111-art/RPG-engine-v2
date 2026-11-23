@@ -2,7 +2,7 @@
  * Deno Deploy must serve this marker before a rollout is considered verified.
  */
 export const ORARIO_PLAYER_RELEASE={
- version:"danmachi-solo-chroma-rpg-lab-v3.1-2026-11-23",
+ version:"danmachi-solo-chroma-rpg-lab-v3.2-2026-11-23",
  branch:"main",
  features:["player_system","falna_buff","orario_combat","shadow_army",
   "system_instances","npc_suspicion","cas_save",
@@ -12,6 +12,8 @@ export const ORARIO_PLAYER_RELEASE={
   "chroma_personal_memory_cues","chroma_d3_xp_repair",
   "chroma_d3_full_510_reconcile","chroma_higher_threat_xp_bonus",
   "quicksilver_evolution_reaction","chroma_skill_training",
-  "canon_dagger_technique_damage_and_speed","canon_critical_throw_skill_gates"] as const,
+  "canon_dagger_technique_damage_and_speed","canon_critical_throw_skill_gates",
+  "hapjeong_three_canon_stages","briga_razan_encounters",
+  "proof_backed_wolf_slayer","earned_return_crystal_retreat"] as const,
  noAutomaticCampaignCreation:true
 } as const;

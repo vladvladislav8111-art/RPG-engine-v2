@@ -7,7 +7,7 @@
  */
 import {awardJinwooEncounter,projectJinwooFalna,
  type JinwooStats,type JinwooState} from "./shadow_monarch_rules.ts";
-import {SYSTEM_ENCOUNTER_BY_ID} from "./orario_system_encounters.ts";
+import {SYSTEM_ENCOUNTER_BY_ID,FIRST_INSTANT_CANON_RULES} from "./orario_system_encounters.ts";
 type Tier="ordinary"|"elite"|"rare"|"monster_rex";
 export type DanmachiMonsterBalance={
  id:string;name:string;floorMin:number;floorMax:number;
@@ -97,6 +97,14 @@ export function comparePlayerToOrarioMonster(s:JinwooState,params:{
  if(!Number.isSafeInteger(count)||count<1||count>20)
   throw Error("BALANCE_GROUP_INVALID");
  const total=projectJinwooFalna(s).total;
+ // Original Wolf Slayer title: +40% combat stats against beast-type mobs.
+ // This projection does NOT mutate System points or permanently refill HP/MP.
+ const beasts=new Set(["system.dungeon_wolf","system.razan",
+  "system.briga","system.kasaka","kobold","dungeon_lizard",
+  "silverback","infant_dragon","minotaur"]);
+ if(s.storyFlags.includes("title.wolf_slayer")&&beasts.has(mob.id))
+  for(const key of ["strength","stamina","agility","perception","intelligence"] as const)
+   total[key]=Math.round(total[key]*FIRST_INSTANT_CANON_RULES.wolfSlayerCombatStatsMultiplier);
  const attack=weighted(total,"attack"),guard=weighted(total,"guard");
  const enemyAttack=weighted(mob.combat,"attack"),enemyGuard=weighted(mob.combat,"guard");
  const offenseRatio=attack/enemyGuard;
@@ -269,6 +277,16 @@ export function commitBalancedMonsterDefeat(s:JinwooState,e:{
   monsterId:e.monsterId,sourceRef:e.sourceRef,
   floor:e.floor
  }};
+ // Source-backed canonical Wolf Slayer title: only actual unique defeated
+ // System wolves count, never spawns, attacks, or narrative observations.
+ if(e.killer==="player"&&e.monsterId==="system.dungeon_wolf"&&
+    n.dungeonKeys["instant.first"]?.state==="entered"&&
+    !n.storyFlags.includes("title.wolf_slayer")){
+  const wolves=Object.entries(n.defeatEvidence).filter(([ref,proof])=>
+   proof.monsterId==="system.dungeon_wolf"&&n.defeatedTargetRefs.includes(ref));
+  if(wolves.length>=FIRST_INSTANT_CANON_RULES.wolfSlayerEarnedAtUniqueWolves)
+   n.storyFlags.push("title.wolf_slayer");
+ }
  return n;
 }
 export const CROSSOVER_BALANCE_NOTES=[
