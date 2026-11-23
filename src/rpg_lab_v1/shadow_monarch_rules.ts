@@ -180,6 +180,9 @@ export interface JinwooMagicStone{
  id:string;monsterRef:string;monsterName:string;kind:"monster";
  powerRating:number;powerTier:JinwooShadow["powerTier"];
  guildValueValis:number;corruptedMana:boolean;
+ /** Optional validated Linos-model provenance for new Chroma stones only. */
+ sizePct?:number;saturationPct?:number;integrityPct?:number;
+ pricingModel?:"chroma_linos_v1";
  intact:boolean;state:"held"|"consumed_by_shadow"|"sold";
  collectedRef:string;
 }
