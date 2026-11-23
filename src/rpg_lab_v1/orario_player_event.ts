@@ -50,7 +50,8 @@ const playable=new Set([
  "dungeon_clear","instant_return","first_knight","shadow_deploy","shadow_victory",
  "shadow_revive","daily_box","injury","rest","medical_care",
  "reconcile_chroma_d1","reconcile_chroma_starting_valis",
- "reconcile_chroma_d3_xp","reconcile_chroma_d3_full","evolve_skill",
+ "reconcile_chroma_d3_xp","reconcile_chroma_d3_full",
+ "reconcile_chroma_razan_xp","evolve_skill",
  "local_purchase"
 ]);
 export type OrarioPlayerAction={
@@ -154,6 +155,30 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
      throw Error("CHROMA_D3_XP_RECONCILE_EVIDENCE_OR_STATE_INVALID");
    const n=structuredClone(current);
    n.xp+=124; // 199 total for six kills instead of the previous 75.
+   n.appliedRewardRefs.push(sourceRef);
+   return n;
+  }
+  case "reconcile_chroma_razan_xp":{
+   // One-time, narrowly source-verified correction after the campaign
+   // upgraded Razan's reward from 55 XP to 83 XP (not extra kill XP).
+   // Only the existing Chroma save with both confirmed kills qualifies.
+   const razanRef="chroma.d3_b2_razan_quicksilver_combo_6.554";
+   const brigaRef="chroma.d3_b2_briga_close_combo_7.563";
+   if(s.projectId!=="chroma_orario_main_20261120"||
+      s.sessionId!=="chroma_day0_20261120"||
+      s.player.hero?.id!=="hero.chroma"||
+      sourceRef!=="chroma.repair.d3_razan_reward_28xp.584"||
+      eventTime!=="D3 18:24"||a.playerApproved!==true||
+      q.confirmRazanRewardReview!==true||
+      current.appliedRewardRefs.includes(sourceRef)||
+      !s.events.some(ev=>ev.sourceRef===razanRef)||
+      !s.events.some(ev=>ev.sourceRef===brigaRef)||
+      current.defeatEvidence?.["chroma.instant.razan.01"]?.sourceRef!==razanRef||
+      current.defeatEvidence?.["chroma.instant.briga.01"]?.sourceRef!==brigaRef||
+      current.systemLevel!==7||current.xp!==1459)
+    throw Error("CHROMA_RAZAN_REWARD_CORRECTION_NOT_PROVEN");
+   const n=structuredClone(current);
+   n.xp+=28; // 83 newly balanced XP - 55 previously earned XP.
    n.appliedRewardRefs.push(sourceRef);
    return n;
   }
