@@ -17,6 +17,8 @@ export const SYSTEM_EQUIPMENT_EFFECTS:Readonly<Record<string,Effect>>={
  shortbow:{slot:"weapon",attack:4,armor:0,speedPenalty:0},
  daggers_throwing:{slot:"weapon",attack:3,armor:0,speedPenalty:0},
  dagger_hardened:{slot:"weapon",attack:7,armor:0,speedPenalty:0},
+ // Canonical C-rank +25 dagger; requires source-evidenced Kasaka boss drop.
+ kasaka_fang:{slot:"weapon",attack:25,armor:0,speedPenalty:0},
  sword_obsidian:{slot:"weapon",attack:11,armor:0,speedPenalty:0},
  dagger_shadowbound:{slot:"weapon",attack:14,armor:0,
   speedPenalty:0,skillGate:"shadow_extraction"},
@@ -43,7 +45,11 @@ export function previewVerifiedLoadout(s:JinwooState,e:Loadout){
   const m=SYSTEM_EQUIPMENT_EFFECTS[id],entry=catalog[id];
   const loadedKnives=id==="daggers_throwing"&&
    (s.ammoRemaining?.daggers_throwing??0)>0;
-  if(!m||!entry||((s.inventory[id]??0)<1&&!loadedKnives))
+  const earnedKasakaFang=id==="kasaka_fang"&&
+   (s.systemDropRefs??[]).some(ref=>
+    s.defeatEvidence?.[ref]?.monsterId==="system.kasaka");
+  if(!m||(!entry&&!earnedKasakaFang)||
+     ((s.inventory[id]??0)<1&&!loadedKnives))
    throw Error("PLAYER_EQUIPMENT_NOT_OWNED_OR_UNSUPPORTED");
   if(m.skillGate&&!s.unlockedSkills.includes(m.skillGate))
    throw Error("PLAYER_EQUIPMENT_SKILL_LOCKED");

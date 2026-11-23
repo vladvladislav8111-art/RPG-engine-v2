@@ -44,6 +44,11 @@ export function recordConfirmedMonsterDrop(s:JinwooState,e:{
   (s.systemDropRefs??[]).includes(e.monsterRef)||
   !Object.hasOwn(SYSTEM_MONSTER_DROPS,e.monsterId))
   throw Error("PLAYER_MONSTER_DROP_NOT_EARNED");
+ // A Kasaka keepsake is a canonical two-piece boss reward, never two
+ // independent loot rolls nor an item recoverable from a different kill.
+ if(e.monsterId==="system.kasaka"&&
+    s.defeatEvidence?.[e.monsterRef]?.monsterId!=="system.kasaka")
+  throw Error("PLAYER_KASAKA_DROP_BOSS_PROOF_REQUIRED");
  const table=SYSTEM_MONSTER_DROPS[e.monsterId as keyof typeof SYSTEM_MONSTER_DROPS];
  const roll=draw(e.monsterRef+"|"+e.monsterId);
  let remaining=roll,itemId:string|null=null;
@@ -53,6 +58,10 @@ export function recordConfirmedMonsterDrop(s:JinwooState,e:{
  const n=structuredClone(s);
  n.systemDropRefs=[...(n.systemDropRefs??[]),e.monsterRef];
  if(itemId)n.inventory[itemId]=(n.inventory[itemId]??0)+1;
+ // The source canon drops both Venom Fang and Kasaka's Venom together.
+ // Maintain the existing one-monsterRef, one-search, one-reward gate.
+ if(e.monsterId==="system.kasaka"&&itemId==="kasaka_fang")
+  n.inventory.kasaka_venom=(n.inventory.kasaka_venom??0)+1;
  n.appliedRewardRefs.push(e.sourceRef);
  return {next:n,itemId,roll};
 }
