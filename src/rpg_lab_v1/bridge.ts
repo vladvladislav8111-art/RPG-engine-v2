@@ -11,6 +11,8 @@ import {narrativeMinute} from "./events.ts";
 import {effectiveJinwooMaxHp,effectiveJinwooMaxMp,effectiveJinwooStaminaReserve,
  projectJinwooFalna} from "./shadow_monarch_rules.ts";
 import {readCurrentPlayerBattle} from "./orario_player_combat.ts";
+import {runChromaHuntBatch} from "./hunt_batch.ts";
+import {applyOrarioPlayerAction} from "./orario_player_event.ts";
 import {reviewLabNarration,type LabNarrativeReviewRequest} from "./narrative_guard.ts";
 export type LabPackLoader=(projectId:string,expectedRevision?:number)=>Promise<{pack:LabPack;revision:number}>;
 export type LabSourceLoader=(projectId:string)=>Promise<GoogleSourceIndex>;
@@ -112,6 +114,10 @@ export async function hydrateLabBridgeRequest(req:WorldV3BatchRequest,load:LabPa
       loaded.session.sessionId!==spec.sessionId)
     throw Error("LAB_SESSION_BRIDGE_PROJECT_MISMATCH");
    const view=reviewLabSessionMemory(loaded.pack,loaded.session,spec as LabMemoryViewRequest);
+   const hunt=spec.huntPreview;
+   if(hunt!==undefined&&(!record(hunt)||typeof hunt.sourceRef!=="string"||!record(hunt.options)||
+      Object.keys(hunt).some(k=>!["sourceRef","options"].includes(k))))throw Error("HUNT_PREVIEW_INVALID");
+   const huntPreview=record(hunt)?runChromaHuntBatch(loaded.session,hunt.sourceRef as string,hunt.options as Record<string,unknown>,applyOrarioPlayerAction).receipt:null;
    // The existing World V3 memory-view channel can also audit the player's actual
    // typed RPG Lab state. Keep it opt-in, read-only, and bounded to avoid leaking
    // NPC private memories or exceeding World V3's 64 KiB payload limit.
@@ -142,6 +148,8 @@ export async function hydrateLabBridgeRequest(req:WorldV3BatchRequest,load:LabPa
       lastCombatRef:p.activeEncounter.lastCombatRef??null}:null,
     recentEvents:loaded.session.events.slice(-8),
     gmPostCount:loaded.session.gmPostCadence?.count??0,
+    heldMagicStones:Object.values(p.magicStones).filter(x=>x.state==="held").length,
+    lastHuntBatch:p.lastHuntBatch?{sourceRef:p.lastHuntBatch.sourceRef,endClock:p.lastHuntBatch.endClock,totals:p.lastHuntBatch.totals,stopReason:p.lastHuntBatch.stopReason}:null,
     sourceAttestedBySave:true,readOnly:true
    }:null;
    const auditRequested=spec.includePlayerAudit===true;
@@ -170,6 +178,7 @@ export async function hydrateLabBridgeRequest(req:WorldV3BatchRequest,load:LabPa
     ...view,packRevision:loaded.packRevision,sessionRevision:loaded.sessionRevision,
     ...(audit?{playerAudit:audit}:{}),
     ...(compact?{compactPlayerAudit:compact}:{}),
+    ...(huntPreview?{huntPreview:{...huntPreview,readOnly:true,committed:false}}:{}),
    }}});
    continue;
   }

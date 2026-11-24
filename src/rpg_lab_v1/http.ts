@@ -21,6 +21,7 @@ import {readOrarioPlayerAnchors} from "./orario_player_anchors.ts";
 import {planLabEventArchive} from "./event_archive.ts";
 import {buildFreshDanmachiLabPack} from "./danmachi_starter.ts";
 import {readOrarioPlayerHud} from "./orario_player_event.ts";
+import type {HuntReceipt} from "./hunt_batch.ts";
 import {CHROMA_GM_WELCOME_CARD,CHROMA_GM_FIVE_POST_CHECK} from "./gm_guide.ts";
 import {promoteOriginalNpcInKv,type LabPromoteOriginalNpcArgs} from "./original_npc_promotion_kv.ts";
 import {archivedLabKey,validateLabArchiveRequest,validateLabArchiveMarker,
@@ -220,7 +221,7 @@ export async function commitLabCampaignEvent(args:{
  event:LabTurnWithPlan;expectedPackRevision?:number;
 }):Promise<{ok:true;revision:number;projectId:string;sessionId:string;
  sourceRef:string;gameClock:string;rememberedBy:string[];legacySaveTouched:false;
- roleplayGuardRequired:boolean;roleplayGuardVerified:boolean}>{
+ roleplayGuardRequired:boolean;roleplayGuardVerified:boolean;huntReceipt?:HuntReceipt}>{
  const loaded=await loadLabProjectFromKv(args.projectId);
  return commitLabCampaignEventInKv(await storage(),args,loaded);
 }
@@ -322,6 +323,8 @@ export async function commitLabCampaignEventInKv(kv:Deno.Kv,args:{
  }
  const checked=applyGuardedLabEvent(planned.working,pack,event,expectedRevision,historicProof,receipt);
  const next=checked.next;
+ const huntReceipt=event.playerSystem?.kind==="hunt_batch"?next.player.jinwoo?.lastHuntBatch:undefined;
+ if(huntReceipt&&huntReceipt.sourceRef!==event.sourceRef)throw Error("HUNT_RECEIPT_SOURCE_MISMATCH");
  const value=await encodeLabSession(next,pack,expectedRevision+1);
  const head=await prepareLabSessionHead(kv,projectId,sessionId,value);
  let tx=kv.atomic()
@@ -330,7 +333,7 @@ export async function commitLabCampaignEventInKv(kv:Deno.Kv,args:{
   .check({key:archivedLabKey(projectId,sessionId),versionstamp:retired.versionstamp})
   .check({key:refKey,versionstamp:ref.versionstamp})
   .set(key,head)
-  .set(refKey,{revision:expectedRevision+1,event});
+  .set(refKey,{revision:expectedRevision+1,event,...(huntReceipt?{huntReceipt}:{})});
  if(backupEntry)tx=tx.check({key:backupEntry.key,versionstamp:backupEntry.versionstamp})
   .set(backupEntry.key,receipt);
  if(restorePoint&&restoreEntry)tx=tx.check({key:restoreKey,versionstamp:restoreEntry.versionstamp}).set(restoreKey,restorePoint);
@@ -343,7 +346,8 @@ export async function commitLabCampaignEventInKv(kv:Deno.Kv,args:{
  return {ok:true as const,revision:value.revision,projectId,sessionId,
   sourceRef:event.sourceRef,gameClock:next.gameClock,
   rememberedBy:event.observations?.map(x=>x.npcId)??[],legacySaveTouched:false as const,
-  roleplayGuardRequired:checked.guardRequired,roleplayGuardVerified:checked.guardVerified};
+  roleplayGuardRequired:checked.guardRequired,roleplayGuardVerified:checked.guardVerified,
+  ...(huntReceipt?{huntReceipt}:{})};
 }
 
 /** Explicit atomic NPC promotion, with no gameplay event or save migration. */
@@ -408,11 +412,11 @@ export async function readLabConfirmedEvent(projectId:string,sessionId:string,so
    readOnly:true,legacySaveTouched:false};
  }
  const kv=await storage();
- const result=await kv.get<{revision:number;event:LabConfirmedEvent}>([
+ const result=await kv.get<{revision:number;event:LabConfirmedEvent;huntReceipt?:HuntReceipt}>([
   ROOT,"event_refs",projectId,sessionId,sourceRef]);
  if(!result.value)throw Error("LAB_EVENT_NOT_FOUND");
  return {projectId,sessionId,revision:result.value.revision,
-  event:result.value.event,readOnly:true,legacySaveTouched:false};
+  event:result.value.event,...(result.value.huntReceipt?{huntReceipt:result.value.huntReceipt}:{}),readOnly:true,legacySaveTouched:false};
 }
 
 export async function handleRpgLabHttp(req:Request,url:URL,commitEvent=commitLabCampaignEvent,openStorage=storage):Promise<Response>{
