@@ -65,7 +65,7 @@ const playable=new Set([
  "daily_start","daily_progress","daily_claim","daily_fail",
  "purchase","use_item","spend_points","falna_bless","falna_update",
  "stone_collect","stone_sell","stone_sell_batch","stone_extract","monster_drop",
- "chroma_swap_kasaka_fang",
+ "chroma_swap_kasaka_fang","reconcile_chroma_f9_rabbit_vital",
  "unlock","change_class","plot_key","dungeon_key","dungeon_enter",
  "dungeon_clear","instant_return","first_knight","shadow_deploy","shadow_victory",
  "shadow_revive","daily_box","injury","rest","medical_care",
@@ -438,6 +438,34 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
   case "rune_study":
    return applyV4RuneStudy(current as unknown as LiveV46Save,{sourceRef,skillId:String(q.skillId??""),
     playerConfirmed:true}) as unknown as JinwooState;
+  case "reconcile_chroma_f9_rabbit_vital":{
+   // One-time, source-bound adjudication of the already executed penetrating
+   // head thrust. No new attack, roll, skill use, fatigue, MP or stone collection.
+   const first="chroma.d4_f9_rabbit_head_combo.792";
+   const second="chroma.d4_f9_rabbit_head_thrust.793";
+   const enemy="chroma.d4.f9.needle_rabbit.790";
+   const battle=current.activeEncounter;
+   if(s.projectId!=="chroma_orario_main_20261120"||
+      s.sessionId!=="chroma_day0_20261120"||s.player.hero?.id!=="hero.chroma"||
+      sourceRef!=="chroma.repair.d4_f9_rabbit_vital.794"||
+      eventTime!==s.gameClock||eventTime!=="D4 13:47"||
+      q.confirmExistingBrainPenetration!==true||
+      !current.storyFlags.includes("chroma_crossover_v4")||
+      ![first,second].every(ref=>s.events.some(e=>e.sourceRef===ref)&&
+        current.appliedRewardRefs.includes(ref))||
+      current.appliedRewardRefs.includes(sourceRef)||
+      current.defeatedTargetRefs.includes(enemy)||current.defeatEvidence?.[enemy]||
+      !battle||battle.enemyRef!==enemy||battle.monsterId!=="needle_rabbit"||
+      battle.floor!==9||battle.round!==2||battle.lastCombatRef!==second||
+      battle.startedRef!=="chroma.d4_f9_search_needle_rabbit.790"||
+      (battle.bleedingWounds?.length??0)<2||
+      !battle.paralyzedLocations?.some(x=>x.location==="whole_body"&&x.secondsRemaining>0))
+    throw Error("CHROMA_F9_RABBIT_VITAL_REPAIR_NOT_PROVEN");
+   const corrected=structuredClone(current);
+   corrected.activeEncounter=undefined;
+   return commitBalancedMonsterDefeat(corrected,{sourceRef,monsterId:battle.monsterId,
+    floor:battle.floor,monsterRef:enemy,confirmedDefeat:true,killer:"player"});
+  }
   case "start_battle":
    if(!s.player.locationId?.startsWith("orario.dungeon")&&
      !Object.values(current.dungeonKeys).some(k=>k.state==="entered"))

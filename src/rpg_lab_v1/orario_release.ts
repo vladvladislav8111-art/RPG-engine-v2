@@ -2,7 +2,7 @@
  * Deno Deploy must serve this marker before a rollout is considered verified.
  */
 export const ORARIO_PLAYER_RELEASE={
- version:"danmachi-solo-chroma-rpg-lab-v4.7-2026-11-24",
+ version:"danmachi-solo-chroma-rpg-lab-v4.7.1-2026-11-24",
  branch:"main",
  features:["player_system","falna_buff","orario_combat","shadow_army",
   "system_instances","npc_suspicion","cas_save",
@@ -20,6 +20,7 @@ export const ORARIO_PLAYER_RELEASE={
   "kasaka_venom_permanent_tradeoff","guild_verified_bulk_stone_sale",
   "chroma_steel_dagger_equipment_swap",
   "preexisting_kandiaru_poison_protection",
-  "chroma_proven_venom_debuff_correction"] as const,
+  "chroma_proven_venom_debuff_correction","wolf_slayer_animal_scope",
+  "chroma_f9_vital_repair","compact_player_audit"] as const,
  noAutomaticCampaignCreation:true
 } as const;
