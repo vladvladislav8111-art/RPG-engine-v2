@@ -33,7 +33,7 @@ export type HuntEncounterReceipt={targetRef:string;monsterId:string;time:string;
  summoned:number;speedActivated:boolean;xp:number;gold:number;damageTaken:number;
  defeatRef:string|null;stoneRef:string|null;material:string|null;};
 export type HuntBlockReceipt={from:string;to:string;sector:number;openedSector:boolean;
- localCleared:boolean;encounters:HuntEncounterReceipt[];};
+ localCleared:boolean;signalLost:boolean;encounters:HuntEncounterReceipt[];};
 export type HuntReceipt={schema:"CHROMA_HUNT_BATCH_V1";sourceRef:string;startClock:string;
  endClock:string;options:HuntOptions;stopReason:"duration"|"hp"|"fatigue"|"mana_for_group"|
  "encounter_limit"|"unresolved_battle"|"unconscious"|"stone_capacity";
@@ -58,8 +58,8 @@ function options(q:Record<string,unknown>):HuntOptions{
  if(!int(o.floor,1,100)||!int(o.durationMinutes,5,180)||!int(o.intervalMinutes,5,10)||
   !["ant_chain","patrol"].includes(String(o.mode))||!int(o.speedAt,3,8)||
   !int(o.stopHpPercent,10,95)||!int(o.stopFatigue,10,95)||
-  !["kasaka_fang","steel_dagger","dagger_hardened","dagger_basic"].includes(String(o.weaponId))||
-  !["steel_dagger","dagger_hardened","dagger_basic"].includes(String(o.baitWeaponId))||
+  !["kasaka_fang","steel_dagger","dagger_hardened","blade_steel"].includes(String(o.weaponId))||
+  !["steel_dagger","dagger_hardened","blade_steel"].includes(String(o.baitWeaponId))||
   typeof o.collectStones!=="boolean"||typeof o.collectMaterials!=="boolean"||
   typeof o.includeOtherMonsters!=="boolean")throw Error("HUNT_OPTIONS_INVALID");
  if(o.mode==="ant_chain"&&(o.floor<7||o.floor>9))throw Error("HUNT_ANT_FLOOR_INVALID");
@@ -104,8 +104,7 @@ export function runChromaHuntBatch(session:LabSession,sourceRef:string,q:Record<
  const stop=():HuntReceipt["stopReason"]|null=>p.hp<=0?"unconscious":
   p.hp/effectiveJinwooMaxHp(p)*100<=o.stopHpPercent?"hp":
   p.fatigue>=o.stopFatigue?"fatigue":
-  o.collectStones&&Object.keys(p.magicStones).length>=500?"stone_capacity":
-  enemyCount>=48?"encounter_limit":null;
+  o.collectStones&&Object.keys(p.magicStones).length>=500?"stone_capacity":null;
  const seed=(s:string)=>hash(session.sessionId+"|"+session.gameClock+"|"+o.floor+"|"+s);
  function fight(minute:number,id:string,chain:HuntSector|null):HuntEncounterReceipt{
   const targetRef=child("target"),card=monsterForPlayer(p,id,{floor:o.floor,monsterRef:targetRef});
@@ -159,13 +158,13 @@ export function runChromaHuntBatch(session:LabSession,sourceRef:string,q:Record<
   }else{r.outcome=p.hp<=0?"unconscious":"ongoing";reason=stop()??(reason==="duration"?"unresolved_battle":reason);}
   const after=snap(p);r.xp=gained(b,after);r.gold=after.gold-b.gold;
   totals.xp+=r.xp;totals.gold+=r.gold;totals.damageTaken+=r.damageTaken;
-  if(reason==="duration")reason=stop()??"duration";
+  if(reason==="duration")reason=stop()??(enemyCount>=48?"encounter_limit":"duration");
   return r;
  }
  for(let offset=0;offset<o.durationMinutes&&reason==="duration";offset+=o.intervalMinutes){
   const from=start+offset,to=Math.min(start+o.durationMinutes,from+o.intervalMinutes);
   const priorStop=stop();if(priorStop){reason=priorStop;break;}
-  const b:HuntBlockReceipt={from:clock(from),to:clock(to),sector:sector?.index??index,openedSector:false,localCleared:false,encounters:[]};
+  const b:HuntBlockReceipt={from:clock(from),to:clock(to),sector:sector?.index??index,openedSector:false,localCleared:false,signalLost:false,encounters:[]};
   blocks.push(b);end=to;
   if(o.mode==="ant_chain"){
    if(!sector){index++;b.sector=index;b.openedSector=true;
@@ -180,7 +179,9 @@ export function runChromaHuntBatch(session:LabSession,sourceRef:string,q:Record<
     b.encounters.push(fight(minute,"killer_ant",sector));
     if(reason!=="duration"){end=minute;b.to=clock(end);break;}
    }
-   if(sector&&sector.pending===0&&sector.reserve===0&&!p.activeEncounter){b.localCleared=true;sector=null;}
+   if(sector&&sector.pending===0&&!p.activeEncounter){
+    b.localCleared=sector.reserve===0;b.signalLost=sector.reserve>0;sector=null;
+   }
    // Opportunistic fights happen on the way through an empty/cleared sector,
    // not as invented simultaneous attacks while an ant encounter is active.
    const others=species.filter(x=>x!=="killer_ant");

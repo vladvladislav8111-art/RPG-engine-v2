@@ -149,7 +149,7 @@ export async function hydrateLabBridgeRequest(req:WorldV3BatchRequest,load:LabPa
     recentEvents:loaded.session.events.slice(-8),
     gmPostCount:loaded.session.gmPostCadence?.count??0,
     heldMagicStones:Object.values(p.magicStones).filter(x=>x.state==="held").length,
-    lastHuntBatch:p.lastHuntBatch?{sourceRef:p.lastHuntBatch.sourceRef,endClock:p.lastHuntBatch.endClock,totals:p.lastHuntBatch.totals,stopReason:p.lastHuntBatch.stopReason}:null,
+    lastHuntBatch:p.lastHuntBatch?{sourceRef:p.lastHuntBatch.sourceRef,endClock:p.lastHuntBatch.endClock,totals:p.lastHuntBatch.totals,stopReason:p.lastHuntBatch.stopReason,remaining:p.lastHuntBatch.remaining}:null,
     sourceAttestedBySave:true,readOnly:true
    }:null;
    const auditRequested=spec.includePlayerAudit===true;
