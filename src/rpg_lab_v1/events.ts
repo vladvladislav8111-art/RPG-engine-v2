@@ -169,6 +169,8 @@ export function applyConfirmedLabEvent(session:LabSession,pack:LabPack,event:Lab
   if(pack.worldId!=="danmachi.orario"||event.linos!==undefined||
     event.effects!==undefined||event.playerSystem?.args===undefined)
    throw Error("ORARIO_PLAYER_EVENT_CONFLICT");
+  if(event.playerSystem.kind==="hunt_batch"&&(event.kind!=="player_turn"||event.playerLocationId!==undefined&&event.playerLocationId!==session.player.locationId||event.locationId!==undefined&&event.locationId!==session.player.locationId))
+   throw Error("HUNT_EVENT_LOCATION_OR_KIND_INVALID");
   if(event.playerSystem.kind==="init"&&event.kind!=="character_setup")
    throw Error("ORARIO_PLAYER_INIT_KIND_REQUIRED");
   if(["falna_bless","falna_update"].includes(event.playerSystem.kind)){

@@ -206,6 +206,8 @@ export interface PlayerCombatEncounter{
  paralyzedLocations?:{location:string;secondsRemaining:number}[];
 }
 export interface JinwooState{
+ /** Bounded latest receipt; older receipts live in immutable event records. */
+ lastHuntBatch?:import("./hunt_batch.ts").HuntReceipt;
  schema:"DANMACHI_JINWOO_PREP_V1";
  injuries?:import("./orario_player_survival.ts").PlayerInjury[];
  dailyTraining?:import("./orario_player_survival.ts").DailyTraining;

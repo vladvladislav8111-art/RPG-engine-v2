@@ -60,6 +60,7 @@ import {applyVerifiedV46RuneCast,applyVerifiedV46EquipTitle,
 import type {RuneSkillId} from "./rune_abilities_v45.ts";
 import type {TitleId} from "./title_rules_v45.ts";
 import type {RuneChallengeId} from "./rune_challenges_v45.ts";
+import {runChromaHuntBatch} from "./hunt_batch.ts";
 const playable=new Set([
  "init","activate","chroma_v4_migrate","rune_study","rune_cast","rune_evolve","equip_title","title_grant","rune_challenge","start_battle","combat_exchange","activate_skill",
  "daily_start","daily_progress","daily_claim","daily_fail",
@@ -73,7 +74,7 @@ const playable=new Set([
  "reconcile_chroma_d3_xp","reconcile_chroma_d3_full",
  "reconcile_chroma_razan_xp","reconcile_chroma_kandiaru_blessing",
  "reconcile_chroma_d3_linos_47_stones","reconcile_chroma_d4_daily_triple","evolve_skill",
- "local_purchase"
+ "local_purchase","hunt_batch"
 ]);
 export type OrarioPlayerAction={
  kind:string;
@@ -100,6 +101,11 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
  if(!current)throw Error("ORARIO_PLAYER_NOT_INITIALIZED");
  const q={...a.args,sourceRef} as Record<string,unknown>;
  switch(a.kind){
+  case "hunt_batch":{
+   const batch=runChromaHuntBatch(s,sourceRef,a.args,applyOrarioPlayerAction);
+   if(eventTime!==batch.receipt.endClock)throw Error("HUNT_END_CLOCK_MISMATCH:"+batch.receipt.endClock);
+   return batch.next;
+  }
   case "reconcile_chroma_d4_daily_triple":{
    // One-time correction for the D4 claim which was committed by the older
    // choice-based code. That claim already awarded +3 unallocated points.

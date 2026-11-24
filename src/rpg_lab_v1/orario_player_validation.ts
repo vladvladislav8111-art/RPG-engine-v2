@@ -84,6 +84,15 @@ export function validateOrarioPlayerState(s:JinwooState):JinwooState{
     throw Error("CHROMA_V4_META_INVALID");
   }
 
+ if(s.lastHuntBatch!==undefined){
+  const h=s.lastHuntBatch;
+  if(h.schema!=="CHROMA_HUNT_BATCH_V1"||!id(h.sourceRef)||!s.appliedRewardRefs.includes(h.sourceRef)||
+   !Array.isArray(h.blocks)||h.blocks.length>36||!h.blocks.every(b=>Array.isArray(b.encounters)&&b.encounters.length<=5)||
+   h.blocks.reduce((n,b)=>n+b.encounters.length,0)>48||JSON.stringify(h).length>48000||
+   (h.remaining!==null&&(!nat(h.remaining.index)||!nat(h.remaining.pending)||!nat(h.remaining.reserve)||
+    !nat(h.remaining.signalled)||!nat(h.remaining.defeated)||h.remaining.pending+h.remaining.reserve+h.remaining.defeated>9)))
+   throw Error("HUNT_RECEIPT_INVALID");
+ }
  if(!unique(s.appliedRewardRefs)||!unique(s.defeatedTargetRefs)||
   !unique(s.unlockedSkills)||!unique(s.unlockedShopItems)||
   !unique(s.storyFlags)||s.completedDailyDays.some(x=>typeof x!=="string"))
