@@ -8,6 +8,9 @@ import {reviewLabSessionMemory,type LabMemoryViewRequest} from "./memory_view.ts
 import {withSessionDefaults,type LabSession} from "./session.ts";
 import {buildLabSceneBrief} from "./living_world.ts";
 import {narrativeMinute} from "./events.ts";
+import {effectiveJinwooMaxHp,effectiveJinwooMaxMp,effectiveJinwooStaminaReserve,
+ projectJinwooFalna} from "./shadow_monarch_rules.ts";
+import {readCurrentPlayerBattle} from "./orario_player_combat.ts";
 import {reviewLabNarration,type LabNarrativeReviewRequest} from "./narrative_guard.ts";
 export type LabPackLoader=(projectId:string,expectedRevision?:number)=>Promise<{pack:LabPack;revision:number}>;
 export type LabSourceLoader=(projectId:string)=>Promise<GoogleSourceIndex>;
@@ -112,6 +115,35 @@ export async function hydrateLabBridgeRequest(req:WorldV3BatchRequest,load:LabPa
    // The existing World V3 memory-view channel can also audit the player's actual
    // typed RPG Lab state. Keep it opt-in, read-only, and bounded to avoid leaking
    // NPC private memories or exceeding World V3's 64 KiB payload limit.
+   const compactRequested=spec.includeCompactPlayerAudit===true;
+   if(spec.includeCompactPlayerAudit!==undefined&&typeof spec.includeCompactPlayerAudit!=="boolean")
+    throw Error("LAB_COMPACT_PLAYER_AUDIT_FLAG_INVALID");
+   if(compactRequested&&spec.includePlayerAudit===true)
+    throw Error("LAB_PLAYER_AUDIT_MODES_CONFLICT");
+   const p=loaded.session.player.jinwoo;
+   const compact=compactRequested&&p?{
+    locationId:loaded.session.player.locationId??null,
+    systemLevel:p.systemLevel,xp:p.xp,freeStatPoints:p.freeStatPoints,
+    hp:p.hp,hpMax:effectiveJinwooMaxHp(p),mp:p.mp,mpMax:effectiveJinwooMaxMp(p),
+    fatigue:p.fatigue,stamina:effectiveJinwooStaminaReserve(p),
+    stats:p.stats,effectiveStats:projectJinwooFalna(p).total,
+    falna:{level:p.falna.divineLevel,status:p.falna.status,godId:p.falna.godId??null},
+    gold:p.gold,valis:p.valis,activeTitle:p.chromaV4Meta?.activeTitle??null,
+    activeSkills:(p.activeSkills??[]).slice(0,20),
+    skillMastery:Object.entries(p.skillMastery??{}).slice(0,20).map(([id,m])=>
+      ({id,level:m.level,xp:m.xp,uses:m.uses})),
+    daggerUses:p.combatTraining?.dagger?.uses??0,
+    inventory:Object.entries(p.inventory).slice(0,40).map(([id,quantity])=>({id,quantity})),
+    inventoryDistinctCount:Object.keys(p.inventory).length,
+    battle:readCurrentPlayerBattle(p),
+    battleConditions:p.activeEncounter?{
+      bleeding:(p.activeEncounter.bleedingWounds??[]).slice(0,20),
+      paralysis:(p.activeEncounter.paralyzedLocations??[]).slice(0,20),
+      lastCombatRef:p.activeEncounter.lastCombatRef??null}:null,
+    recentEvents:loaded.session.events.slice(-8),
+    gmPostCount:loaded.session.gmPostCadence?.count??0,
+    sourceAttestedBySave:true,readOnly:true
+   }:null;
    const auditRequested=spec.includePlayerAudit===true;
    if(spec.includePlayerAudit!==undefined&&typeof spec.includePlayerAudit!=="boolean")
     throw Error("LAB_PLAYER_AUDIT_FLAG_INVALID");
@@ -137,6 +169,7 @@ export async function hydrateLabBridgeRequest(req:WorldV3BatchRequest,load:LabPa
    jobs.push({...job,payload:{rpgLabSessionResolvedV1:{
     ...view,packRevision:loaded.packRevision,sessionRevision:loaded.sessionRevision,
     ...(audit?{playerAudit:audit}:{}),
+    ...(compact?{compactPlayerAudit:compact}:{}),
    }}});
    continue;
   }

@@ -30,6 +30,16 @@ function hash(ref:string,salt:string):number{
   h^=c.charCodeAt(0);h=Math.imul(h,16777619);
  }return (h>>>0)%100+1;
 }
+/** Explicit animal identities plus previously supported beast families. */
+export function isWolfSlayerBeast(monsterId:string):boolean{
+ return /wolf|kobold|silverback|beast/.test(monsterId)||
+  new Set(["needle_rabbit","metal_rabbit","almiraj","dungeon_lizard",
+   "jack_bird","frog_shooter","bad_bat","hellhound","ligerfang","battle_boar",
+   "mammoth_fool","sword_stag","skull_sheep","old_bison","black_rhinos",
+   "loup_garou","loup_garou_surface","gryphon","hippogriff","unicorn",
+   "system.razan","system.briga","system.kasaka","infant_dragon","minotaur",
+   "desert_lizard","firebird","aqua_serpent","thunder_snake"]).has(monsterId);
+}
 export type BattleResolution={
  next:JinwooState;rolls:{player:number;enemy:number};
  dealt:number;taken:number;injuryRef?:string;
@@ -114,7 +124,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  // Expired System skills never affect combat, and their modifier snapshot
  // cannot mutate base System attributes or permanently award levels.
  const modifiers=getPlayerSkillBattleModifiers(next,minute);
- const beastForTitle=/wolf|kobold|silverback|beast/.test(mob.id);
+ const beastForTitle=isWolfSlayerBeast(mob.id);
  const wolfTitleBoost=v4&&beastForTitle&&
   next.chromaV4Meta?.activeTitle==="wolf_slayer"&&
   next.chromaV4Meta.titleIds.includes("wolf_slayer")?1.4:1;
@@ -200,7 +210,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
   }
   if(s.storyFlags.includes("chroma_crossover_v4")&&s.chromaV4Meta){
    const tags:string[]=[];
-   if(/wolf|kobold|silverback|beast/.test(mob.id))tags.push("beast");
+   if(isWolfSlayerBeast(mob.id))tags.push("beast");
    if(/ant|spider|mantis|arachne/.test(mob.id))tags.push("chitin");
    if(/goliath|giant|udaius|titan/.test(mob.id))tags.push("giant");
    if(mob.armor>=10)tags.push("armor");
