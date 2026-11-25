@@ -44,7 +44,7 @@ export type ActivePlayerSkill={
  /** Snapshot at activation; gaining mastery mid-buff cannot reprice or reboost it. */
  speedMultiplier?:number;
  reactionMultiplier?:number;
- criticalMultiplier?:number;criticalStrikes?:number;
+ criticalMultiplier?:number;criticalStrikes?:number;criticalSeriesDurationMs?:number;
 };
 const valid=(s:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(s);
 export function activateConfirmedPlayerSkill(s:JinwooState,e:{
@@ -121,7 +121,8 @@ export function activateConfirmedPlayerSkill(s:JinwooState,e:{
  n.activeSkills=[...now,{id:e.skillId,startedRef:e.sourceRef,
   expiresMinute:e.startMinute+e.durationMinutes,agilityBonus,positionBonus,
   mpSpent:mpCost,speedMultiplier,reactionMultiplier,
-  ...(critical?{criticalMultiplier:critical.multiplier,criticalStrikes:critical.strikes}:{})}];
+  ...(critical?{criticalMultiplier:critical.multiplier,criticalStrikes:critical.strikes,
+   ...(critical.seriesDurationMs!==undefined?{criticalSeriesDurationMs:critical.seriesDurationMs}:{})}:{})}];
  n.appliedRewardRefs.push(e.sourceRef);return n;
 }
 export function getPlayerSkillBattleModifiers(s:JinwooState,minute:number){

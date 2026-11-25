@@ -1,5 +1,5 @@
 import {v48Edge,v48Pierce} from "./chroma_runes_v48.ts";
-import {weaponSharpness} from "./chroma_sharpness_v48.ts";
+import {weaponSharpness,usesSharpnessRules} from "./chroma_sharpness_v48.ts";
 /** Source-backed equipment effectiveness, using the existing Player shop.
  * Physical items must be present in the Player inventory before combat stats
  * can be derived; no free +200 weapon from a client-entered number.
@@ -46,7 +46,8 @@ export function previewVerifiedLoadout(s:JinwooState,e:Loadout){
  const slots=new Set<Slot>();
  let attack=0,armor=0,speedPenalty=0,pierce=0;
  for(const id of ids){
-  const m=SYSTEM_EQUIPMENT_EFFECTS[id],entry=catalog[id];
+  const m=id==="knight_killer"&&usesSharpnessRules(s.storyFlags)?
+   {...SYSTEM_EQUIPMENT_EFFECTS[id],attack:75,armorPiercing:0}:SYSTEM_EQUIPMENT_EFFECTS[id],entry=catalog[id];
   const loadedKnives=id==="daggers_throwing"&&
    (s.ammoRemaining?.daggers_throwing??0)>0;
    const heldSteelDagger=id==="steel_dagger"&&
@@ -92,7 +93,7 @@ export function previewOwnedEquipmentEncounter(s:JinwooState,e:{
  const bonus=gear.armorPiercing+(e.move==="strike"&&e.attackStyle==="thrust"&&gear.sharpness!==null?v48Pierce(s,e.currentMinute??-1):0);
  const piercing=bonus>0&&mob.armor>=5?Math.min(bonus,mob.armor):0;
  // A simple verified armor-penetration bonus, not absolute immunity bypass.
- const exchange=previewCombatExchange(s,{
+ const baseExchange=previewCombatExchange(s,{
   monsterId:e.monsterId,floor:e.floor,move:e.move,
   weaponPower:e.move==="magic"?0:gear.attack+piercing,
   armorPower:gear.armor,
@@ -102,6 +103,14 @@ export function previewOwnedEquipmentEncounter(s:JinwooState,e:{
   spellMpCost:e.spellMpCost,spellId:e.spellId,
   confirmedIrregularRef:e.confirmedIrregularRef
  });
- return {gear,exchange,readOnly:true,requiresPlayerConfirmedEquipAction:true,
+ // Explicit armored species; ordinary high-level beasts do not qualify just
+ // because their numeric defense grew. The v4.8 bonus replaces flat pierce.
+ const armoredTargetMultiplier=usesSharpnessRules(s.storyFlags)&&e.move==="strike"&&
+  e.loadout.weaponId==="knight_killer"&&e.attackStyle!=="blunt"&&mob.armor>=5&&
+  new Set(["killer_ant","hard_armored","mad_beetle","crystal_turtle","black_rhinos","crystal_mantis","system.igris","sl_igris"]).has(mob.id)?1.25:1;
+ const damageIfHit=Math.round(baseExchange.damageIfHit*armoredTargetMultiplier);
+ const exchange=armoredTargetMultiplier===1?baseExchange:{...baseExchange,damageIfHit,
+  expectedDamage:+(baseExchange.hitChancePercent*damageIfHit/100).toFixed(1)};
+ return {gear,exchange,armoredTargetMultiplier,readOnly:true,requiresPlayerConfirmedEquipAction:true,
   noFreeWeaponAndNoAutoBattleOutcome:true};
 }

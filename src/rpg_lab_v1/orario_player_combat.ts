@@ -1,7 +1,7 @@
 import {v48BattleBonus,v48StrikePractice,v48Fatigue,v48PhysicalShield,v48PainStore,v48PainRelease,v48Fear,v48EndBattle} from "./chroma_runes_v48.ts";
 import {effectiveJinwooStaminaReserve} from "./shadow_monarch_rules.ts";
 import {usesSharpnessRules} from "./chroma_sharpness_v48.ts";
-import {criticalMultiplier,criticalChain} from "./chroma_critical_v48.ts";
+import {criticalMultiplier,criticalChain,criticalProfile,timedMutilationChain,type MutilationReceipt} from "./chroma_critical_v48.ts";
 import {boundedChildRef} from "./event_child_refs.ts";
 /** Event-sourced freeform skirmish integration.
  * One confirmed exchange can represent a short narration sequence, but all
@@ -145,6 +145,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  const daggerFighting=e.move==="strike"&&(
   e.loadout.weaponId?.includes("dagger")===true||
   e.loadout.weaponId==="kasaka_fang"||
+  (usesSharpnessRules(next.storyFlags)&&e.loadout.weaponId==="knight_killer")||
   (!e.loadout.weaponId&&next.storyFlags.includes("chroma.dual_daggers.verified")));
  if(e.confirmedComboAttack===true&&!daggerFighting)
   throw Error("PLAYER_DAGGER_COMBO_REQUIRES_DAGGERS");
@@ -154,6 +155,19 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  const forced=v48&&daggerFighting&&e.loadout.weaponId!=="daggers_throwing"?(next.activeSkills??[]).find(x=>x.expiresMinute>minute&&x.criticalMultiplier!==undefined):undefined;
  if(forced)next.activeSkills=(next.activeSkills??[]).filter(x=>x.startedRef!==forced.startedRef);
  let series:number[]=[];
+ // Recover the original level of an old in-flight activation from its snapshot.
+ const mutilationProfile=forced?.id==="mutilation"?{
+  strikes:forced.criticalStrikes??3,
+  seriesDurationMs:forced.criticalSeriesDurationMs??criticalProfile("mutilation",
+   Math.max(1,Math.min(10,1+Math.round(((forced.criticalMultiplier??3)-3)*9)))).seriesDurationMs!
+ }:null;
+ let mutilationReceipt:MutilationReceipt|undefined;
+ const resolveMutilation=(firstHit:boolean,damage:number,hp:number)=>{
+  const {impacts,...timing}=timedMutilationChain(mutilationProfile!,firstHit,damage,hp,
+   i=>hash(e.sourceRef,"critical_series_"+i)<=wear.exchange.hitChancePercent);
+  mutilationReceipt={sourceRef:e.sourceRef,enemyRef:active.enemyRef,...timing};
+  return impacts;
+ };
  // Dagger skill multiplies damage and attack tempo, never a new stat.
  const learnedBonus=0;
  const wear=previewOwnedEquipmentEncounter(battleStats,{
@@ -235,11 +249,14 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
   }
   if(v48&&e.move==="strike"){
    dealt=Math.round(dealt*criticalMultiplier(e.confirmedWeakPointHit===true,forced?.criticalMultiplier));
-   if(forced)series=criticalChain({strikes:forced.criticalStrikes??1},true,dealt,enemyHpBeforeV4,i=>hash(e.sourceRef,"critical_series_"+i)<=chance);
+   if(mutilationProfile)series=resolveMutilation(true,dealt,enemyHpBeforeV4);
+   else if(forced)series=criticalChain({strikes:forced.criticalStrikes??1},true,dealt,enemyHpBeforeV4,i=>hash(e.sourceRef,"critical_series_"+i)<=chance);
    dealt+=v48PainRelease(next,battle.enemyRef,e.painReleasePercent??100);
   }
   active.enemyHp=Math.max(0,active.enemyHp-dealt-series.slice(1).reduce((a,b)=>a+b,0));
  }
+  if(mutilationProfile&&!mutilationReceipt)resolveMutilation(false,0,enemyHpBeforeV4);
+  if(mutilationReceipt)next.lastMutilation=mutilationReceipt;
   // V4 only: independently validate the second held blade, calculate its
   // own hit roll and damage, then advance persisted bleed and paralysis.
   let v4ParalysisPenalty=0,v4DirectLanded=false;
@@ -254,7 +271,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
     ...(confirmedVital?{confirmedVitalEvidence:true,weakPoint:e.vitalTarget}:{}),
    });
    for(const damage of series.slice(1))impacts.push({weaponId:e.loadout.weaponId??"unarmed",attackLanded:true,penetrated:true,physicalDamage:damage,location:loc});
-   if(e.move==="strike"&&e.loadout.offhandWeaponId&&active.enemyHp>0){
+   if(e.move==="strike"&&e.loadout.offhandWeaponId&&active.enemyHp>0&&!mutilationProfile){
     const off=previewOwnedEquipmentEncounter(battleStats,{
      monsterId:battle.monsterId,floor:battle.floor,
      loadout:{weaponId:e.loadout.offhandWeaponId},move:"strike",attackStyle:e.attackStyle,currentMinute:minute,
@@ -276,6 +293,8 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
      paralyzedLocations:active.paralyzedLocations}});
    v4DirectLanded=impacts.length>0;
    const inflicted=applyConfirmedImpacts(initial,impacts,v48&&!!forced?11:2);
+   // The existing one-second status tick represents the surrounding exchange,
+   // not the fixed subsecond duration of the Mutilation strike sequence.
    const advanced=advanceEnemyStatuses(inflicted.target,1);
    active.enemyHp=e.move==="magic"&&v48?Math.max(0,advanced.hp-dealt):advanced.hp;
    active.bleedingWounds=advanced.bleedingWounds;

@@ -107,6 +107,17 @@ export function validateOrarioPlayerState(s:JinwooState):JinwooState{
    !nat(st.guildValueValis)||!nat(st.powerRating))
    throw Error("ORARIO_PLAYER_MAGIC_STONE_INVALID");
  }
+ if(s.lastMutilation!==undefined){
+  const r=s.lastMutilation;
+  if(!r||!id(r.sourceRef)||!id(r.enemyRef)||!s.appliedRewardRefs.includes(r.sourceRef)||
+   !nat(r.plannedStrikes)||r.plannedStrikes<3||r.plannedStrikes>10||
+   !nat(r.attemptedStrikes)||r.attemptedStrikes<1||r.attemptedStrikes>r.plannedStrikes||
+   !nat(r.landedStrikes)||r.landedStrikes>r.attemptedStrikes||
+   !nat(r.plannedDurationMs)||r.plannedDurationMs<120||r.plannedDurationMs>300||
+   (300-r.plannedDurationMs)%20!==0||
+   !nat(r.elapsedMs)||r.elapsedMs!==Math.ceil(r.plannedDurationMs*r.attemptedStrikes/r.plannedStrikes))
+   throw Error("ORARIO_MUTILATION_RECEIPT_INVALID");
+ }
  if(s.skillMastery!==undefined){
   if(!keys(s.skillMastery,32))throw Error("ORARIO_SKILL_MASTERY_MAP_INVALID");
   for(const [skillId,progress] of Object.entries(s.skillMastery)){

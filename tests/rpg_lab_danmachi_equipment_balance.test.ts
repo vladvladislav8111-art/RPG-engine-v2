@@ -84,3 +84,14 @@ test("Knight Killer's effect only helps against armor, never universal armor neg
  assert.equal(low.gear.armorPiercing,against.gear.armorPiercing);
  assert.equal(against.readOnly,true);
 });
+
+test("v4.8 Knight Killer restores attack and scoped armor damage without legacy changes",()=>{
+ let s=purse();s.systemLevel=40;s.storyFlags.push("chroma_crossover_v4","chroma_rules_v48");
+ s=purchaseJinwooItem(s,{sourceRef:"buy.knight.v48",itemId:"knight_killer",quantity:1});
+ assert.equal(s.gold,40500);
+ const gear=previewVerifiedLoadout(s,{weaponId:"knight_killer"});
+ assert.equal(gear.attack,75);assert.equal(gear.armorPiercing,0);assert.equal(gear.sharpness,120);
+ const armored=previewOwnedEquipmentEncounter(s,{monsterId:"killer_ant",floor:7,move:"strike",loadout:{weaponId:"knight_killer"}});
+ const beast=previewOwnedEquipmentEncounter(s,{monsterId:"minotaur",floor:16,move:"strike",loadout:{weaponId:"knight_killer"}});
+ assert.equal(armored.armoredTargetMultiplier,1.25);assert.equal(beast.armoredTargetMultiplier,1);
+});

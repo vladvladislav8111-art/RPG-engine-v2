@@ -1,3 +1,4 @@
+import {usesSharpnessRules} from "./chroma_sharpness_v48.ts";
 import {v48Reserve} from "./chroma_runes_v48.ts";
 /** Sung Jinwoo / Shadow Monarch crossover preparation for DanMachi RPG Lab.
  *
@@ -207,6 +208,8 @@ export interface PlayerCombatEncounter{
  paralyzedLocations?:{location:string;secondsRemaining:number}[];
 }
 export interface JinwooState{
+ /** Fixed subsecond v4.8 strike-series receipt, optional for legacy saves. */
+ lastMutilation?:import("./chroma_critical_v48.ts").MutilationReceipt;
  /** Bounded latest receipt; older receipts live in immutable event records. */
  lastHuntBatch?:import("./hunt_batch.ts").HuntReceipt;
  schema:"DANMACHI_JINWOO_PREP_V1";
@@ -387,7 +390,10 @@ export function shopAvailable(s:JinwooState){
 export function visibleJinwooStore(s:JinwooState):ShopEntry[]{
  if(!shopAvailable(s))return [];
  return JINWOO_STORE.filter(entry=>entry.minSystemLevel<=s.systemLevel&&
-  (entry.availability==="routine"||s.unlockedShopItems.includes(entry.id)));
+  (entry.availability==="routine"||s.unlockedShopItems.includes(entry.id)))
+  .map(entry=>entry.id==="knight_killer"&&usesSharpnessRules(s.storyFlags)?{
+   ...entry,goldPrice:9500,effect:"Атака +75, острота 120, +25% урона по тяжело бронированным целям; без прежнего плоского пробития"
+  }:entry);
 }
 export function purchaseJinwooItem(s:JinwooState,e:{
  sourceRef:string;itemId:string;quantity:number;
