@@ -1,0 +1,169 @@
+{
+  "status": "design-reviewed; not live rune drops or skills",
+  "note": "Campaign parameters agreed in DOC-D7-1604-350/351. Existing rune fields unchanged until execution, unlock, mastery, proofs and migration are wired and tested.",
+  "runes": [
+    {
+      "monsterId": "minotaur",
+      "id": "minotaur_strength",
+      "percent": 0.4,
+      "base": "STR +5..15%",
+      "evolution": "titan_might",
+      "effect": "STR +15..30%"
+    },
+    {
+      "monsterId": "killer_ant",
+      "id": "body_reserve",
+      "percent": 0.5,
+      "base": "SP max +10..30%; cost -5..15%",
+      "evolution": "overload",
+      "effect": "1 MP substitutes 3..5 SP when exhausted"
+    },
+    {
+      "monsterId": "infant_dragon",
+      "id": "dragon_blood",
+      "percent": 0.8,
+      "base": "heat/fire resistance 10..50%",
+      "evolution": "blood_burning",
+      "effect": "spend 5..20% maxHP for STR/AGI/PER +1.5..2 percentage points per percent maxHP; 60 seconds; floor 10% HP"
+    },
+    {
+      "monsterId": "moss_huge",
+      "id": "regeneration",
+      "percent": 0.3,
+      "base": "natural HP recovery x1..2",
+      "evolution": "living_core",
+      "effect": "1..3% maxHP/10s for 20..30MP"
+    },
+    {
+      "monsterId": "aqua_serpent",
+      "id": "second_breath",
+      "percent": 0.5,
+      "base": "breath holding x2..10",
+      "evolution": "autonomous_breathing",
+      "effect": "5..1 MP/min"
+    },
+    {
+      "monsterId": "bad_bat",
+      "id": "echolocation",
+      "percent": 0.6,
+      "base": "10..100m;20MP",
+      "evolution": "spatial_perception",
+      "effect": "silhouettes;25MP"
+    },
+    {
+      "monsterId": "ligerfang",
+      "id": "sixth_sense",
+      "percent": 0.4,
+      "base": "danger warning 5..30m",
+      "evolution": "danger_harbinger",
+      "effect": "direction and type"
+    },
+    {
+      "monsterId": "almiraj",
+      "id": "soft_landing",
+      "percent": 0.5,
+      "base": "fall damage -10..50%",
+      "evolution": "air_support",
+      "effect": "1..5 platforms;10..5MP each"
+    },
+    {
+      "monsterId": "lamia",
+      "id": "flexibility",
+      "percent": 0.4,
+      "base": "five stages; mobility +10..50%",
+      "evolution": "anomalous_flexibility",
+      "effect": "extended safe range"
+    },
+    {
+      "monsterId": "hard_armored",
+      "id": "physical_shield",
+      "percent": 0.4,
+      "base": "physical only; 5..15% maxHP cap;5..10 damage/MP",
+      "evolution": "layered_shield",
+      "effect": "physical shield layers"
+    },
+    {
+      "monsterId": "crystal_turtle",
+      "id": "pain_storage",
+      "percent": 0.4,
+      "base": "store 10..30% enemy HP damage; cap10% maxHP",
+      "evolution": "retribution",
+      "effect": "30..50%; cap15%; no self damage"
+    },
+    {
+      "monsterId": "black_rhinos",
+      "id": "immovability",
+      "percent": 0.3,
+      "base": "knockback/stun resistance 20..60%",
+      "evolution": "steadfast_fortress",
+      "effect": "active stance"
+    },
+    {
+      "monsterId": "silverback",
+      "id": "muscle_acceleration",
+      "percent": 0.4,
+      "base": "movement power +25..70%;12..20MP",
+      "evolution": "chain_power",
+      "effect": "multiple paid movements"
+    },
+    {
+      "monsterId": "crystal_mantis",
+      "id": "edge_sharpness",
+      "percent": 0.5,
+      "base": "sharpness +10..40%",
+      "evolution": "cleaving_blade",
+      "effect": "ranged edge 5..25m;20MP"
+    },
+    {
+      "monsterId": "sword_stag",
+      "id": "piercing",
+      "percent": 0.4,
+      "base": "thrust pierce +2..11",
+      "evolution": "breakthrough",
+      "effect": "enhanced thrust"
+    },
+    {
+      "monsterId": "green_dragon",
+      "id": "dragon_presence",
+      "percent": 0.3,
+      "base": "fear pressure, no mind control",
+      "evolution": "dragon_authority",
+      "effect": "targeted aura"
+    }
+  ],
+  "existingRuneChanges": {
+    "mana_barrier": "magic damage only",
+    "binding_web": "exclude from new drops after compatibility migration",
+    "focused_light": "exclude from new drops after compatibility migration"
+  },
+  "critical": {
+    "natural": 1.5,
+    "criticalAttack": {
+      "levels": 5,
+      "mp": [
+        70,
+        60,
+        50,
+        40,
+        30
+      ],
+      "multipliers": [
+        2,
+        2.25,
+        2.5,
+        2.75,
+        3
+      ]
+    },
+    "mutilation": {
+      "levels": 10,
+      "mpStart": 150,
+      "mpEnd": 100,
+      "strikesStart": 3,
+      "strikesEnd": 10,
+      "multiplierStart": 3,
+      "multiplierEnd": 4
+    },
+    "notes": "One confirmed hit at a time; no automatic hit or penetration. No stacking natural and forced crit; preserve existing vital proof. Not wired in this commit."
+  }
+}

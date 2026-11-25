@@ -1,3 +1,5 @@
+import {usesSharpnessRules} from "./chroma_sharpness_v48.ts";
+import {criticalProfile} from "./chroma_critical_v48.ts";
 /** Active System skills in the early Orario crossover.
  * A System stat alone does not imply possession of the Skill.
  * Combat effects require explicit activation and can expire without reward.
@@ -13,7 +15,7 @@ export function skillMasteryLevel(s:JinwooState,skillId:string):number{
  return s.skillMastery?.[skillId]?.level??1;
 }
 export function recordConfirmedSkillPractice(s:JinwooState,e:{
- skillId:"sprint"|"quicksilver";enemyRef:string;sourceRef:string;
+ skillId:"sprint"|"quicksilver"|"critical_attack"|"mutilation";enemyRef:string;sourceRef:string;
  threatLevel:number;confirmedEffective:true;
 }):JinwooState{
  if(!e.confirmedEffective||!valid(e.enemyRef)||!valid(e.sourceRef)||
@@ -26,7 +28,7 @@ export function recordConfirmedSkillPractice(s:JinwooState,e:{
  const next=structuredClone(s);
  const gain=Math.min(36,8+e.threatLevel*3);
  let level=old.level,xp=old.xp+gain;
- const maxLevel=e.skillId==="quicksilver"?10:5;
+ const maxLevel=e.skillId==="quicksilver"||e.skillId==="mutilation"?10:5;
  while(level<maxLevel&&xp>=level*60){xp-=level*60;level++;}
  next.skillMastery={...(next.skillMastery??{}),[e.skillId]:{
   level,xp:level>=maxLevel?0:xp,uses:old.uses+1,
@@ -42,6 +44,7 @@ export type ActivePlayerSkill={
  /** Snapshot at activation; gaining mastery mid-buff cannot reprice or reboost it. */
  speedMultiplier?:number;
  reactionMultiplier?:number;
+ criticalMultiplier?:number;criticalStrikes?:number;
 };
 const valid=(s:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(s);
 export function activateConfirmedPlayerSkill(s:JinwooState,e:{
@@ -66,6 +69,7 @@ export function activateConfirmedPlayerSkill(s:JinwooState,e:{
     now.some(x=>["sprint","quicksilver"].includes(x.id)))
   throw Error("PLAYER_SPEED_SKILLS_CANNOT_STACK");
  let mpCost=0,agilityBonus=0,positionBonus=0,speedMultiplier=1,reactionMultiplier=1;
+ let critical:ReturnType<typeof criticalProfile>|undefined;
  switch(e.skillId){
   case "sprint":
    if(s.unlockedSkills.includes("quicksilver"))
@@ -93,10 +97,12 @@ export function activateConfirmedPlayerSkill(s:JinwooState,e:{
     (speedMultiplier-1));break;
   case "critical_attack":
    if(e.durationMinutes!==1)throw Error("PLAYER_SKILL_DURATION_INVALID");
-   mpCost=12;break;
+   if(usesSharpnessRules(s.storyFlags))critical=criticalProfile("critical_attack",skillMasteryLevel(s,"critical_attack"));
+   mpCost=critical?.mp??12;break;
   case "mutilation":
    if(e.durationMinutes!==1)throw Error("PLAYER_SKILL_DURATION_INVALID");
-   mpCost=24;break;
+   if(usesSharpnessRules(s.storyFlags))critical=criticalProfile("mutilation",skillMasteryLevel(s,"mutilation"));
+   mpCost=critical?.mp??24;break;
   case "dagger_throw":
    if(e.durationMinutes!==1)throw Error("PLAYER_SKILL_DURATION_INVALID");
    mpCost=8;break;
@@ -114,7 +120,8 @@ export function activateConfirmedPlayerSkill(s:JinwooState,e:{
  const n=structuredClone(s);n.mp-=mpCost;
  n.activeSkills=[...now,{id:e.skillId,startedRef:e.sourceRef,
   expiresMinute:e.startMinute+e.durationMinutes,agilityBonus,positionBonus,
-  mpSpent:mpCost,speedMultiplier,reactionMultiplier}];
+  mpSpent:mpCost,speedMultiplier,reactionMultiplier,
+  ...(critical?{criticalMultiplier:critical.multiplier,criticalStrikes:critical.strikes}:{})}];
  n.appliedRewardRefs.push(e.sourceRef);return n;
 }
 export function getPlayerSkillBattleModifiers(s:JinwooState,minute:number){
@@ -179,6 +186,7 @@ export function recordConfirmedCombatTechnique(s:JinwooState,e:{
     !next.unlockedSkills.includes("master_of_shortsword"))
   next.unlockedSkills.push("master_of_shortsword");
  if(e.kind==="weakpoint"&&uses>=45&&
+    (!usesSharpnessRules(next.storyFlags)||skillMasteryLevel(next,"critical_attack")>=5)&&
     !next.unlockedSkills.includes("mutilation"))
   next.unlockedSkills.push("mutilation");
  if(e.kind==="throw"&&uses>=35&&

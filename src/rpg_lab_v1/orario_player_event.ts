@@ -1,3 +1,6 @@
+import {castV48,evolveV48,v48Known,ownsV48,practiceV48,v48Hazard,v48World,readV48,v48EndBattle,v48Strength} from "./chroma_runes_v48.ts";
+import {usesSharpnessRules,SHARPNESS_RULE_FLAG} from "./chroma_sharpness_v48.ts";
+import {previewOwnedEquipmentEncounter as v48EquipPreview} from "./danmachi_player_equipment.ts";
 import {requireMigrationReceipt,type MigrationBackupReceipt} from "./migration_receipt.ts";
 /** One event-stream adapter for the new Orario Player.
  * Every write is derived from an already confirmed Lab event sourceRef,
@@ -74,7 +77,7 @@ const playable=new Set([
  "reconcile_chroma_d3_xp","reconcile_chroma_d3_full",
  "reconcile_chroma_razan_xp","reconcile_chroma_kandiaru_blessing",
  "reconcile_chroma_d3_linos_47_stones","reconcile_chroma_d4_daily_triple","evolve_skill",
- "local_purchase","hunt_batch"
+ "local_purchase","hunt_batch","rune_practice_v48"
 ]);
 export type OrarioPlayerAction={
  kind:string;
@@ -329,6 +332,13 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
       s.player.hero?.id!=="hero.chroma"||a.playerApproved!==true||
       current.activeEncounter||q.confirmedBackup!==true)
     throw Error("CHROMA_V4_MIGRATION_GATES_NOT_MET");
+   if(q.enableV48===true){
+    if(!current.storyFlags.includes("chroma_crossover_v4")||usesSharpnessRules(current.storyFlags)||current.appliedRewardRefs.includes(sourceRef))throw Error("V48_MIGRATION_GATES_NOT_MET");
+    const n=structuredClone(current);n.storyFlags.push(SHARPNESS_RULE_FLAG);n.chromaV4Meta!.v48Runtime={mastery:{}};
+    n.activeSkills=(n.activeSkills??[]).filter(x=>x.id!=="critical_attack"&&x.id!=="mutilation");
+    if(n.chromaV4Meta!.runeRuntime)n.chromaV4Meta!.runeRuntime.effects=n.chromaV4Meta!.runeRuntime.effects.filter(x=>x.type!=="barrier");
+    n.appliedRewardRefs.push(sourceRef);return n;
+   }
    const staged=stageChromaV4(current as unknown as LiveV46Save) as unknown as JinwooState;
    const rebase=previewResourceRebase({
     systemLevel:current.systemLevel,systemStats:current.stats,
@@ -338,6 +348,12 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
    staged.hp=rebase.proposed.hp;staged.mp=rebase.proposed.mp;
    staged.appliedRewardRefs.push(sourceRef);
    return staged;
+  }
+  case "rune_practice_v48":{
+   const skillId=String(q.skillId??""),proofRef=String(q.proofRef??"");
+   const proof=historicProof?.sourceRef===proofRef?historicProof:s.events.find(x=>x.sourceRef===proofRef);
+   if(s.player.hero?.id!=="hero.chroma"||!ownsV48(current,skillId)||!proof||current.appliedRewardRefs.includes(sourceRef)||current.appliedRewardRefs.includes(proofRef)||!confirmHistoricProof({proofKind:proof.kind??"",expectedKind:"rune_practice_proof."+skillId,proofTime:proof.time,actionTime:eventTime,proofRef,sourceRef}))throw Error("V48_PRACTICE_PROOF_INVALID");
+   const n=structuredClone(current);practiceV48(n,skillId,proofRef);n.appliedRewardRefs.push(sourceRef,proofRef);return n;
   }
   case "rune_cast":case "rune_evolve":case "equip_title":case "title_grant":case "rune_challenge":{
    // Sources and outcomes are read from the authenticated Lab session;
@@ -408,6 +424,22 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
      current.storyFlags.includes("rune.evolution.rulers_touch.earned"),
    };
    const v46=current as unknown as LiveV46Save;
+   if(usesSharpnessRules(current.storyFlags)&&v48Known(String(q.skillId??""))){
+    const skillId=String(q.skillId);
+    if(a.kind==="rune_evolve")return evolveV48(current,{sourceRef,proofRef,skillId,verifiedFeat:!!proof&&confirmHistoricProof({proofKind:proof.kind??"",expectedKind:"rune_evolve_proof."+skillId,proofTime:proof.time,actionTime:eventTime,proofRef,sourceRef})&&current.storyFlags.includes("rune.evolution."+skillId+".earned")});
+    if(a.kind!=="rune_cast"||!verifiedKind("rune_cast"))throw Error("V48_CAST_PROOF_INVALID");
+    const minute=narrativeMinute(eventTime),previous=narrativeMinute(s.gameClock);if(minute===null||previous===null)throw Error("V48_CAST_CLOCK_INVALID");
+    const en=current.activeEncounter,mob=en?enemyCard():undefined;let damage:number|undefined,hit:boolean|undefined;
+    if(skillId==="cleaving_blade"){
+     if(!en||q.target!=="enemy"||typeof q.weaponId!=="string"||["shortbow","daggers_throwing"].includes(q.weaponId))throw Error("V48_CLEAVE_REQUIRES_EDGE");
+     const p=v48EquipPreview(current,{monsterId:en.monsterId,floor:en.floor,loadout:{weaponId:q.weaponId},move:"strike",attackStyle:"slash",...(en.irregularRef?{confirmedIrregularRef:en.irregularRef}:{})});
+     if(p.gear.sharpness===null)throw Error("V48_CLEAVE_REQUIRES_EDGE");damage=p.exchange.damageIfHit;hit=host.confirmRuneHit(sourceRef,proofRef,en.enemyRef);
+    }
+    const n=castV48(current,{sourceRef,skillId,minute,maxHp:effectiveJinwooMaxHp(current),elapsedMinutes:minute-previous,
+     ...(typeof q.hpPercent==="number"?{hpPercent:q.hpPercent}:{}),...(typeof q.count==="number"?{count:q.count}:{}),...(typeof q.durationSeconds==="number"?{durationSeconds:q.durationSeconds}:{}),...(en?{enemyRef:en.enemyRef,enemyLevel:mob!.systemThreatLevel}:{}),...(damage!==undefined?{damage,hit}:{})});
+    if(en&&n.activeEncounter?.enemyHp===0){n.activeEncounter=undefined;v48EndBattle(n);return commitBalancedMonsterDefeat(n,{sourceRef:childRuneVictoryRef(sourceRef,"direct"),monsterId:en.monsterId,floor:en.floor,monsterRef:en.enemyRef,confirmedDefeat:true,killer:"player",...(en.irregularRef?{confirmedIrregularRef:en.irregularRef}:{})});}
+    return n;
+   }
    if(a.kind==="rune_cast"){
     const minute=narrativeMinute(eventTime);
     if(minute===null)throw Error("V46_RUNE_EVENT_CLOCK_INVALID");
@@ -771,10 +803,17 @@ export function applyOrarioPlayerAction(s:LabSession,a:OrarioPlayerAction,
     costValis:q.costValis as number
    });
   }
-  case "injury":
+  case "injury":{
+   if(usesSharpnessRules(current.storyFlags)&&["fall","heat","magic"].includes(String(q.damageKind))&&q.confirmedCause===true){
+    const minute=narrativeMinute(eventTime);if(minute===null||typeof q.damage!=="number")throw Error("V48_HAZARD_INVALID");
+    const n=structuredClone(current),damage=v48Hazard(n,q.damage,q.damageKind as "fall"|"heat"|"magic",minute,sourceRef);
+    if(!damage){if(n.appliedRewardRefs.includes(sourceRef))throw Error("V48_HAZARD_DUPLICATE");n.appliedRewardRefs.push(sourceRef);return n;}
+    return applyConfirmedInjury(n,{...q,damage,sourceRef,confirmedCause:true} as Parameters<typeof applyConfirmedInjury>[1]);
+   }
    return applyConfirmedInjury(current,{
     ...q,sourceRef,confirmedCause:q.confirmedCause===true
    } as Parameters<typeof applyConfirmedInjury>[1]);
+  }
   default:throw Error("ORARIO_PLAYER_ACTION_UNKNOWN");
  }
 }
@@ -790,6 +829,7 @@ export function readOrarioPlayerHud(s:LabSession){
   mp:p.mp,mpMax:effectiveJinwooMaxMp(p),
   fatigue:p.fatigue,stamina:effectiveJinwooStaminaReserve(p),
   effectiveStats:projectJinwooFalna(p).total,
+  ...(usesSharpnessRules(p.storyFlags)?{runeV48:{mastery:readV48(p).mastery,world:v48World(p,narrativeMinute(s.gameClock)??0),strengthBonusPct:v48Strength(p),lastAction:readV48(p).lastAction}}:{}),
   phase:p.phase,awaitingActivation:p.awaitingActivation??false,
   gold:p.gold,valis:p.valis,
   inventory:{...p.inventory},

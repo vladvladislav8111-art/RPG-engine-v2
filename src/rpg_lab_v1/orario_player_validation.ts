@@ -1,3 +1,4 @@
+import {validateV48Runtime} from "./chroma_runes_v48.ts";
 /** Validates active Player state on every Lab session replay.
  * The original campaign state is stored separately and remains untouched.
  * Optional recent features maintain compatibility with older Player snapshots.
@@ -45,6 +46,7 @@ export function validateOrarioPlayerState(s:JinwooState):JinwooState{
     projectFalnaV4(s.layeredFalnaV4,s.stats);
    }
    const meta=s.chromaV4Meta!;
+   if(meta.v48Runtime!==undefined)validateV48Runtime(meta.v48Runtime);
    if(meta.runeRuntime!==undefined){
     const rt=meta.runeRuntime;
     if(!nat(rt.nowSecond)||!Array.isArray(rt.effects)||

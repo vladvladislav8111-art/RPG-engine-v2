@@ -1,3 +1,4 @@
+import {v48Reserve} from "./chroma_runes_v48.ts";
 /** Sung Jinwoo / Shadow Monarch crossover preparation for DanMachi RPG Lab.
  *
  * Pure, testable rulebook only. NO live campaign/save mutations. No automatic
@@ -651,6 +652,6 @@ export function effectiveJinwooMaxMp(s:JinwooState){
  * Canon fatigue remains a 0..100 percentage; displayed reserve scales with END. */
 export function effectiveJinwooStaminaReserve(s:JinwooState){
  const end=projectJinwooFalna(s).total.stamina;
- const max=Math.round(100*Math.max(10,end)/10);
+ const max=Math.round(100*Math.max(10,end)/10*(1+v48Reserve(s)/100));
  return {current:Math.round(max*(1-s.fatigue/100)),max,fatiguePercent:s.fatigue};
 }

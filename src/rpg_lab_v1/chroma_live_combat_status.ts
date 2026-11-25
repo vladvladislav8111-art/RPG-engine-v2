@@ -42,10 +42,10 @@ export function readCombatCondition(input:CombatStatusInput):TargetCondition{
 }
 
 /** Each wound is independent; a resistance must be evidenced, not injected for a boss. */
-export function applyConfirmedImpacts(initial:TargetCondition,impacts:ConfirmedImpact[]):{
+export function applyConfirmedImpacts(initial:TargetCondition,impacts:ConfirmedImpact[],limit:2|11=2):{
  target:TargetCondition;directDamage:number;vitalKill:boolean;kasakaWoundsAdded:number;
 }{
- if(impacts.length>2)throw Error('V4_MAX_TWO_STRIKES_PER_EXCHANGE');
+ if(impacts.length>limit)throw Error('V4_MAX_TWO_STRIKES_PER_EXCHANGE');
  let target=structuredClone(initial),vitalKill=false,kasakaWoundsAdded=0;
  const before=target.hp;
  for(const strike of impacts){

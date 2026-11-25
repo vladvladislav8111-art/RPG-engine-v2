@@ -1,3 +1,4 @@
+import {armorAbsorption,usesSharpnessRules} from "./chroma_sharpness_v48.ts";
 import {chromaCatalogId} from "./chroma_catalog_ids.ts";
 /** Cross-universe battle calibration, revision 1.
  * Source-inspired lore anchors: DanMachi Falna ability rank and qualitative
@@ -231,6 +232,8 @@ export type ExchangePreview={
 export function previewCombatExchange(s:JinwooState,params:{
  monsterId:string;floor:number;move:CombatMove;
  weaponPower:number;armorPower:number;positionBonus?:number;
+ /** Owned equipment adapter supplies this for guarded v4.8 previews. */
+ weaponSharpness?:number|null;
  proficiencyBonus?:number;spellMpCost?:number;spellId?:string;monsterCount?:number;
  confirmedIrregularRef?:string;
 }):ExchangePreview{
@@ -267,14 +270,16 @@ export function previewCombatExchange(s:JinwooState,params:{
  const damage=guard?0:Math.max(1,Math.round(
   (params.move==="magic"?p.intelligence*1.7:
    p.strength*1.4)+params.weaponPower-
-  mob.combat.stamina*.35-mob.armor*1.6));
+  mob.combat.stamina*.35-(usesSharpnessRules(s.storyFlags)&&params.move==="strike"?
+   armorAbsorption(mob.armor,params.weaponSharpness):mob.armor*1.6)));
  // Player advantage and reach must matter in each short exchange.
  const enemyChance=clamp(Math.round(35+
   18*Math.log(Math.max(.01,(mob.combat.agility+mob.combat.perception)/
    (p.agility+p.perception)))-
   pos-(guard?18:0)+s.fatigue*.08),2,95);
  const enemyDamage=Math.max(1,Math.round(mob.combat.strength*1.3+
-  mob.weaponForce-p.stamina*.35-params.armorPower*1.6));
+  mob.weaponForce-p.stamina*.35-(usesSharpnessRules(s.storyFlags)?
+   armorAbsorption(params.armorPower,(mob as typeof mob & {attackSharpness?:number|null}).attackSharpness):params.armorPower*1.6)));
  return {hitChancePercent:guard?0:chance,
   damageIfHit:damage,expectedDamage:+(chance*damage/100).toFixed(1),
   attackerResourceCost:{mp:params.move==="magic"?params.spellMpCost!:0,
@@ -357,7 +362,7 @@ export function commitBalancedMonsterDefeat(s:JinwooState,e:{
  if(n.storyFlags.includes("chroma_crossover_v4")&&getV4MonsterCard(runeCatalogId)){
   if(!n.chromaV4Meta)throw Error("CHROMA_V4_RUNE_META_MISSING");
   const r=v4RuneReceipt({monsterId:runeCatalogId,targetRef:e.monsterRef,
-   sourceRef:e.sourceRef});
+   sourceRef:e.sourceRef,rulesV48:usesSharpnessRules(n.storyFlags)});
   if(r){
    const claims=n.chromaV4Meta.runeAwards??{};
    if(claims[e.monsterRef])throw Error("CHROMA_V4_RUNE_ALREADY_ROLLED");

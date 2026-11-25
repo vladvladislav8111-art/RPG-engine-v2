@@ -1,3 +1,7 @@
+import {v48BattleBonus,v48StrikePractice,v48Fatigue,v48PhysicalShield,v48PainStore,v48PainRelease,v48Fear,v48EndBattle} from "./chroma_runes_v48.ts";
+import {effectiveJinwooStaminaReserve} from "./shadow_monarch_rules.ts";
+import {usesSharpnessRules} from "./chroma_sharpness_v48.ts";
+import {criticalMultiplier,criticalChain} from "./chroma_critical_v48.ts";
 import {boundedChildRef} from "./event_child_refs.ts";
 /** Event-sourced freeform skirmish integration.
  * One confirmed exchange can represent a short narration sequence, but all
@@ -81,6 +85,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  tacticalApproach?:"standard"|"paint_blind"|"hit_and_run";
  confirmedPaintAvailable?:boolean;
  confirmedWeakPointHit?:boolean;
+ attackStyle?:"slash"|"thrust"|"blunt";painReleasePercent?:number;
  /** Explicitly described multi-cut sequence, not a free automatic strike. */
   confirmedComboAttack?:boolean;
   targetLocation?:string;
@@ -132,10 +137,11 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  const boost=(key:keyof JinwooState["stats"])=>(rawTotal?
   Math.max(0,Math.round(rawTotal.total[key]*wolfTitleBoost)-rawTotal.bonus[key]):
   next.stats[key]);
+ const runeBonus=v48BattleBonus(next,minute,projectJinwooFalna(next).total,e.move==="strike");
  const battleStats={...next,stats:{...next.stats,
-  strength:boost("strength"),stamina:boost("stamina"),
-  agility:boost("agility")+modifiers.agilityBonus,
-  perception:boost("perception"),intelligence:boost("intelligence")}};
+  strength:boost("strength")+runeBonus.strength,stamina:boost("stamina"),
+  agility:boost("agility")+modifiers.agilityBonus+runeBonus.agility,
+  perception:boost("perception")+runeBonus.perception,intelligence:boost("intelligence")}};
  const daggerFighting=e.move==="strike"&&(
   e.loadout.weaponId?.includes("dagger")===true||
   e.loadout.weaponId==="kasaka_fang"||
@@ -143,11 +149,16 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
  if(e.confirmedComboAttack===true&&!daggerFighting)
   throw Error("PLAYER_DAGGER_COMBO_REQUIRES_DAGGERS");
  const daggerTechnique=previewDaggerTechnique(next);
+ const v48=usesSharpnessRules(next.storyFlags);
+ if(e.attackStyle!==undefined&&!['slash','thrust','blunt'].includes(e.attackStyle))throw Error('V48_ATTACK_STYLE_INVALID');
+ const forced=v48&&daggerFighting&&e.loadout.weaponId!=="daggers_throwing"?(next.activeSkills??[]).find(x=>x.expiresMinute>minute&&x.criticalMultiplier!==undefined):undefined;
+ if(forced)next.activeSkills=(next.activeSkills??[]).filter(x=>x.startedRef!==forced.startedRef);
+ let series:number[]=[];
  // Dagger skill multiplies damage and attack tempo, never a new stat.
  const learnedBonus=0;
  const wear=previewOwnedEquipmentEncounter(battleStats,{
   monsterId:battle.monsterId,floor:battle.floor,
-  loadout:e.loadout,move:e.move==="retreat"?"guard":e.move,
+  loadout:e.loadout,move:e.move==="retreat"?"guard":e.move,attackStyle:e.attackStyle,currentMinute:minute,
   ...(e.proficiencyBonus!==undefined||learnedBonus>0?
    {proficiencyBonus:Math.min(20,(e.proficiencyBonus??0)+learnedBonus)}:{}),
   positionBonus:(e.positionBonus??0)+modifiers.positionBonus-injury.speedPenalty,
@@ -183,7 +194,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
    Math.round((modifiers.reactionMultiplier-1)*50))));
   if(rolls.player<=evade){
    active.round++;
-   next.activeEncounter=undefined;
+   next.activeEncounter=undefined;v48EndBattle(next);
    next.appliedRewardRefs.push(e.sourceRef);
    return {next,rolls,dealt,taken,outcome:"retreat",
     xpGranted:0,systemGoldGranted:0};
@@ -193,14 +204,14 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
   if(daggerFighting&&daggerTechnique.unlocked){
    dealt=Math.max(1,Math.round(dealt*daggerTechnique.damageMultiplier));
    const activeNow=modifiers.currentlyActive;
-   if(e.confirmedWeakPointHit===true&&
+   if(!v48&&e.confirmedWeakPointHit===true&&
       activeNow.some(x=>x==="critical_attack"||x==="mutilation"))
     dealt=Math.round(dealt*(activeNow.includes("mutilation")?1.85:1.50));
    if(e.loadout.weaponId==="daggers_throwing"&&
       activeNow.some(x=>x==="dagger_throw"||x==="dagger_rush"))
     dealt=Math.round(dealt*(activeNow.includes("dagger_rush")?1.45:1.20));
    // Faster extra cut only if player actually ordered multiple strikes.
-   if(e.confirmedComboAttack===true&&
+   if(!forced&&e.confirmedComboAttack===true&&
       e.loadout.weaponId!=="daggers_throwing"&&
       hash(e.sourceRef,"dagger_combo_speed")<=
        daggerTechnique.attackSpeedBonusPercent){
@@ -222,7 +233,12 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
    dealt=Math.max(1,Math.round(dealt*title.physicalDamageMultiplier));
    dealt+=Math.round(mob.armor*1.6*title.armorIgnoreFraction);
   }
-  active.enemyHp=Math.max(0,active.enemyHp-dealt);
+  if(v48&&e.move==="strike"){
+   dealt=Math.round(dealt*criticalMultiplier(e.confirmedWeakPointHit===true,forced?.criticalMultiplier));
+   if(forced)series=criticalChain({strikes:forced.criticalStrikes??1},true,dealt,enemyHpBeforeV4,i=>hash(e.sourceRef,"critical_series_"+i)<=chance);
+   dealt+=v48PainRelease(next,battle.enemyRef,e.painReleasePercent??100);
+  }
+  active.enemyHp=Math.max(0,active.enemyHp-dealt-series.slice(1).reduce((a,b)=>a+b,0));
  }
   // V4 only: independently validate the second held blade, calculate its
   // own hit roll and damage, then advance persisted bleed and paralysis.
@@ -237,10 +253,11 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
     physicalDamage:dealt,location:loc,
     ...(confirmedVital?{confirmedVitalEvidence:true,weakPoint:e.vitalTarget}:{}),
    });
+   for(const damage of series.slice(1))impacts.push({weaponId:e.loadout.weaponId??"unarmed",attackLanded:true,penetrated:true,physicalDamage:damage,location:loc});
    if(e.move==="strike"&&e.loadout.offhandWeaponId&&active.enemyHp>0){
     const off=previewOwnedEquipmentEncounter(battleStats,{
      monsterId:battle.monsterId,floor:battle.floor,
-     loadout:{weaponId:e.loadout.offhandWeaponId},move:"strike",
+     loadout:{weaponId:e.loadout.offhandWeaponId},move:"strike",attackStyle:e.attackStyle,currentMinute:minute,
      positionBonus:(e.positionBonus??0)+modifiers.positionBonus-injury.speedPenalty,
      ...(e.proficiencyBonus!==undefined?{proficiencyBonus:e.proficiencyBonus}:{}),
      ...(battle.irregularRef?{confirmedIrregularRef:battle.irregularRef}:{})
@@ -249,7 +266,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
      const offDamage=Math.max(1,off.exchange.damageIfHit-injury.attackPenalty);
      impacts.push({weaponId:e.loadout.offhandWeaponId,attackLanded:true,
       penetrated:true,physicalDamage:offDamage,location:loc});
-     next.fatigue=Math.min(100,next.fatigue+off.exchange.attackerResourceCost.fatigue);
+     v48Fatigue(next,off.exchange.attackerResourceCost.fatigue,effectiveJinwooStaminaReserve(next).max,battle.enemyRef);
     }
    }
    const initial=readCombatCondition({enemyHp:enemyHpBeforeV4,
@@ -258,9 +275,9 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
     status:{bleedingWounds:active.bleedingWounds,
      paralyzedLocations:active.paralyzedLocations}});
    v4DirectLanded=impacts.length>0;
-   const inflicted=applyConfirmedImpacts(initial,impacts);
+   const inflicted=applyConfirmedImpacts(initial,impacts,v48&&!!forced?11:2);
    const advanced=advanceEnemyStatuses(inflicted.target,1);
-   active.enemyHp=advanced.hp;
+   active.enemyHp=e.move==="magic"&&v48?Math.max(0,advanced.hp-dealt):advanced.hp;
    active.bleedingWounds=advanced.bleedingWounds;
    active.paralyzedLocations=advanced.paralyzedLocations;
    v4ParalysisPenalty=paralysisCounterPenalty(advanced);
@@ -268,7 +285,13 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
   }
   const cost=wear.exchange.attackerResourceCost;
  if(cost.mp>next.mp)throw Error("PLAYER_BATTLE_MP_INSUFFICIENT");
- next.mp-=cost.mp;next.fatigue=Math.min(100,next.fatigue+cost.fatigue);
+ next.mp-=cost.mp;v48Fatigue(next,cost.fatigue*Math.max(1,series.length),effectiveJinwooStaminaReserve(next).max,battle.enemyRef);
+ if(v48&&e.move==="strike")v48StrikePractice(next,minute,battle.enemyRef,dealt>0,e.attackStyle==="thrust"&&wear.gear.sharpness!==null,wear.gear.sharpness!==null&&e.attackStyle!=="blunt",mob.armor);
+ if(v48&&series.length&&forced&&(forced.id==="critical_attack"||forced.id==="mutilation")){
+  const trained=recordConfirmedSkillPractice(next,{skillId:forced.id,enemyRef:battle.enemyRef,sourceRef:e.sourceRef,threatLevel:mob.systemThreatLevel,confirmedEffective:true});
+  next.skillMastery=trained.skillMastery;
+  if(forced.id==="critical_attack"&&(next.skillMastery?.critical_attack?.level??0)>=5&&(next.combatTraining?.weakpoint?.uses??0)>=45&&!next.unlockedSkills.includes("mutilation"))next.unlockedSkills.push("mutilation");
+ }
  active.round++;
  active.lastCombatRef=e.sourceRef;
  // Credit one source-attested success per enemy, not every hit or activation.
@@ -306,7 +329,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
   // No automatic loot. A separate confirmed recovery event may collect
   // the intact magic stone. XP & gold committed on the same battle event.
   const oldLevel=next.systemLevel,oldGold=next.gold,oldXp=next.xp;
-  next.activeEncounter=undefined;
+  next.activeEncounter=undefined;v48EndBattle(next);
   const raised=commitBalancedMonsterDefeat(next,{
    sourceRef:e.sourceRef,monsterId:mob.id,floor:battle.floor,
    monsterRef:battle.enemyRef,confirmedDefeat:true,killer:"player",
@@ -331,7 +354,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
   Math.round((modifiers.reactionMultiplier-1)*50)-
   (next.unlockedSkills.includes("combat_evasion")?4:0)-
    (daggerFighting?Math.round(daggerTechnique.attackSpeedBonusPercent/4):0)-
-   v4ParalysisPenalty);
+   v4ParalysisPenalty-v48Fear(next,battle.enemyRef,minute));
   if(v4&&next.chromaV4Meta?.runeRuntime){
    const runes=next.chromaV4Meta.runeRuntime;
    const active=runes.effects.filter(x=>x.targetId===battle.enemyRef&&
@@ -368,7 +391,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
    if(v4&&next.chromaV4Meta?.runeRuntime){
     const ledger=next.chromaV4Meta.runeRuntime;
     const barriers=ledger.effects.filter(x=>x.targetId==="hero.chroma"&&
-     x.type==="barrier"&&x.expiresSecond>ledger.nowSecond);
+     x.type==="barrier"&&!v48&&x.expiresSecond>ledger.nowSecond);
     for(const barrier of barriers){
      if(taken<=0)break;
      const absorbed=Math.min(taken,Math.floor(barrier.power));
@@ -376,6 +399,7 @@ export function resolveConfirmedOrarioExchange(s:JinwooState,e:{
     }
     ledger.effects=ledger.effects.filter(x=>x.type!=="barrier"||x.power>0);
    }
+   if(v48){taken=v48PhysicalShield(next,taken,minute,battle.enemyRef);v48PainStore(next,Math.min(next.hp,taken),maxHp,battle.enemyRef);}
    next.hp=Math.max(0,next.hp-taken);
   if(next.hp>0&&next.hp<=maxHp*.30){
    const trained=recordConfirmedCombatTechnique(next,{kind:"survival",

@@ -28,12 +28,12 @@ export type RuneTarget = {
  size:'small'|'medium'|'large'|'giant';poisonImmune:boolean;
  weightKg?:number;position?:{x:number;y:number;z:number};wounds:RuneWound[];
 };
-export type RuneStatus='stealth'|'barrier'|'burning'|'stagger'|'paralyzed'|
+export type RuneStatus='stealth'|'barrier'|'magic_barrier'|'burning'|'stagger'|'paralyzed'|
  'poisoned'|'webbed'|'acid_erosion'|'telekinetic_hold';
 export type RuneEffect={id:string;sourceRef:string;targetId:string;
  type:RuneStatus;expiresSecond:number;power:number;location?:string};
 export type RuneEncounter={nowSecond:number;casterId:string;mp:number;maxMp:number;
- intelligence:number;learnedSkills:string[];mastery:Partial<Record<RuneSkillId,RuneMastery>>;
+ intelligence:number;rulesV48?:boolean;learnedSkills:string[];mastery:Partial<Record<RuneSkillId,RuneMastery>>;
  cooldownReadyAt:Partial<Record<RuneSkillId,number>>;targets:Record<string,RuneTarget>;
  effects:RuneEffect[];usedRefs:string[];};
 export type RuneCast={sourceRef:string;proofRef:string;encounterRef:string;
@@ -89,11 +89,11 @@ export function canRuneTargetAct(state:RuneEncounter,targetId:string,location?:s
   (x.type==='paralyzed'&&(x.location==='whole_body'||(location!==undefined&&x.location===location))));
 }
 export function absorbRuneShield(state:RuneEncounter,e:{targetId:string;incomingDamage:number;
- sourceRef:string;attackFromFront:boolean}){
+ sourceRef:string;attackFromFront:boolean;damageKind?:'physical'|'magic'}){
  if(!Number.isSafeInteger(e.incomingDamage)||e.incomingDamage<0||!ID.test(e.sourceRef)||
     state.usedRefs.includes(e.sourceRef))throw Error('RUNE_SHIELD_DAMAGE_INVALID');
  const n=clone(state);
- const barriers=n.effects.filter(x=>x.targetId===e.targetId&&x.type==='barrier'&&
+ const barriers=n.effects.filter(x=>x.targetId===e.targetId&&(n.rulesV48?e.damageKind==='magic'&&x.type==='magic_barrier':x.type==='barrier')&&
   x.expiresSecond>n.nowSecond&&
   (x.location!=='front' || e.attackFromFront)).sort((a,b)=>a.expiresSecond-b.expiresSecond);
  let pending=e.incomingDamage,blocked=0;
@@ -102,7 +102,7 @@ export function absorbRuneShield(state:RuneEncounter,e:{targetId:string;incoming
   const absorb=Math.min(pending,Math.floor(barrier.power));
   barrier.power-=absorb;pending-=absorb;blocked+=absorb;
  }
- n.effects=n.effects.filter(x=>x.type!=='barrier'||x.power>0);
+ n.effects=n.effects.filter(x=>!['barrier','magic_barrier'].includes(x.type)||x.power>0);
  n.usedRefs.push(e.sourceRef);
  return {state:n,blocked,remainingDamage:pending};
 }
@@ -220,7 +220,7 @@ export function executeRuneCast(state:RuneEncounter,a:RuneCast,host:{
     add(t.id,'stagger',Math.max(1,Math.round(1*mult)),1);
    break;
   case 'focused_light':harm(targets[0],210+int*3.3,.1);break;
-  case 'mana_barrier':add(targets[0].id,'barrier',15,Math.round((200+5*int)*mult),
+  case 'mana_barrier':add(targets[0].id,n.rulesV48?'magic_barrier':'barrier',15,Math.round((200+5*int)*mult),
    mastery.level>=4?'all_sides':'front');break;
   case 'paralyzing_toxin':{
    const t=targets[0];harm(t,40+int*.7,.3);

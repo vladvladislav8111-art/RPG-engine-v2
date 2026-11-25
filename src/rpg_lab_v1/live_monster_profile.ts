@@ -9,7 +9,7 @@ type CatalogCard = {
  systemLevelMin:number;systemLevelMax:number;baseXp:number;baseGold:number;
  priceMagicStoneValis:number|null;canSpawnNaturally:boolean;
  requiresStoryTrigger:boolean;floorRanges:number[][];floorMin:number|null;
- hp?:number; tactics?:string[];
+ hp?:number; tactics?:string[];attackSharpness?:number|null;
 };
 type Five={strength:number;stamina:number;agility:number;perception:number;intelligence:number};
 export type LiveMonsterCard={id:string;name:string;floorMin:number;floorMax:number;
@@ -18,7 +18,7 @@ export type LiveMonsterCard={id:string;name:string;floorMin:number;floorMax:numb
  hp:number;armor:number;weaponForce:number;baseXp:number;baseSystemGold:number;
  magicStoneValis:number;features:string[];loreNote:string;
  v4FloorRanges:number[][];v4RequiresStoryTrigger:boolean;
- v4Origin:string;};
+ v4Origin:string;attackSharpness?:number|null;};
 const map=new Map<string,CatalogCard>((catalog.monsters as CatalogCard[]).map(c=>[c.id,c]));
 const id=(x:string)=>/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(x);
 const safeInt=(n:number)=>Number.isSafeInteger(n)&&n>=0;
@@ -82,5 +82,5 @@ export function adaptMonsterForV4(args:{monsterId:string;eventProofRef:string;
   features:[...(c.tactics??[])],loreNote:'DanMachi × Solo Leveling v4: проектная числовая модель',
   v4FloorRanges:c.floorRanges.map(x=>[...x]),
   v4RequiresStoryTrigger:c.requiresStoryTrigger,
-  v4Origin:c.origin};
+  v4Origin:c.origin,attackSharpness:c.attackSharpness??null};
 }

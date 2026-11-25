@@ -1,3 +1,4 @@
+import {usesSharpnessRules} from "./chroma_sharpness_v48.ts";
 /** Authoritative Chroma v4.6 event bridge. All state updates are pure and
  * must be written by RPG Lab's existing revision-checked session CAS writer.
  * Callers cannot supply monster stats, player max HP/MP, hit rolls or XP.
@@ -95,7 +96,7 @@ function reconstruct(s:LiveV46Save,host:RuneTitleEventHost):RuneEncounter{
  const effects=ledger.effects.filter(x=>x.targetId==='hero.chroma'||
   (currentEncounter!==null&&x.targetId===currentEncounter));
  const state:RuneEncounter={nowSecond:ledger.nowSecond,casterId:'hero.chroma',
-  mp:s.mp,maxMp,intelligence,
+  mp:s.mp,maxMp,intelligence,rulesV48:usesSharpnessRules(s.storyFlags),
   learnedSkills:[...new Set([...player.learnedSkills,...(s.unlockedSkills??[])])],
   mastery:ledger.mastery,cooldownReadyAt:ledger.cooldownReadyAt,
   targets,effects,usedRefs:ledger.usedRefs};

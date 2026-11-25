@@ -32,7 +32,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "goblin"
+      "sourceCardId": "goblin",
+      "attackSharpness": 40
     },
     {
       "id": "kobold",
@@ -63,7 +64,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "kobold"
+      "sourceCardId": "kobold",
+      "attackSharpness": 48
     },
     {
       "id": "jack_bird",
@@ -90,7 +92,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "jack_bird"
+      "sourceCardId": "jack_bird",
+      "attackSharpness": 15
     },
     {
       "id": "dungeon_lizard",
@@ -114,7 +117,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "dungeon_lizard"
+      "sourceCardId": "dungeon_lizard",
+      "attackSharpness": 35
     },
     {
       "id": "frog_shooter",
@@ -138,7 +142,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "frog_shooter"
+      "sourceCardId": "frog_shooter",
+      "attackSharpness": null
     },
     {
       "id": "war_shadow",
@@ -168,7 +173,8 @@
       },
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "war_shadow"
+      "sourceCardId": "war_shadow",
+      "attackSharpness": 78
     },
     {
       "id": "killer_ant",
@@ -195,7 +201,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "killer_ant"
+      "sourceCardId": "killer_ant",
+      "attackSharpness": 65
     },
     {
       "id": "purple_moth",
@@ -222,7 +229,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "purple_moth"
+      "sourceCardId": "purple_moth",
+      "attackSharpness": null
     },
     {
       "id": "needle_rabbit",
@@ -249,7 +257,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "needle_rabbit"
+      "sourceCardId": "needle_rabbit",
+      "attackSharpness": 58
     },
     {
       "id": "blue_papilio",
@@ -279,7 +288,8 @@
       },
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "blue_papilio"
+      "sourceCardId": "blue_papilio",
+      "attackSharpness": null
     },
     {
       "id": "imp",
@@ -303,7 +313,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "imp"
+      "sourceCardId": "imp",
+      "attackSharpness": 45
     },
     {
       "id": "bad_bat",
@@ -327,7 +338,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "bad_bat"
+      "sourceCardId": "bad_bat",
+      "attackSharpness": 40
     },
     {
       "id": "orc",
@@ -354,7 +366,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "orc"
+      "sourceCardId": "orc",
+      "attackSharpness": 55
     },
     {
       "id": "silverback",
@@ -378,7 +391,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "silverback"
+      "sourceCardId": "silverback",
+      "attackSharpness": null
     },
     {
       "id": "hard_armored",
@@ -405,7 +419,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "hard_armored"
+      "sourceCardId": "hard_armored",
+      "attackSharpness": null
     },
     {
       "id": "infant_dragon",
@@ -432,7 +447,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "infant_dragon"
+      "sourceCardId": "infant_dragon",
+      "attackSharpness": 105
     },
     {
       "id": "black_wyvern",
@@ -456,7 +472,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "black_wyvern"
+      "sourceCardId": "black_wyvern",
+      "attackSharpness": 145
     },
     {
       "id": "wyvern",
@@ -478,7 +495,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "wyvern"
+      "sourceCardId": "wyvern",
+      "attackSharpness": 110
     },
     {
       "id": "crystal_mantis",
@@ -505,7 +523,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "crystal_mantis"
+      "sourceCardId": "crystal_mantis",
+      "attackSharpness": 145
     },
     {
       "id": "lamia_mormos",
@@ -527,7 +546,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "lamia_mormos"
+      "sourceCardId": "lamia_mormos",
+      "attackSharpness": 90
     },
     {
       "id": "hellhound",
@@ -557,7 +577,8 @@
       },
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "hellhound"
+      "sourceCardId": "hellhound",
+      "attackSharpness": 85
     },
     {
       "id": "almiraj",
@@ -584,7 +605,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "almiraj"
+      "sourceCardId": "almiraj",
+      "attackSharpness": 65
     },
     {
       "id": "dungeon_worm",
@@ -608,7 +630,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "dungeon_worm"
+      "sourceCardId": "dungeon_worm",
+      "attackSharpness": 75
     },
     {
       "id": "minotaur",
@@ -635,7 +658,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "minotaur"
+      "sourceCardId": "minotaur",
+      "attackSharpness": 88
     },
     {
       "id": "ligerfang",
@@ -662,7 +686,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "ligerfang"
+      "sourceCardId": "ligerfang",
+      "attackSharpness": 100
     },
     {
       "id": "goliath_17",
@@ -689,7 +714,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "goliath_17"
+      "sourceCardId": "goliath_17",
+      "attackSharpness": null
     },
     {
       "id": "black_goliath",
@@ -716,7 +742,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "black_goliath"
+      "sourceCardId": "black_goliath",
+      "attackSharpness": null
     },
     {
       "id": "bugbear",
@@ -743,7 +770,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "bugbear"
+      "sourceCardId": "bugbear",
+      "attackSharpness": 65
     },
     {
       "id": "battle_boar",
@@ -770,7 +798,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "battle_boar"
+      "sourceCardId": "battle_boar",
+      "attackSharpness": 75
     },
     {
       "id": "lizardman",
@@ -797,7 +826,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "lizardman"
+      "sourceCardId": "lizardman",
+      "attackSharpness": 85
     },
     {
       "id": "firebird",
@@ -827,7 +857,8 @@
       },
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "firebird"
+      "sourceCardId": "firebird",
+      "attackSharpness": 90
     },
     {
       "id": "vouivre",
@@ -854,7 +885,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "vouivre"
+      "sourceCardId": "vouivre",
+      "attackSharpness": 150
     },
     {
       "id": "mad_beetle",
@@ -881,7 +913,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "mad_beetle"
+      "sourceCardId": "mad_beetle",
+      "attackSharpness": 85
     },
     {
       "id": "mammoth_fool",
@@ -908,7 +941,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "mammoth_fool"
+      "sourceCardId": "mammoth_fool",
+      "attackSharpness": 100
     },
     {
       "id": "dark_fungus",
@@ -935,7 +969,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "dark_fungus"
+      "sourceCardId": "dark_fungus",
+      "attackSharpness": null
     },
     {
       "id": "gun_libellula",
@@ -962,7 +997,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "gun_libellula"
+      "sourceCardId": "gun_libellula",
+      "attackSharpness": 90
     },
     {
       "id": "sword_stag",
@@ -989,7 +1025,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "sword_stag"
+      "sourceCardId": "sword_stag",
+      "attackSharpness": 130
     },
     {
       "id": "deadly_hornet",
@@ -1016,7 +1053,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "deadly_hornet"
+      "sourceCardId": "deadly_hornet",
+      "attackSharpness": 105
     },
     {
       "id": "moss_huge",
@@ -1043,7 +1081,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "moss_huge"
+      "sourceCardId": "moss_huge",
+      "attackSharpness": null
     },
     {
       "id": "moss_huge_enhanced",
@@ -1070,7 +1109,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "moss_huge_enhanced"
+      "sourceCardId": "moss_huge_enhanced",
+      "attackSharpness": null
     },
     {
       "id": "metal_rabbit",
@@ -1097,7 +1137,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "metal_rabbit"
+      "sourceCardId": "metal_rabbit",
+      "attackSharpness": 125
     },
     {
       "id": "green_dragon",
@@ -1124,7 +1165,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "green_dragon"
+      "sourceCardId": "green_dragon",
+      "attackSharpness": 160
     },
     {
       "id": "hobgoblin",
@@ -1151,7 +1193,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "hobgoblin"
+      "sourceCardId": "hobgoblin",
+      "attackSharpness": 75
     },
     {
       "id": "viscum",
@@ -1178,7 +1221,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "viscum"
+      "sourceCardId": "viscum",
+      "attackSharpness": null
     },
     {
       "id": "raider_fish",
@@ -1205,7 +1249,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "raider_fish"
+      "sourceCardId": "raider_fish",
+      "attackSharpness": 90
     },
     {
       "id": "harpy",
@@ -1232,7 +1277,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "harpy"
+      "sourceCardId": "harpy",
+      "attackSharpness": 100
     },
     {
       "id": "siren",
@@ -1262,7 +1308,8 @@
       },
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "siren"
+      "sourceCardId": "siren",
+      "attackSharpness": 95
     },
     {
       "id": "blue_crab",
@@ -1289,7 +1336,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "blue_crab"
+      "sourceCardId": "blue_crab",
+      "attackSharpness": 120
     },
     {
       "id": "aqua_serpent",
@@ -1316,7 +1364,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "aqua_serpent"
+      "sourceCardId": "aqua_serpent",
+      "attackSharpness": 115
     },
     {
       "id": "crystal_turtle",
@@ -1343,7 +1392,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "crystal_turtle"
+      "sourceCardId": "crystal_turtle",
+      "attackSharpness": 110
     },
     {
       "id": "devil_mosquito",
@@ -1370,7 +1420,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "devil_mosquito"
+      "sourceCardId": "devil_mosquito",
+      "attackSharpness": 130
     },
     {
       "id": "light_quartz",
@@ -1400,7 +1451,8 @@
       },
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "light_quartz"
+      "sourceCardId": "light_quartz",
+      "attackSharpness": null
     },
     {
       "id": "crystaroth_urchin",
@@ -1427,7 +1479,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "crystaroth_urchin"
+      "sourceCardId": "crystaroth_urchin",
+      "attackSharpness": 130
     },
     {
       "id": "iguazu",
@@ -1454,7 +1507,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "iguazu"
+      "sourceCardId": "iguazu",
+      "attackSharpness": 120
     },
     {
       "id": "mermaid",
@@ -1481,7 +1535,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "mermaid"
+      "sourceCardId": "mermaid",
+      "attackSharpness": null
     },
     {
       "id": "merman",
@@ -1508,7 +1563,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "merman"
+      "sourceCardId": "merman",
+      "attackSharpness": 115
     },
     {
       "id": "merman_leader",
@@ -1535,7 +1591,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "merman_leader"
+      "sourceCardId": "merman_leader",
+      "attackSharpness": 140
     },
     {
       "id": "drag_octopus",
@@ -1562,7 +1619,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "drag_octopus"
+      "sourceCardId": "drag_octopus",
+      "attackSharpness": null
     },
     {
       "id": "carbuncle",
@@ -1592,7 +1650,8 @@
       },
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "carbuncle"
+      "sourceCardId": "carbuncle",
+      "attackSharpness": null
     },
     {
       "id": "afanc",
@@ -1619,7 +1678,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "afanc"
+      "sourceCardId": "afanc",
+      "attackSharpness": 140
     },
     {
       "id": "dodora",
@@ -1646,7 +1706,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "dodora"
+      "sourceCardId": "dodora",
+      "attackSharpness": 130
     },
     {
       "id": "lamia",
@@ -1673,7 +1734,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "lamia"
+      "sourceCardId": "lamia",
+      "attackSharpness": 125
     },
     {
       "id": "voltimeria",
@@ -1700,7 +1762,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "voltimeria"
+      "sourceCardId": "voltimeria",
+      "attackSharpness": 135
     },
     {
       "id": "kelpie",
@@ -1727,7 +1790,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "kelpie"
+      "sourceCardId": "kelpie",
+      "attackSharpness": 100
     },
     {
       "id": "amphisbaena",
@@ -1754,7 +1818,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "amphisbaena"
+      "sourceCardId": "amphisbaena",
+      "attackSharpness": 170
     },
     {
       "id": "bloodsaurus",
@@ -1781,7 +1846,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "bloodsaurus"
+      "sourceCardId": "bloodsaurus",
+      "attackSharpness": 170
     },
     {
       "id": "basilisk",
@@ -1811,7 +1877,8 @@
       },
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "basilisk"
+      "sourceCardId": "basilisk",
+      "attackSharpness": 145
     },
     {
       "id": "spartoi",
@@ -1838,7 +1905,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "spartoi"
+      "sourceCardId": "spartoi",
+      "attackSharpness": 155
     },
     {
       "id": "barbarian",
@@ -1865,7 +1933,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "barbarian"
+      "sourceCardId": "barbarian",
+      "attackSharpness": 145
     },
     {
       "id": "lizardman_elite",
@@ -1892,7 +1961,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "lizardman_elite"
+      "sourceCardId": "lizardman_elite",
+      "attackSharpness": 165
     },
     {
       "id": "obsidian_soldier",
@@ -1919,7 +1989,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "obsidian_soldier"
+      "sourceCardId": "obsidian_soldier",
+      "attackSharpness": 175
     },
     {
       "id": "skull_sheep",
@@ -1946,7 +2017,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "skull_sheep"
+      "sourceCardId": "skull_sheep",
+      "attackSharpness": 120
     },
     {
       "id": "loup_garou",
@@ -1973,7 +2045,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "loup_garou"
+      "sourceCardId": "loup_garou",
+      "attackSharpness": 170
     },
     {
       "id": "peluda",
@@ -2003,7 +2076,8 @@
       },
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "peluda"
+      "sourceCardId": "peluda",
+      "attackSharpness": 150
     },
     {
       "id": "worm_well",
@@ -2030,7 +2104,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "worm_well"
+      "sourceCardId": "worm_well",
+      "attackSharpness": 180
     },
     {
       "id": "udaeus",
@@ -2057,7 +2132,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "udaeus"
+      "sourceCardId": "udaeus",
+      "attackSharpness": 210
     },
     {
       "id": "delphyne",
@@ -2084,7 +2160,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "delphyne"
+      "sourceCardId": "delphyne",
+      "attackSharpness": 230
     },
     {
       "id": "ooze",
@@ -2111,7 +2188,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "ooze"
+      "sourceCardId": "ooze",
+      "attackSharpness": null
     },
     {
       "id": "flame_rock",
@@ -2138,7 +2216,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "flame_rock"
+      "sourceCardId": "flame_rock",
+      "attackSharpness": null
     },
     {
       "id": "fomoire",
@@ -2165,7 +2244,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "fomoire"
+      "sourceCardId": "fomoire",
+      "attackSharpness": 195
     },
     {
       "id": "balor",
@@ -2192,7 +2272,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "balor"
+      "sourceCardId": "balor",
+      "attackSharpness": 240
     },
     {
       "id": "virga",
@@ -2219,7 +2300,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "virga"
+      "sourceCardId": "virga",
+      "attackSharpness": 210
     },
     {
       "id": "black_rhinos",
@@ -2246,7 +2328,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "black_rhinos"
+      "sourceCardId": "black_rhinos",
+      "attackSharpness": 185
     },
     {
       "id": "deformis_spider",
@@ -2276,7 +2359,8 @@
       },
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "deformis_spider"
+      "sourceCardId": "deformis_spider",
+      "attackSharpness": 195
     },
     {
       "id": "cadmus",
@@ -2303,7 +2387,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "cadmus"
+      "sourceCardId": "cadmus",
+      "attackSharpness": 245
     },
     {
       "id": "venom_scorpion",
@@ -2330,7 +2415,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "venom_scorpion"
+      "sourceCardId": "venom_scorpion",
+      "attackSharpness": 185
     },
     {
       "id": "thunder_snake",
@@ -2360,7 +2446,8 @@
       },
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "thunder_snake"
+      "sourceCardId": "thunder_snake",
+      "attackSharpness": 195
     },
     {
       "id": "silver_worm",
@@ -2387,7 +2474,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "silver_worm"
+      "sourceCardId": "silver_worm",
+      "attackSharpness": 205
     },
     {
       "id": "ill_wyvern",
@@ -2414,7 +2502,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "ill_wyvern"
+      "sourceCardId": "ill_wyvern",
+      "attackSharpness": 225
     },
     {
       "id": "valgang_dragon",
@@ -2441,7 +2530,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "valgang_dragon"
+      "sourceCardId": "valgang_dragon",
+      "attackSharpness": 260
     },
     {
       "id": "titan_alm",
@@ -2468,7 +2558,8 @@
       "rune": null,
       "requiresStoryTrigger": false,
       "origin": "DanMachi",
-      "sourceCardId": "titan_alm"
+      "sourceCardId": "titan_alm",
+      "attackSharpness": null
     },
     {
       "id": "demi_spirit",
@@ -2495,7 +2586,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "demi_spirit"
+      "sourceCardId": "demi_spirit",
+      "attackSharpness": null
     },
     {
       "id": "varasite",
@@ -2522,7 +2614,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "varasite"
+      "sourceCardId": "varasite",
+      "attackSharpness": 220
     },
     {
       "id": "corrupted_spirit",
@@ -2553,7 +2646,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "corrupted_spirit"
+      "sourceCardId": "corrupted_spirit",
+      "attackSharpness": null
     },
     {
       "id": "troll",
@@ -2575,7 +2669,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "troll"
+      "sourceCardId": "troll",
+      "attackSharpness": null
     },
     {
       "id": "poison_vermis",
@@ -2597,7 +2692,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "poison_vermis"
+      "sourceCardId": "poison_vermis",
+      "attackSharpness": 70
     },
     {
       "id": "old_bison",
@@ -2619,7 +2715,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "old_bison"
+      "sourceCardId": "old_bison",
+      "attackSharpness": 60
     },
     {
       "id": "dungeon_fly",
@@ -2638,7 +2735,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "dungeon_fly"
+      "sourceCardId": "dungeon_fly",
+      "attackSharpness": 25
     },
     {
       "id": "ogre",
@@ -2660,7 +2758,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "ogre"
+      "sourceCardId": "ogre",
+      "attackSharpness": 70
     },
     {
       "id": "gargoyle",
@@ -2682,7 +2781,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "gargoyle"
+      "sourceCardId": "gargoyle",
+      "attackSharpness": 100
     },
     {
       "id": "gryphon",
@@ -2704,7 +2804,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "gryphon"
+      "sourceCardId": "gryphon",
+      "attackSharpness": 115
     },
     {
       "id": "arachne",
@@ -2729,7 +2830,8 @@
       },
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "arachne"
+      "sourceCardId": "arachne",
+      "attackSharpness": 130
     },
     {
       "id": "hippogriff",
@@ -2751,7 +2853,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "hippogriff"
+      "sourceCardId": "hippogriff",
+      "attackSharpness": 105
     },
     {
       "id": "armarosaurus",
@@ -2773,7 +2876,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "armarosaurus"
+      "sourceCardId": "armarosaurus",
+      "attackSharpness": 150
     },
     {
       "id": "scylla",
@@ -2795,7 +2899,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "scylla"
+      "sourceCardId": "scylla",
+      "attackSharpness": 160
     },
     {
       "id": "unicorn",
@@ -2817,7 +2922,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "unicorn"
+      "sourceCardId": "unicorn",
+      "attackSharpness": 115
     },
     {
       "id": "blood_smeared_troll",
@@ -2839,7 +2945,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "blood_smeared_troll"
+      "sourceCardId": "blood_smeared_troll",
+      "attackSharpness": 110
     },
     {
       "id": "golmina",
@@ -2861,7 +2968,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "golmina"
+      "sourceCardId": "golmina",
+      "attackSharpness": 160
     },
     {
       "id": "sand_worm",
@@ -2883,7 +2991,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "sand_worm"
+      "sourceCardId": "sand_worm",
+      "attackSharpness": 105
     },
     {
       "id": "desert_lizard",
@@ -2905,7 +3014,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "desert_lizard"
+      "sourceCardId": "desert_lizard",
+      "attackSharpness": 65
     },
     {
       "id": "sand_scorpion",
@@ -2927,7 +3037,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "sand_scorpion"
+      "sourceCardId": "sand_scorpion",
+      "attackSharpness": 95
     },
     {
       "id": "vulture_hunter",
@@ -2949,7 +3060,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "vulture_hunter"
+      "sourceCardId": "vulture_hunter",
+      "attackSharpness": 80
     },
     {
       "id": "harpy_surface",
@@ -2971,7 +3083,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "harpy_surface"
+      "sourceCardId": "harpy_surface",
+      "attackSharpness": 70
     },
     {
       "id": "raider_fish_surface",
@@ -2993,7 +3106,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "raider_fish_surface"
+      "sourceCardId": "raider_fish_surface",
+      "attackSharpness": 65
     },
     {
       "id": "loup_garou_surface",
@@ -3015,7 +3129,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "loup_garou_surface"
+      "sourceCardId": "loup_garou_surface",
+      "attackSharpness": 95
     },
     {
       "id": "juggernaut",
@@ -3034,7 +3149,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "juggernaut"
+      "sourceCardId": "juggernaut",
+      "attackSharpness": 300
     },
     {
       "id": "valg",
@@ -3056,7 +3172,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "valg"
+      "sourceCardId": "valg",
+      "attackSharpness": 210
     },
     {
       "id": "violas",
@@ -3078,7 +3195,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "violas"
+      "sourceCardId": "violas",
+      "attackSharpness": 180
     },
     {
       "id": "jewel_fetus",
@@ -3097,7 +3215,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "jewel_fetus"
+      "sourceCardId": "jewel_fetus",
+      "attackSharpness": null
     },
     {
       "id": "anglfish_ova",
@@ -3116,7 +3235,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "anglfish_ova"
+      "sourceCardId": "anglfish_ova",
+      "attackSharpness": 90
     },
     {
       "id": "antares_movie",
@@ -3135,7 +3255,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "DanMachi",
-      "sourceCardId": "antares_movie"
+      "sourceCardId": "antares_movie",
+      "attackSharpness": 260
     },
     {
       "id": "sl_wolf",
@@ -3154,7 +3275,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "Solo Leveling",
-      "sourceCardId": "sl_wolf"
+      "sourceCardId": "sl_wolf",
+      "attackSharpness": 55
     },
     {
       "id": "sl_briga",
@@ -3178,7 +3300,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "Solo Leveling",
-      "sourceCardId": "sl_briga"
+      "sourceCardId": "sl_briga",
+      "attackSharpness": 75
     },
     {
       "id": "sl_razan",
@@ -3202,7 +3325,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "Solo Leveling",
-      "sourceCardId": "sl_razan"
+      "sourceCardId": "sl_razan",
+      "attackSharpness": 68
     },
     {
       "id": "sl_kasaka",
@@ -3224,7 +3348,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "Solo Leveling",
-      "sourceCardId": "sl_kasaka"
+      "sourceCardId": "sl_kasaka",
+      "attackSharpness": 100
     },
     {
       "id": "sl_cerberus",
@@ -3246,7 +3371,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "Solo Leveling",
-      "sourceCardId": "sl_cerberus"
+      "sourceCardId": "sl_cerberus",
+      "attackSharpness": 130
     },
     {
       "id": "sl_giant_spider",
@@ -3268,7 +3394,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "Solo Leveling",
-      "sourceCardId": "sl_giant_spider"
+      "sourceCardId": "sl_giant_spider",
+      "attackSharpness": 115
     },
     {
       "id": "sl_igris",
@@ -3293,7 +3420,8 @@
       },
       "requiresStoryTrigger": true,
       "origin": "Solo Leveling",
-      "sourceCardId": "sl_igris"
+      "sourceCardId": "sl_igris",
+      "attackSharpness": 180
     },
     {
       "id": "sl_baruka",
@@ -3315,7 +3443,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "Solo Leveling",
-      "sourceCardId": "sl_baruka"
+      "sourceCardId": "sl_baruka",
+      "attackSharpness": 180
     },
     {
       "id": "sl_high_orc",
@@ -3337,7 +3466,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "Solo Leveling",
-      "sourceCardId": "sl_high_orc"
+      "sourceCardId": "sl_high_orc",
+      "attackSharpness": 170
     },
     {
       "id": "sl_kargalgan",
@@ -3359,7 +3489,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "Solo Leveling",
-      "sourceCardId": "sl_kargalgan"
+      "sourceCardId": "sl_kargalgan",
+      "attackSharpness": null
     },
     {
       "id": "sl_vulcan",
@@ -3381,7 +3512,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "Solo Leveling",
-      "sourceCardId": "sl_vulcan"
+      "sourceCardId": "sl_vulcan",
+      "attackSharpness": null
     },
     {
       "id": "sl_metus",
@@ -3403,7 +3535,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "Solo Leveling",
-      "sourceCardId": "sl_metus"
+      "sourceCardId": "sl_metus",
+      "attackSharpness": null
     },
     {
       "id": "sl_baran",
@@ -3425,7 +3558,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "Solo Leveling",
-      "sourceCardId": "sl_baran"
+      "sourceCardId": "sl_baran",
+      "attackSharpness": 240
     },
     {
       "id": "sl_ant_king",
@@ -3447,7 +3581,8 @@
       "rune": null,
       "requiresStoryTrigger": true,
       "origin": "Solo Leveling",
-      "sourceCardId": "sl_ant_king"
+      "sourceCardId": "sl_ant_king",
+      "attackSharpness": 260
     }
   ],
   "storyOnly": [

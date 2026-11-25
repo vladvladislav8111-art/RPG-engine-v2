@@ -1,3 +1,5 @@
+import {v48Regen,practiceLine} from "./chroma_runes_v48.ts";
+import {usesSharpnessRules} from "./chroma_sharpness_v48.ts";
 /** Optional, source-bound survival rules for the new Orario Player.
  * Healing, injuries, daily training, and usable shop inventory are kept
  * inside the same Player snapshot. A plan never fabricates a victory.
@@ -94,13 +96,14 @@ export function completeConfirmedRest(s:JinwooState,e:{
  source(s,e.sourceRef);
  if(!e.playerConfirmed||!e.safeRestLocation||s.activeEncounter||
   s.hp<=0||!Number.isSafeInteger(e.minutes)||
-  e.minutes<60||e.minutes>2880)
+  e.minutes<(usesSharpnessRules(s.storyFlags)?1:60)||e.minutes>2880)
   throw Error("PLAYER_REST_NOT_AVAILABLE");
  const n=copy(s);
  n.hp=Math.min(effectiveJinwooMaxHp(n),n.hp+
-  Math.floor(effectiveJinwooMaxHp(n)*e.minutes/7200));
+  (e.minutes>=60?Math.floor(effectiveJinwooMaxHp(n)*e.minutes/7200*v48Regen(n)):0));
+ if(n.hp>s.hp)practiceLine(n,"regeneration","living_core",e.sourceRef);
  n.mp=Math.min(effectiveJinwooMaxMp(n),n.mp+
-  Math.floor(effectiveJinwooMaxMp(n)*e.minutes/960));
+  (e.minutes>=60?Math.floor(effectiveJinwooMaxMp(n)*e.minutes/960):0));
  n.fatigue=Math.max(0,n.fatigue-Math.floor(e.minutes/8));
  for(const wound of n.injuries??[]){
   if(wound.active&&wound.treated&&wound.kind==="bruise"&&

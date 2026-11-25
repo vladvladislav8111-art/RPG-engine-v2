@@ -1,3 +1,6 @@
+import {V48_BASE,type V48Runtime} from "./chroma_runes_v48.ts";
+import {V48_RUNE_LINES} from "./chroma_rune_profiles_v48.ts";
+import {usesSharpnessRules} from "./chroma_sharpness_v48.ts";
 /**
  * Integration boundary between legacy RPG Lab's persisted JinwooState and
  * the isolated DanMachi × Solo Leveling v4 engine. This does NOT write KV.
@@ -29,7 +32,7 @@ export type ChromaV4Meta={
  /** Immutable rune draw audit after journal-confirmed kills. */
  runeAwards?:Record<string,{monsterId:string;sourceRef:string;rollTenThousand:number;
   chanceBasisPoints:number;runeSkillId:string|null}>;
- runeRuntime?:RuntimeRuneLedger;titleBattleLedger?:TitleCombatLedger;
+ runeRuntime?:RuntimeRuneLedger;titleBattleLedger?:TitleCombatLedger;v48Runtime?:V48Runtime;
 };
 export type LegacyChromaSave=LegacyChromaCore&{
  storyFlags:string[];unlockedSkills?:string[];
@@ -159,7 +162,8 @@ export function applyV4RuneStudy(s:LegacyChromaSave,e:{
 }):LegacyChromaSave{
  assertValidV4(s);
  if(!e.playerConfirmed||!id(e.sourceRef)||s.appliedRewardRefs.includes(e.sourceRef)||
-    !Object.values(CATALOG_RUNE_SKILL_IDS).includes(e.skillId)||
+    (!Object.values(CATALOG_RUNE_SKILL_IDS).includes(e.skillId)&&!(usesSharpnessRules(s.storyFlags)&&V48_BASE.has(e.skillId)))||
+    V48_RUNE_LINES.some(r=>r.id===e.skillId&&s.chromaV4Meta!.learnedSkills.includes(r.evolution))||
     (s.unlockedSkills??[]).includes(e.skillId))
   throw Error('CHROMA_V4_RUNE_STUDY_NOT_AUTHORIZED');
  const player=studyRuneStone(toV4Player(s),e.skillId);

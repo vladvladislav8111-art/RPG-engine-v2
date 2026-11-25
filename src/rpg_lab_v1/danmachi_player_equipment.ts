@@ -1,3 +1,5 @@
+import {v48Edge,v48Pierce} from "./chroma_runes_v48.ts";
+import {weaponSharpness} from "./chroma_sharpness_v48.ts";
 /** Source-backed equipment effectiveness, using the existing Player shop.
  * Physical items must be present in the Player inventory before combat stats
  * can be derived; no free +200 weapon from a client-entered number.
@@ -71,6 +73,7 @@ export function previewVerifiedLoadout(s:JinwooState,e:Loadout){
   pierce+=m.armorPiercing??0;
  }
  const result={attack,armor,speedPenalty,armorPiercing:pierce,
+  sharpness:v48Edge(s,weaponSharpness(e.weaponId)),
   verifiedItemIds:ids,readOnly:true,
   withoutInventoryNoEquipmentBonus:true};
  return result;
@@ -79,19 +82,21 @@ export function previewOwnedEquipmentEncounter(s:JinwooState,e:{
  monsterId:string;floor:number;loadout:Loadout;
  move:CombatMove;positionBonus?:number;proficiencyBonus?:number;
  spellMpCost?:number;spellId?:string;confirmedIrregularRef?:string;
+ attackStyle?:"slash"|"thrust"|"blunt";currentMinute?:number;
 }){
  const gear=previewVerifiedLoadout(s,e.loadout);
  const mob=monsterForPlayer(s,e.monsterId,{floor:e.floor,
   monsterRef:s.activeEncounter?.enemyRef??"preview."+e.monsterId,
   irregularRef:e.confirmedIrregularRef});
  if(!mob)throw Error("PLAYER_EQUIPMENT_MONSTER_UNKNOWN");
- const piercing=gear.armorPiercing>0&&mob.armor>=5?
-  Math.min(gear.armorPiercing,mob.armor):0;
+ const bonus=gear.armorPiercing+(e.move==="strike"&&e.attackStyle==="thrust"&&gear.sharpness!==null?v48Pierce(s,e.currentMinute??-1):0);
+ const piercing=bonus>0&&mob.armor>=5?Math.min(bonus,mob.armor):0;
  // A simple verified armor-penetration bonus, not absolute immunity bypass.
  const exchange=previewCombatExchange(s,{
   monsterId:e.monsterId,floor:e.floor,move:e.move,
   weaponPower:e.move==="magic"?0:gear.attack+piercing,
   armorPower:gear.armor,
+  weaponSharpness:e.attackStyle==="blunt"?null:gear.sharpness,
   positionBonus:(e.positionBonus??0)-gear.speedPenalty,
   proficiencyBonus:e.proficiencyBonus,
   spellMpCost:e.spellMpCost,spellId:e.spellId,
